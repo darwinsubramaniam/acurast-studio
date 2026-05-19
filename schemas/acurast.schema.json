@@ -1,80 +1,285 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Acurast Job Configuration",
+  "description": "Configuration for Acurast decentralized serverless compute deployments. https://github.com/Acurast/acurast-cli#acurastjson",
   "type": "object",
+  "required": ["projects"],
+  "additionalProperties": false,
   "properties": {
-    "name": {
-      "type": "string",
-      "description": "Human-readable name for the job."
-    },
-    "runtime": {
-      "type": "string",
-      "enum": ["node20", "shell", "cargo"],
-      "description": "Execution runtime.",
-      "default": "node20"
-    },
-    "execution": {
+    "projects": {
       "type": "object",
-      "description": "Execution scheduling.",
-      "properties": {
-        "type": {
-          "type": "string",
-          "enum": ["interval", "once", "cron"],
-          "description": "Scheduling type."
-        },
-        "interval": {
-          "type": "number",
-          "description": "Interval in milliseconds (for type: interval)."
-        },
-        "maxExecutionTime": {
-          "type": "number",
-          "description": "Max execution time in milliseconds.",
-          "default": 20000
-        },
-        "cron": {
-          "type": "string",
-          "description": "Cron expression (for type: cron)."
-        }
-      },
-      "required": ["type"]
-    },
-    "maxCostPerExecution": {
-      "type": "string",
-      "description": "Maximum cost per execution in Planck (1 ACU = 1e12 Planck)."
-    },
-    "minReplicas": {
-      "type": "integer",
-      "minimum": 1,
-      "description": "Minimum number of processor replicas.",
-      "default": 1
-    },
-    "maxReplicas": {
-      "type": "integer",
-      "minimum": 1,
-      "description": "Maximum number of processor replicas.",
-      "default": 1
-    },
-    "assignmentStrategy": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "type": "string",
-          "enum": ["single", "competing"],
-          "description": "How processors are assigned."
-        }
-      }
-    },
-    "includeEnvironmentVariables": {
-      "type": "array",
-      "items": { "type": "string" },
-      "description": "List of env var keys to encrypt and send to processors."
-    },
-    "enableDevtools": {
-      "type": "boolean",
-      "description": "Forward console logs to CLI via devtools protocol.",
-      "default": false
+      "description": "Map of project keys to their deployment configurations.",
+      "additionalProperties": { "$ref": "#/definitions/project" },
+      "minProperties": 1
     }
   },
-  "required": ["execution"],
-  "additionalProperties": false
+  "definitions": {
+    "project": {
+      "type": "object",
+      "description": "Acurast job deployment configuration.",
+      "required": ["projectName", "fileUrl", "execution"],
+      "additionalProperties": false,
+      "properties": {
+        "projectName": {
+          "type": "string",
+          "description": "Human-readable name for the project.",
+          "minLength": 1
+        },
+        "fileUrl": {
+          "type": "string",
+          "description": "Path to the bundled file (e.g. dist/bundle.js), an IPFS hash, or an HTTPS URL.",
+          "minLength": 1
+        },
+        "network": {
+          "type": "string",
+          "description": "Network to deploy on.",
+          "enum": ["mainnet", "canary"],
+          "default": "mainnet"
+        },
+        "onlyAttestedDevices": {
+          "type": "boolean",
+          "description": "Only allow hardware-attested devices to run this deployment.",
+          "default": false
+        },
+        "enableDevtools": {
+          "type": "boolean",
+          "description": "Forward console logs from processor executions to the DevTools dashboard.",
+          "default": false
+        },
+        "startAt": {
+          "description": "Optional scheduled start time. Omit to start immediately.",
+          "type": "object",
+          "properties": {
+            "msFromNow": {
+              "type": "number",
+              "description": "Start this many milliseconds from now.",
+              "minimum": 0
+            },
+            "timestamp": {
+              "type": "number",
+              "description": "Unix timestamp (ms) at which the deployment starts.",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "assignmentStrategy": {
+          "type": "object",
+          "description": "Controls how processors are assigned to executions.",
+          "required": ["type"],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "Single: one set of processors reused for all executions. Competing: new processors assigned per execution.",
+              "enum": ["Single", "Competing"],
+              "default": "Single"
+            },
+            "instantMatch": {
+              "type": "object",
+              "description": "Pin the job to a specific processor (Single strategy only).",
+              "required": ["processor"],
+              "additionalProperties": false,
+              "properties": {
+                "processor": {
+                  "type": "string",
+                  "description": "SS58 address of the target processor."
+                },
+                "maxAllowedStartDelayInMs": {
+                  "type": "number",
+                  "description": "Maximum allowed start delay for this processor (ms).",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        },
+        "execution": {
+          "type": "object",
+          "description": "Scheduling and timing for job executions.",
+          "required": ["type"],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "onetime: run once. interval: run on a repeating schedule.",
+              "enum": ["onetime", "interval"]
+            },
+            "maxExecutionTimeInMs": {
+              "type": "number",
+              "description": "Maximum wall-clock time per execution (ms). For interval jobs, set at least 10 000 ms less than intervalInMs.",
+              "minimum": 1
+            },
+            "intervalInMs": {
+              "type": "number",
+              "description": "Time between execution starts (ms). Required when type is \"interval\".",
+              "minimum": 1
+            },
+            "numberOfExecutions": {
+              "type": "integer",
+              "description": "Total number of executions to run. Required when type is \"interval\".",
+              "minimum": 1
+            }
+          }
+        },
+        "maxAllowedStartDelayInMs": {
+          "type": "number",
+          "description": "Maximum allowed start delay relative to the scheduled start time (ms).",
+          "minimum": 0,
+          "default": 10000
+        },
+        "usageLimit": {
+          "type": "object",
+          "description": "Resource caps enforced during execution. 0 means unlimited.",
+          "additionalProperties": false,
+          "properties": {
+            "maxMemory": {
+              "type": "number",
+              "description": "Maximum memory (bytes). 0 = unlimited.",
+              "minimum": 0
+            },
+            "maxNetworkRequests": {
+              "type": "number",
+              "description": "Maximum outbound network requests. 0 = unlimited.",
+              "minimum": 0
+            },
+            "maxStorage": {
+              "type": "number",
+              "description": "Maximum storage (bytes). 0 = unlimited.",
+              "minimum": 0
+            }
+          }
+        },
+        "numberOfReplicas": {
+          "type": "integer",
+          "description": "Number of processors that run this deployment in parallel.",
+          "minimum": 1,
+          "default": 1
+        },
+        "requiredModules": {
+          "type": "array",
+          "description": "Processor capability modules required. Shell is auto-injected when runtime is Shell.",
+          "items": {
+            "type": "string",
+            "enum": ["DataEncryption", "LLM", "Shell"]
+          },
+          "uniqueItems": true,
+          "default": []
+        },
+        "runtime": {
+          "type": "string",
+          "description": "Execution runtime. NodeJSWithBundle (default): bundled Node.js file. NodeJS: single Node.js file. Shell: native binary in a Linux distro image.",
+          "enum": ["NodeJSWithBundle", "NodeJS", "Shell"],
+          "default": "NodeJSWithBundle"
+        },
+        "image": {
+          "type": "object",
+          "description": "Linux distro image for the Shell runtime. Required when runtime is \"Shell\".",
+          "required": ["url", "sha256"],
+          "additionalProperties": false,
+          "properties": {
+            "url": {
+              "type": "string",
+              "description": "HTTPS URL to a .tar.xz distro image (e.g. from https://github.com/termux/proot-distro).",
+              "pattern": "^https://"
+            },
+            "sha256": {
+              "type": "string",
+              "description": "SHA256 hash of the image for download verification (64 hex chars).",
+              "pattern": "^[a-fA-F0-9]{64}$"
+            }
+          }
+        },
+        "entrypoint": {
+          "type": "string",
+          "description": "Script or binary the processor runs after extracting the Shell image (e.g. acurast.sh)."
+        },
+        "restartPolicy": {
+          "type": "string",
+          "description": "Restart policy for the Shell runtime process.",
+          "enum": ["no", "always", "on-failure"],
+          "default": "no"
+        },
+        "minProcessorReputation": {
+          "type": "number",
+          "description": "Minimum processor reputation score required.",
+          "minimum": 0,
+          "default": 0
+        },
+        "maxCostPerExecution": {
+          "type": "number",
+          "description": "Maximum cost per execution in planck (smallest ACU denomination). 1 ACU = 1e12 planck.",
+          "minimum": 0
+        },
+        "includeEnvironmentVariables": {
+          "type": "array",
+          "description": "Names of .env variables to encrypt and pass to processors at deploy time.",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "processorWhitelist": {
+          "type": "array",
+          "description": "Restrict to specific processor addresses. Empty = allow any processor.",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "minProcessorVersions": {
+          "type": "object",
+          "description": "Minimum processor app versions required.",
+          "additionalProperties": false,
+          "properties": {
+            "android": { "description": "Minimum Android processor app version." },
+            "ios": { "description": "Minimum iOS processor app version." }
+          }
+        },
+        "mutability": {
+          "type": "string",
+          "description": "Whether the deployment can be modified after creation. Immutable is recommended for production.",
+          "enum": ["Immutable", "Mutable"],
+          "default": "Immutable"
+        },
+        "reuseKeysFrom": {
+          "description": "Reuse encryption keys from a previous Mutable deployment. Format: [\"Acurast\", deployerAddress, deploymentId] or null.",
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "array",
+              "items": [
+                { "type": "string", "enum": ["Acurast"], "description": "Origin chain." },
+                { "type": "string", "description": "SS58 address of the original deployer." },
+                { "type": "number", "description": "Deployment ID (u128)." }
+              ],
+              "minItems": 3,
+              "maxItems": 3
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "runtime": { "const": "Shell" } },
+            "required": ["runtime"]
+          },
+          "then": { "required": ["image"] }
+        },
+        {
+          "if": {
+            "required": ["execution"],
+            "properties": {
+              "execution": {
+                "required": ["type"],
+                "properties": { "type": { "const": "interval" } }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "execution": { "required": ["intervalInMs", "numberOfExecutions"] }
+            }
+          }
+        }
+      ]
+    }
+  }
 }

@@ -6,8 +6,27 @@ import { registerWalletCommands } from './wallet/walletCommands';
 import { WalletStatusBar, SHOW_WALLETS_COMMAND_ID } from './wallet/walletStatusBar';
 import { StudioPanel } from './studio/studioPanel';
 import { acurastClient } from './sdk/acurastClient';
+import { registerAcurastLanguageService } from './acurastLanguageService';
+
+async function ensureJsonSchema(extensionContext: vscode.ExtensionContext): Promise<void> {
+  const schemaUri = vscode.Uri.joinPath(extensionContext.extensionUri, 'schemas', 'acurast.schema.json').toString();
+  const config = vscode.workspace.getConfiguration('json');
+  const existing = (config.get<Array<{ fileMatch?: string | string[]; url?: string }>>('schemas') ?? []);
+  const alreadySet = existing.some(s => {
+    const ms = Array.isArray(s.fileMatch) ? s.fileMatch : [s.fileMatch ?? ''];
+    return ms.some(m => m === '**/acurast.json' || m === 'acurast.json');
+  });
+  if (!alreadySet) {
+    await config.update('schemas', [
+      ...existing,
+      { fileMatch: ['**/acurast.json'], url: schemaUri }
+    ], vscode.ConfigurationTarget.Global);
+  }
+}
 
 export async function activate(extensionContext: vscode.ExtensionContext) {
+  ensureJsonSchema(extensionContext).catch(() => {});
+
   const ctx = new AcurastContext(extensionContext);
   await ctx.initialize();
 
@@ -26,6 +45,7 @@ export async function activate(extensionContext: vscode.ExtensionContext) {
     vscode.commands.registerCommand('acurast.studio.home', () => studioPanel.navigate('home')),
     ...registerWalletCommands(wallet),
     ...registerCommands({ ctx, wallet, output, studioPanel }),
+    ...registerAcurastLanguageService(extensionContext),
     { dispose: () => studioPanel.dispose() },
     { dispose: () => acurastClient.dispose() }
   );

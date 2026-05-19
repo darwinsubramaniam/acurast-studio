@@ -1,0 +1,7 @@
+{
+  "name": "Acurast Config",
+  "scopeName": "source.acurast-config",
+  "patterns": [
+    { "include": "source.json" }
+  ]
+}

@@ -1,5 +1,4 @@
 src/
-schemas/
 .vscode/
 node_modules/
 *.map

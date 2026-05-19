@@ -2,7 +2,7 @@
   "name": "acurast-studio",
   "displayName": "Acurast Studio",
   "description": "VS Code extension for Acurast serverless development — scaffolding, deployment, live logs, and cost estimation.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publisher": "dw3labs",
   "license": "MIT",
   "repository": {
@@ -239,7 +239,10 @@
     },
     "jsonValidation": [
       {
-        "fileMatch": "acurast.json",
+        "fileMatch": [
+          "acurast.json",
+          "**/acurast.json"
+        ],
         "url": "./schemas/acurast.schema.json"
       }
     ],
@@ -260,20 +263,32 @@
         ],
         "filenames": [
           "acurast.json"
-        ]
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./media/acurast-config-light.svg",
+          "dark": "./media/acurast-config-dark.svg"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "acurast-config",
+        "scopeName": "source.acurast-config",
+        "path": "./syntaxes/acurast-config.tmGrammar.json"
       }
     ]
   },
   "scripts": {
     "vscode:prepublish": "npm run build",
     "build:font": "fantasticon",
-    "build:ext": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify",
-    "build:ext:dev": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "build:ext": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --main-fields=module,main --minify",
+    "build:ext:dev": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --main-fields=module,main --sourcemap",
     "build:webview": "node scripts/build-webview.mjs",
     "build:webview:dev": "node scripts/build-webview.mjs --dev",
     "build": "npm run build:font && npm run build:ext && npm run build:webview",
     "build:dev": "npm run build:ext:dev && npm run build:webview:dev",
-    "watch:ext": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap --watch",
+    "watch:ext": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --main-fields=module,main --sourcemap --watch",
     "watch:webview": "node scripts/build-webview.mjs --dev --watch",
     "watch": "npm run watch:ext & npm run watch:webview",
     "typecheck": "tsc --noEmit",
@@ -306,6 +321,7 @@
     "@polkadot/types-codec": "^16.5.6",
     "@polkadot/util": "^14.0.3",
     "@polkadot/util-crypto": "^14.0.3",
-    "@polkadot/wasm-crypto": "^7.5.4"
+    "@polkadot/wasm-crypto": "^7.5.4",
+    "vscode-json-languageservice": "^5.7.2"
   }
 }
