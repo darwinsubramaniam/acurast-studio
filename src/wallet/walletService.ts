@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady, mnemonicGenerate, mnemonicValidate } from '@polkadot/util-crypto';
-import { encrypt, decrypt, EncryptedBlob } from './crypto';
+import { encrypt, decrypt } from './crypto';
+import type { EncryptedBlob } from './crypto';
 
 const SECRETS_KEY = 'acurast.wallets.v2';
 const ACURAST_SS58_PREFIX = 42;

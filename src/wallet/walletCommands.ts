@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { WalletService, WalletInfo, WalletMetadata } from './walletService';
+import { WalletService } from './walletService';
+import type { WalletInfo, WalletMetadata } from './walletService';
 
 const MIN_PASSWORD_LEN = 8;
 const MAX_NAME_LEN = 40;

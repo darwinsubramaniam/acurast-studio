@@ -248,9 +248,15 @@
   "scripts": {
     "vscode:prepublish": "npm run build",
     "build:font": "fantasticon",
-    "build": "npm run build:font && esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify",
-    "build:dev": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
-    "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap --watch",
+    "build:ext": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify",
+    "build:ext:dev": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "build:webview": "node scripts/build-webview.mjs",
+    "build:webview:dev": "node scripts/build-webview.mjs --dev",
+    "build": "npm run build:font && npm run build:ext && npm run build:webview",
+    "build:dev": "npm run build:ext:dev && npm run build:webview:dev",
+    "watch:ext": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap --watch",
+    "watch:webview": "node scripts/build-webview.mjs --dev --watch",
+    "watch": "npm run watch:ext & npm run watch:webview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
     "package": "vsce package"
@@ -262,8 +268,11 @@
     "@typescript-eslint/parser": "^8.59.4",
     "@vscode/vsce": "^3.9.1",
     "esbuild": "^0.28.0",
+    "esbuild-svelte": "^0.9.5",
     "eslint": "^10.4.0",
     "fantasticon": "^3.0.0",
+    "svelte": "^5.55.8",
+    "svelte-preprocess": "^6.0.3",
     "typescript": "^6.0.3"
   },
   "dependencies": {

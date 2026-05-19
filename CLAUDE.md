@@ -9,12 +9,18 @@ VS Code extension for **Acurast** development — Acurast is a decentralized ser
 ## Build / run
 
 ```bash
-npm run build:dev    # esbuild bundle with sourcemaps (use for F5 dev loop)
-npm run build        # production: regenerates icon font + minifies bundle
-npm run typecheck    # tsc --noEmit
-npm run watch        # esbuild watch mode
-npm run build:font   # regenerate woff/woff2 from media/icons/*.svg
+npm run build:dev        # build both extension + webview with sourcemaps (use for F5 dev loop)
+npm run build            # production: regenerates icon font + minifies both bundles
+npm run typecheck        # tsc --noEmit
+npm run watch            # watch both extension and webview in parallel
+npm run watch:ext        # watch extension bundle only
+npm run watch:webview    # watch Svelte webview bundle only
+npm run build:font       # regenerate woff/woff2 from media/icons/*.svg
 ```
+
+Two separate bundles are produced:
+- `dist/extension.js` — Node/CJS host bundle (esbuild CLI)
+- `dist/studio/webview.js` — Browser/IIFE Svelte bundle (`scripts/build-webview.mjs` via esbuild JS API)
 
 F5 in VS Code launches the Extension Development Host (config in `.vscode/launch.json`, preLaunchTask runs `build:dev`).
 
@@ -24,7 +30,7 @@ After any code change in the dev host, **`Cmd+R` reloads** — webviews do not h
 
 ## Architecture in one paragraph
 
-The extension is a single Node bundle (`dist/extension.js`) built by esbuild from `src/extension.ts`. It registers **one** webview view (`acurastStudio` of type webview, named "Home") in the Acurast Studio activity bar container. That webview is a vanilla-JS SPA with an internal router (`home | wallets | settings`) — all UI lives in `src/studio/studioPanel.ts` as a single inlined HTML/CSS/JS template. The webview talks to the host via `postMessage`; the host delegates to existing command implementations (`vscode.commands.executeCommand('acurast.wallet.create', id)` etc.) rather than re-implementing flows. Services (wallet storage, SDK client, project config) live outside the panel so commands triggered from the palette or status bar share the same backing logic.
+The extension is a single Node bundle (`dist/extension.js`) built by esbuild from `src/extension.ts`. It registers **one** webview view (`acurastStudio` of type webview, named "Home") in the Acurast Studio activity bar container. The webview is a **Svelte 5** SPA (`dist/studio/webview.js`) with an internal router (`home | wallets | settings | deploy`) — the root `App.svelte` holds all reactive state and dispatches to four route components. Global styles live in `media/studio/global.css`; `studioPanel.ts` reads `media/studio/webview.html` and substitutes `{{CSP}}`, `{{STYLE_URI}}`, `{{SCRIPT_URI}}`, `{{NONCE}}` sentinels at runtime. The webview talks to the host via `postMessage`; the host delegates to existing command implementations (`vscode.commands.executeCommand('acurast.wallet.create', id)` etc.) rather than re-implementing flows. Services (wallet storage, SDK client, project config) live outside the panel so commands triggered from the palette or status bar share the same backing logic.
 
 ## Key modules
 
@@ -40,7 +46,23 @@ The extension is a single Node bundle (`dist/extension.js`) built by esbuild fro
 
 - **`src/sdk/constants.ts`** — RPC endpoints and IPFS proxy defaults. Mainnet: `wss://public-rpc.mainnet.acurast.com`; Canary: `wss://public-rpc.canary.acurast.com`. IPFS uses Acurast's hosted proxy (`https://ipfs-proxy.acurast.prod.gke.papers.tech`) — no Pinata key needed for the default path.
 
-- **`src/studio/studioPanel.ts`** — The whole UI. ~700 lines, deliberately single-file. Holds a `_route` field and posts `{type: 'route'}` to the webview on `navigate(route)`. Polls balance every 30s while on the `wallets` route. Sets context key `acurast.studio.route` so `view/title` menus can hide/show the Home button.
+- **`src/studio/studioPanel.ts`** — Host class (~700 lines). Holds a `_route` field and posts `{type: 'route'}` to the webview on `navigate(route)`. Polls balance every 30s while on the `wallets` route. Sets context key `acurast.studio.route` so `view/title` menus can hide/show the Home button. The `html()` method reads `media/studio/webview.html` and replaces the four `{{...}}` sentinels — no inline template.
+
+- **`src/studio/types.ts`** — All shared TypeScript types used by both the host and the webview: `Route`, `InMsg`, all `*Msg` interfaces, `DeployStageId`, `StageStatus`, `DeployStage`, `DeployState`, etc. Re-exports `WalletInfo` from `../wallet/walletService`.
+
+- **`src/studio/webview/App.svelte`** — Svelte 5 root component. Holds all global state with `$state` runes (`route`, `wallets`, `balance`, `config`, `deploy`, `ctx`). Registers the `window.addEventListener('message')` handler in a `$effect` with cleanup. Routes to the four page components via `{#if}` blocks.
+
+- **`src/studio/webview/Home.svelte`**, **`Wallets.svelte`**, **`Settings.svelte`**, **`Deploy.svelte`** — Route components. Each receives typed props; uses `$derived`/`$derived.by` for computed values. All DOM events use `onclick={}` (Svelte 5 syntax — not `on:click`).
+
+- **`src/studio/webview/lib/vscode.ts`** — Calls `acquireVsCodeApi()` once and exports a `send(type, extra)` helper. Import directly in any component — do not prop-drill the API.
+
+- **`src/studio/webview/lib/icons.ts`** — SVG string constants exported as `ICONS`. Use `{@html ICONS.xxx}` in templates (safe: these are static, not user input).
+
+- **`media/studio/global.css`** — All VS Code theme-variable base styles shared across components (`.wallet-card`, `.nav-card`, `.stage`, etc.). Loaded via `<link>` in `webview.html`.
+
+- **`scripts/build-webview.mjs`** — esbuild JS API config for the Svelte bundle. Must use the JS API (not CLI) because esbuild plugins require it. `css: 'injected'` bundles component `<style>` blocks into the JS.
+
+- **`svelte.config.js`** — Tells the VS Code Svelte language server to use Svelte 5 runes mode (`compilerOptions: { runes: true }`). Without this, the IDE reports false `$derived`/`$state` errors.
 
 - **`src/commands/`** — Each command is a thin function exported from its file and registered in `commands/index.ts`. Wallet commands live separately in `src/wallet/walletCommands.ts` because they only depend on `WalletService`.
 
@@ -56,7 +78,7 @@ The extension is a single Node bundle (`dist/extension.js`) built by esbuild fro
 
 - **Icons.** Custom icons (Acurast logo, status bar) come from a webfont generated by `fantasticon` from SVGs in `media/icons/`. Output lives at `media/font/acurast-icons.woff{,2}`. `package.json` `contributes.icons` maps `acurast-logo` to codepoint `\E000`. To tweak the glyph size, edit the source SVG's viewBox (with `normalize: false` in `.fantasticonrc.json` to preserve the padding) and run `npm run build:font`. Codicons (`$(home)`, `$(cloud-upload)`, etc.) are used everywhere else and don't need the font build.
 
-- **Webviews are vanilla JS.** React was tried and removed (~196kb per webview, no shared chunk across iframes). The rule of thumb: tree-shaped data → native `TreeDataProvider`; static + 1–2 buttons → vanilla webview; complex forms or multi-state UI → reconsider React only if vanilla starts hurting. The Configuration form was the borderline case and is still vanilla.
+- **Webview uses Svelte 5 runes only.** Use `$state`, `$derived`, `$derived.by`, `$effect`, `$props` — never Svelte 4 patterns (`$:`, `export let`, `writable()` stores). The `{@html}` directive is only acceptable for the static SVG strings in `lib/icons.ts`; never use it for user-supplied content. Svelte auto-escapes all `{expression}` interpolations.
 
 - **Status bar lives separately.** `WalletStatusBar` listens on `wallet.onDidChange`, hides when no active wallet exists, click executes `acurast.studio.showWallets` which calls `studioPanel.navigate('wallets')`.
 
@@ -64,6 +86,7 @@ The extension is a single Node bundle (`dist/extension.js`) built by esbuild fro
 
 ## When you add a new feature
 
-- **New webview route**: add to the `Route` type in `studio/studioPanel.ts`, add render function, update the topbar title/icon maps, handle `navigate('newroute')`. Set `acurast.studio.route` context for any title-bar buttons that should show only on that route.
-- **New command callable from the wallet card or settings panel**: add a `data-walletact` or `data-cfgact` attribute, then route it through the existing `case` block in `handle()` to `executeCommand(...)`. Keep the actual implementation in `src/commands/` or `src/wallet/walletCommands.ts` so the palette gets it for free.
+- **New webview route**: (1) Add the route name to the `Route` type in `src/studio/types.ts`. (2) Create `src/studio/webview/MyRoute.svelte` with typed `$props()`. (3) Import and add a `{:else if route === 'myroute'}` branch in `App.svelte`. (4) Update the `routeTitles` map in `App.svelte`. (5) Set `acurast.studio.route` context key in `studioPanel.ts` for any `view/title` buttons that should appear only on that route.
+- **New command callable from the webview**: add an `onclick={() => send('wallet', { action: 'newAction', id: w.id })}` call in the appropriate Svelte component, then handle it in `studioPanel.ts`'s `handle()` method with `vscode.commands.executeCommand(...)`. Keep the actual implementation in `src/commands/` or `src/wallet/walletCommands.ts` so the palette gets it for free.
+- **New shared type**: add to `src/studio/types.ts` and export it. Import with `import type { ... }` in both host and webview files (required by `verbatimModuleSyntax`).
 - **New RPC or IPFS endpoint**: add to `src/sdk/constants.ts`. Per-network overrides come from VS Code setting `acurast.rpcOverrides`.
