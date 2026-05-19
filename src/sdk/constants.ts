@@ -14,3 +14,8 @@ export const SYMBOL: Record<AcurastNetwork, string> = {
   mainnet: 'ACU',
   canary: 'cACU',
 };
+
+export const MATCHER_ENDPOINTS: Record<AcurastNetwork, string> = {
+  mainnet: 'https://matcher.mainnet.acurast.com',
+  canary: 'https://matcher.canary.acurast.com',
+};

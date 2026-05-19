@@ -19,7 +19,7 @@ export function registerCommands(deps: CommandDeps): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('acurast.newProject', () => newProject(ctx)),
     vscode.commands.registerCommand('acurast.deploy', () => deploy({ ctx, wallet, output, studioPanel })),
-    vscode.commands.registerCommand('acurast.estimateCost', () => estimateCost(ctx)),
+    vscode.commands.registerCommand('acurast.estimateCost', () => estimateCost({ ctx, wallet, output })),
     vscode.commands.registerCommand('acurast.openDashboard', () => {
       vscode.env.openExternal(vscode.Uri.parse('https://console.acurast.com'));
     }),

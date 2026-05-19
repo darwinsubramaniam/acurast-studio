@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Route, DeployState, WalletInfo, BalanceMsg } from '../types';
+  import type { Route, DeployState, WalletInfo, BalanceMsg, PricingStateMsg } from '../types';
   import { send } from './lib/vscode';
   import { ICONS } from './lib/icons';
   import Home from './Home.svelte';
@@ -17,6 +17,7 @@
   let balance = $state<BalanceMsg>({ status: 'idle' });
   let config = $state<ConfigState>({ data: null, projectKey: null });
   let deploy = $state<DeployState | null>(null);
+  let pricing = $state<PricingStateMsg | null>(null);
 
   function navigate(newRoute: Route) {
     route = newRoute;
@@ -41,6 +42,10 @@
           break;
         case 'config.state':
           config = { data: msg.config, projectKey: null };
+          pricing = null; // config changed — stale until refreshed
+          break;
+        case 'pricing.state':
+          pricing = msg as unknown as PricingStateMsg;
           break;
         case 'deploy.state':
           deploy = msg.state as DeployState | null;
@@ -68,7 +73,7 @@
 {:else if route === 'wallets'}
   <Wallets {wallets} {balance} {navigate} />
 {:else if route === 'settings'}
-  <Settings {ctx} {config} {navigate} />
+  <Settings {ctx} {config} {navigate} {pricing} />
 {:else if route === 'deploy'}
-  <Deploy {ctx} {deploy} {navigate} />
+  <Deploy {ctx} {deploy} {navigate} {pricing} />
 {/if}

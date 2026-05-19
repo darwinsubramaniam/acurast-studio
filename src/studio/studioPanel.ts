@@ -5,7 +5,10 @@ import { AcurastContext } from '../context';
 import { acurastClient } from '../sdk/acurastClient';
 import { getAcknowledgedProcessors, walletFromMnemonic, jobIdFromChainJson } from '@acurast/sdk/chain';
 import type { UnsubEvent } from '@acurast/sdk/chain';
-import { SYMBOL, type AcurastNetwork } from '../sdk/constants';
+import { loadAcurastConfig } from '@acurast/sdk/deploy';
+import { toCacu } from '@acurast/sdk/matcher';
+import { loadPricing } from '../sdk/pricing';
+import { SYMBOL, MATCHER_ENDPOINTS, type AcurastNetwork } from '../sdk/constants';
 import type { Route, InMsg, WalletActionMsg, DeployState, DeployStage, DeployStageId, StageStatus, DeployJobId, ProcessorPubKey, ProcessorInfo, ChainEvent } from './types';
 
 const BALANCE_POLL_MS = 30_000;
@@ -39,7 +42,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     wallet.onDidChange(() => this.pushWallets());
     ctx.onDidChangeActiveConfig(() => {
       this.pushContext();
-      if (this._route === 'settings') this.pushConfig();
+      void this.pushConfig();
     });
     vscode.workspace.onDidSaveTextDocument((doc) => {
       if (this.ctx.configPath && doc.fileName === this.ctx.configPath) this.pushConfig();
@@ -73,7 +76,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
         this.stopBalancePoll();
       }
       if (route === 'settings') await this.pushConfig();
-      if (route === 'deploy') this.pushDeploy();
+      if (route === 'deploy') { this.pushDeploy(); if (!this._deploy) void this.pushPricing(); }
     }
     // Reveal the view (auto-generated focus command)
     await vscode.commands.executeCommand('acurastStudio.focus');
@@ -116,7 +119,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
           this.stopBalancePoll();
         }
         if (msg.route === 'settings') await this.pushConfig();
-        if (msg.route === 'deploy') this.pushDeploy();
+        if (msg.route === 'deploy') { this.pushDeploy(); if (!this._deploy) void this.pushPricing(); }
         break;
       case 'wallet':
         await this.runWalletAction(msg);
@@ -151,6 +154,9 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       case 'deploy.deregister':
         await this.deregisterDeployment(msg.origin, msg.localId);
         break;
+      case 'pricing.fetch':
+        void this.pushPricing();
+        break;
     }
   }
 
@@ -181,8 +187,8 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     this.pushContext();
     await this.pushWallets();
     if (this._route === 'wallets') this.startBalancePoll();
-    if (this._route === 'settings') await this.pushConfig();
-    if (this._route === 'deploy') this.pushDeploy();
+    await this.pushConfig();
+    if (this._route === 'deploy') { this.pushDeploy(); if (!this._deploy) void this.pushPricing(); }
   }
 
   private async pushWallets() {
@@ -241,6 +247,64 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     } catch {
       return undefined;
     }
+  }
+
+  async pushPricing() {
+    this.post({ type: 'pricing.state', status: 'loading' });
+
+    if (!this.ctx.configPath) {
+      this.post({ type: 'pricing.state', status: 'error', error: 'No active acurast.json' });
+      return;
+    }
+
+    let config;
+    try {
+      config = loadAcurastConfig({ filePath: this.ctx.configPath });
+    } catch (err: unknown) {
+      this.post({ type: 'pricing.state', status: 'error', error: (err as Error).message });
+      return;
+    }
+    if (!config) {
+      this.post({ type: 'pricing.state', status: 'error', error: 'No project found in acurast.json' });
+      return;
+    }
+
+    const network = (config.network ?? 'mainnet') as AcurastNetwork;
+    const matcherOverrides = vscode.workspace.getConfiguration('acurast').get<Record<string, string>>('matcherUrls', {});
+    const matcherUrl = matcherOverrides[network] ?? MATCHER_ENDPOINTS[network];
+    const activeWallet = await this.wallet.getActive();
+
+    const result = await loadPricing({ config, walletAddress: activeWallet?.address, matcherUrl });
+    const { fees, advice, fallbackReason, error } = result;
+
+    this.post({
+      type: 'pricing.state',
+      status: 'ok',
+      fees: {
+        numberOfExecutions: fees.numberOfExecutions.toFixed(),
+        numberOfReplicas: fees.numberOfReplicas.toFixed(),
+        totalRuns: fees.totalRuns.toFixed(),
+        maxCostPerExecution: fees.maxCostPerExecution.toFixed(),
+        maxCostPerExecutionCACU: fees.maxCostPerExecutionCACU.toFixed(),
+        maxCostPerExecutionPerReplicaCACU: fees.maxCostPerExecutionPerReplicaCACU.toFixed(),
+        suggestedCostPerExecution: fees.suggestedCostPerExecution.toFixed(),
+        suggestedCostPerExecutionCACU: toCacu(fees.suggestedCostPerExecution).toFixed(),
+        maxTotalCostCACU: fees.maxTotalCostCACU.toFixed(),
+        excessCostPerExecution: fees.excessCostPerExecution.toFixed(),
+        excessCostPerExecutionPercentage: fees.excessCostPerExecutionPercentage.toFixed(),
+      },
+      advice: advice ? {
+        status: advice.status,
+        matchedProcessors: advice.matchedProcessors,
+        requiredProcessors: advice.requiredProcessors,
+        currentPrice: advice.currentPrice.toFixed(),
+        suggestedPrice: advice.suggestedPrice?.toFixed() ?? null,
+        averagePrice: advice.averagePrice?.toFixed() ?? null,
+        distribution: advice.distribution,
+      } : undefined,
+      fallbackReason,
+      error,
+    });
   }
 
   private async openJson() {
@@ -577,9 +641,10 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     );
     const csp = [
       `default-src 'none'`,
-      `style-src ${webview.cspSource}`,
+      `style-src ${webview.cspSource} 'unsafe-inline'`,
       `script-src 'nonce-${nonce}'`,
       `font-src ${webview.cspSource}`,
+      `connect-src ${webview.cspSource}`,
     ].join('; ');
     const raw = fs.readFileSync(
       vscode.Uri.joinPath(this.extensionUri, 'media', 'studio', 'webview.html').fsPath,

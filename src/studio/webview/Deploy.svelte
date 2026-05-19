@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Route, DeployState, DeployJobId, ProcessorInfo, ChainEvent } from '../types';
+  import type { Route, DeployState, DeployJobId, ProcessorInfo, ChainEvent, PricingStateMsg } from '../types';
   import { send } from './lib/vscode';
   import { ICONS } from './lib/icons';
 
@@ -7,8 +7,15 @@
     ctx: { isAcurastProject: boolean };
     deploy: DeployState | null;
     navigate: (r: Route) => void;
+    pricing: PricingStateMsg | null;
   }
-  let { ctx, deploy }: Props = $props();
+  let { ctx, deploy, pricing }: Props = $props();
+
+  function satoshiToACU(satoshi: string | null | undefined): string {
+    if (!satoshi) return '—';
+    const n = parseFloat(satoshi) / 1e12;
+    return n.toFixed(6).replace(/\.?0+$/, '') || '0';
+  }
 
   function fmtTime(ts: number): string {
     const d = new Date(ts);
@@ -41,6 +48,60 @@
       <p style="font-size:11px;">Select an <code>acurast.json</code> from Project Settings to enable deploy.</p>
     {/if}
   </div>
+
+  {#if ctx.isAcurastProject}
+    <div class="pricing-box" style="margin-top:8px;">
+      <div class="pricing-box-header">
+        <span class="pricing-box-title">Cost Estimate</span>
+        <button class="secondary" style="font-size:10px;padding:2px 8px;" disabled={pricing?.status === 'loading'} onclick={() => send('pricing.fetch')}>
+          {pricing?.status === 'loading' ? 'Checking…' : '⟳'}
+        </button>
+      </div>
+
+      {#if !pricing || pricing.status === 'idle'}
+        <div class="pricing-muted">Loading…</div>
+      {:else if pricing.status === 'loading'}
+        <div class="pricing-muted">Fetching market data…</div>
+      {:else if pricing.status === 'error'}
+        <div class="pricing-error-note">{pricing.error}</div>
+      {:else if pricing.status === 'ok' && pricing.fees}
+        {@const fees = pricing.fees}
+        {@const advice = pricing.advice}
+        {#if advice}
+          <div class="pricing-status-row pricing-{advice.status}" style="margin-bottom:6px;">
+            <span>
+              {advice.status === 'sufficient' ? '✓' : advice.status === 'overpaying' ? '⚠' : '✗'}
+              {advice.status === 'sufficient' ? 'Sufficient' : advice.status === 'overpaying' ? 'Overpaying' : 'Insufficient'}
+            </span>
+            <span class="pricing-match">{advice.matchedProcessors}/{advice.requiredProcessors} processors</span>
+          </div>
+          <div class="pricing-rows">
+            <span class="pricing-label">Your price</span>
+            <span class="pricing-value">{satoshiToACU(advice.currentPrice)} / exec</span>
+            {#if advice.suggestedPrice && advice.status !== 'sufficient'}
+              <span class="pricing-label">Suggested</span>
+              <span class="pricing-value">{satoshiToACU(advice.suggestedPrice)} / exec</span>
+            {/if}
+            <span class="pricing-label">Total max</span>
+            <span class="pricing-value">{fees.maxTotalCostCACU}</span>
+          </div>
+          {#if advice.status !== 'sufficient'}
+            <div class="pricing-muted" style="margin-top:4px;">Adjust price in <button style="background:none;border:none;padding:0;color:var(--vscode-textLink-foreground);cursor:pointer;font:inherit;font-size:10px;" onclick={() => send('navigate', { route: 'settings' })}>Project Settings</button>.</div>
+          {/if}
+        {:else}
+          <div class="pricing-rows">
+            <span class="pricing-label">Max / exec</span>
+            <span class="pricing-value">{fees.maxCostPerExecutionCACU}</span>
+            <span class="pricing-label">Total max</span>
+            <span class="pricing-value">{fees.maxTotalCostCACU}</span>
+          </div>
+          {#if pricing.fallbackReason === 'no-wallet'}
+            <div class="pricing-muted" style="margin-top:4px;">Set an active wallet for live market pricing.</div>
+          {/if}
+        {/if}
+      {/if}
+    </div>
+  {/if}
 {:else}
   {@const d = deploy}
 

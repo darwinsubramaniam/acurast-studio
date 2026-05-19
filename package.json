@@ -217,6 +217,19 @@
             }
           }
         },
+        "acurast.matcherUrls": {
+          "type": "object",
+          "default": {},
+          "description": "Optional matcher API endpoint overrides per network. Defaults to the public Acurast matcher. Example: { \"mainnet\": \"https://my-matcher.example.com\" }",
+          "properties": {
+            "mainnet": {
+              "type": "string"
+            },
+            "canary": {
+              "type": "string"
+            }
+          }
+        },
         "acurast.useKeychainForMnemonic": {
           "type": "boolean",
           "default": true,

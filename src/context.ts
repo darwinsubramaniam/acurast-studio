@@ -10,6 +10,7 @@ export interface AcurastConfig {
     maxExecutionTime?: number;
   };
   maxCostPerExecution?: string;
+  numberOfReplicas?: number;
   minReplicas?: number;
   maxReplicas?: number;
   assignmentStrategy?: { type: string };

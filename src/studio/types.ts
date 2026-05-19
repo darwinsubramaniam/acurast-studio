@@ -20,11 +20,45 @@ export interface DeployOpenOutputMsg { type: 'deploy.openOutput'; }
 export interface DeployQueryProcessorsMsg { type: 'deploy.queryProcessors'; }
 export interface DeployCopyMsg { type: 'deploy.copy'; text: string; }
 export interface DeployDeregisterMsg { type: 'deploy.deregister'; origin: string; localId: number; }
+export interface PricingFetchMsg { type: 'pricing.fetch'; }
 export type InMsg =
   | NavigateMsg | ReadyMsg | WalletActionMsg | RefreshBalanceMsg
   | ConfigSaveMsg | ConfigOpenJsonMsg | ConfigChooseMsg
   | DeployStartMsg | DeployOpenOutputMsg | DeployQueryProcessorsMsg | DeployCopyMsg
-  | DeployDeregisterMsg;
+  | DeployDeregisterMsg | PricingFetchMsg;
+
+export interface SerializedFees {
+  numberOfExecutions: string;
+  numberOfReplicas: string;
+  totalRuns: string;
+  maxCostPerExecution: string;
+  maxCostPerExecutionCACU: string;
+  maxCostPerExecutionPerReplicaCACU: string;
+  suggestedCostPerExecution: string;
+  suggestedCostPerExecutionCACU: string;
+  maxTotalCostCACU: string;
+  excessCostPerExecution: string;
+  excessCostPerExecutionPercentage: string;
+}
+
+export interface SerializedAdvice {
+  status: 'sufficient' | 'insufficient' | 'overpaying';
+  matchedProcessors: number;
+  requiredProcessors: number;
+  currentPrice: string;
+  suggestedPrice: string | null;
+  averagePrice: string | null;
+  distribution: Array<{ range_min: string; range_max: string; count: number }>;
+}
+
+export interface PricingStateMsg {
+  type: 'pricing.state';
+  status: 'idle' | 'loading' | 'ok' | 'error';
+  fees?: SerializedFees;
+  advice?: SerializedAdvice;
+  fallbackReason?: string;
+  error?: string;
+}
 
 export type DeployStageId =
   | 'bundle' | 'upload' | 'prepare' | 'submit'
