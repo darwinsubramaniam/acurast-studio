@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Route, DeployState, WalletInfo, BalanceMsg, PricingStateMsg } from '../types';
+  import type { Route, DeployState, WalletInfo, BalanceMsg, PricingStateMsg, FiatListStateMsg, FiatSelectionStateMsg } from '../types';
   import { send } from './lib/vscode';
   import { ICONS } from './lib/icons';
   import Home from './Home.svelte';
@@ -18,6 +18,8 @@
   let config = $state<ConfigState>({ data: null, projectKey: null });
   let deploy = $state<DeployState | null>(null);
   let pricing = $state<PricingStateMsg | null>(null);
+  let fiatList = $state<FiatListStateMsg | null>(null);
+  let fiatSelection = $state<FiatSelectionStateMsg | null>(null);
 
   function navigate(newRoute: Route) {
     route = newRoute;
@@ -47,6 +49,12 @@
         case 'pricing.state':
           pricing = msg as unknown as PricingStateMsg;
           break;
+        case 'fiat.listState':
+          fiatList = msg as unknown as FiatListStateMsg;
+          break;
+        case 'fiat.selection':
+          fiatSelection = msg as unknown as FiatSelectionStateMsg;
+          break;
         case 'deploy.state':
           deploy = msg.state as DeployState | null;
           break;
@@ -73,7 +81,7 @@
 {:else if route === 'wallets'}
   <Wallets {wallets} {balance} {navigate} />
 {:else if route === 'settings'}
-  <Settings {ctx} {config} {navigate} {pricing} />
+  <Settings {ctx} {config} {navigate} {pricing} {fiatList} {fiatSelection} />
 {:else if route === 'deploy'}
   <Deploy {ctx} {deploy} {navigate} {pricing} />
 {/if}

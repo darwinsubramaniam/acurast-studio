@@ -31,7 +31,7 @@ export async function activate(extensionContext: vscode.ExtensionContext) {
   await ctx.initialize();
 
   const wallet = new WalletService(extensionContext.secrets);
-  const studioPanel = new StudioPanel(extensionContext.extensionUri, ctx, wallet);
+  const studioPanel = new StudioPanel(extensionContext.extensionUri, ctx, wallet, extensionContext.secrets);
   const statusBar = new WalletStatusBar(wallet);
   const output = vscode.window.createOutputChannel('Acurast');
 

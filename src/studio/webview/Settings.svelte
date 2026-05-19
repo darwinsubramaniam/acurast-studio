@@ -1,14 +1,67 @@
 <script lang="ts">
-  import type { Route, PricingStateMsg, SerializedAdvice } from '../types';
+  import type { Route, PricingStateMsg, SerializedAdvice, FiatListStateMsg, FiatSelectionStateMsg, CoinGeckoPlan } from '../types';
   import { send } from './lib/vscode';
+  import { Accordion } from 'bits-ui';
+
+  // Section ids match the Accordion.Item `value=` below. Open-by-default = listed here.
+  let openSections = $state<string[]>(['identity', 'runtime', 'execution', 'scaling']);
 
   interface Props {
     ctx: { configPath: string | null; configRel: string | null };
     config: { data: unknown; projectKey: string | null };
     navigate: (r: Route) => void;
     pricing: PricingStateMsg | null;
+    fiatList: FiatListStateMsg | null;
+    fiatSelection: FiatSelectionStateMsg | null;
   }
-  let { ctx, config, pricing }: Props = $props();
+  let { ctx, config, pricing, fiatList, fiatSelection }: Props = $props();
+
+  // Pricing config form state — local edits before save.
+  const EXCHANGERS: Array<{ id: number; name: string }> = [
+    { id: 1, name: 'CoinMarketCap' },
+    { id: 2, name: 'CoinGecko' },
+  ];
+  let fiatExchangerId = $state<number>(2);
+  let fiatCurrencyId = $state<string>('');
+  let fiatApiKey = $state<string>('');
+  let fiatApiKeyTouched = $state<boolean>(false);
+  let coingeckoPlan = $state<CoinGeckoPlan>('demo');
+
+  $effect(() => {
+    if (!fiatSelection) return;
+    fiatExchangerId = fiatSelection.exchangerId;
+    fiatCurrencyId = fiatSelection.currencyId;
+    coingeckoPlan = fiatSelection.coingeckoPlan;
+    fiatApiKey = '';
+    fiatApiKeyTouched = false;
+  });
+
+  function fiatRefreshList() {
+    send('fiat.fetchList', {
+      exchangerId: fiatExchangerId,
+      apiKey: fiatApiKey.trim() || undefined,
+      coingeckoPlan: fiatExchangerId === 2 ? coingeckoPlan : undefined,
+    });
+  }
+
+  function fiatSave() {
+    send('fiat.save', {
+      exchangerId: fiatExchangerId,
+      currencyId: fiatCurrencyId,
+      apiKey: fiatApiKeyTouched ? fiatApiKey.trim() : undefined,
+      coingeckoPlan: fiatExchangerId === 2 ? coingeckoPlan : undefined,
+    });
+  }
+
+  function fiatClear() {
+    fiatCurrencyId = '';
+    send('fiat.save', {
+      exchangerId: fiatExchangerId,
+      currencyId: '',
+      apiKey: fiatApiKeyTouched ? fiatApiKey.trim() : undefined,
+      coingeckoPlan: fiatExchangerId === 2 ? coingeckoPlan : undefined,
+    });
+  }
 
   let draft = $state<Record<string, unknown>>({});
   let dirty = $derived(Object.keys(draft).length > 0);
@@ -219,6 +272,26 @@
     return n.toFixed(6).replace(/\.?0+$/, '') || '0';
   }
 
+  function satoshiToFiat(satoshi: string | null | undefined, rate: number): number | null {
+    if (!satoshi) return null;
+    const acu = parseFloat(satoshi) / 1e12;
+    if (!Number.isFinite(acu)) return null;
+    return acu * rate;
+  }
+
+  function cacuToFiat(cacu: string | null | undefined, rate: number): number | null {
+    if (!cacu) return null;
+    const n = parseFloat(cacu);
+    if (!Number.isFinite(n)) return null;
+    return n * rate;
+  }
+
+  function fmtFiat(amount: number, sign: string, symbol: string): string {
+    const digits = amount >= 100 ? 2 : amount >= 1 ? 3 : 5;
+    const value = amount.toFixed(digits);
+    return sign ? `${sign}${value} ${symbol}` : `${value} ${symbol}`;
+  }
+
   function adviceIcon(status: SerializedAdvice['status']): string {
     return status === 'sufficient' ? '✓' : status === 'overpaying' ? '⚠' : '✗';
   }
@@ -271,7 +344,76 @@
       <button class="secondary" onclick={() => send('config.openJson')}>Open acurast.json</button>
     </div>
 
-    <div class="field">
+    <Accordion.Root type="multiple" bind:value={openSections} class="acc">
+
+    <!-- Fiat pricing source -->
+    <Accordion.Item value="fiat" class="section acc-item">
+      <Accordion.Header>
+        <Accordion.Trigger class="section-title acc-trigger">Fiat Pricing</Accordion.Trigger>
+      </Accordion.Header>
+      <Accordion.Content class="acc-content">
+      <div class="field">
+        <label for="f_fiatExchanger">Price source</label>
+        <select id="f_fiatExchanger" onchange={(e) => { fiatExchangerId = Number((e.target as HTMLSelectElement).value); }}>
+          {#each EXCHANGERS as ex}
+            <option value={ex.id} selected={ex.id === fiatExchangerId}>{ex.name}</option>
+          {/each}
+        </select>
+        <div class="hint">CoinMarketCap requires an API key. CoinGecko works keyless (public API) or with a Demo/Pro key.</div>
+      </div>
+      {#if fiatExchangerId === 2}
+        <div class="field">
+          <label for="f_fiatPlan">CoinGecko plan</label>
+          <select id="f_fiatPlan" onchange={(e) => { coingeckoPlan = (e.target as HTMLSelectElement).value as CoinGeckoPlan; }}>
+            <option value="demo" selected={coingeckoPlan === 'demo'}>Demo (api.coingecko.com)</option>
+            <option value="pro" selected={coingeckoPlan === 'pro'}>Pro (pro-api.coingecko.com)</option>
+          </select>
+          <div class="hint">Both key types start with <code>CG-</code> so the tier can't be auto-detected. Leave key blank to use the public/keyless API.</div>
+        </div>
+      {/if}
+      <div class="field">
+        <label for="f_fiatApiKey">API key {fiatSelection?.hasApiKey && fiatExchangerId === fiatSelection.exchangerId ? '(stored)' : ''}</label>
+        <input id="f_fiatApiKey" type="password" autocomplete="off"
+          placeholder={fiatSelection?.hasApiKey && fiatExchangerId === fiatSelection.exchangerId ? '•••••••• (saved — type to replace)' : 'optional (blank = public/keyless)'}
+          value={fiatApiKey}
+          oninput={(e) => { fiatApiKey = (e.target as HTMLInputElement).value; fiatApiKeyTouched = true; }} />
+        <div class="hint">Stored in the OS keychain (SecretStorage). Not written to settings.json.</div>
+      </div>
+      <div class="field">
+        <label for="f_fiatCurrency">Display currency</label>
+        <div style="display:flex; gap:6px;">
+          <select id="f_fiatCurrency" style="flex:1;"
+            onchange={(e) => { fiatCurrencyId = (e.target as HTMLSelectElement).value; }}
+            disabled={!fiatList || fiatList.status !== 'ok' || fiatList.exchangerId !== fiatExchangerId}>
+            <option value="" selected={fiatCurrencyId === ''}>— Disabled —</option>
+            {#if fiatList && fiatList.status === 'ok' && fiatList.exchangerId === fiatExchangerId && fiatList.list}
+              {#each fiatList.list as c (c.id)}
+                <option value={c.id} selected={c.id === fiatCurrencyId}>{c.symbol} — {c.name}{c.sign ? ` (${c.sign})` : ''}</option>
+              {/each}
+            {/if}
+          </select>
+          <button class="secondary" style="font-size:11px;" disabled={fiatList?.status === 'loading'} onclick={fiatRefreshList}>
+            {fiatList?.status === 'loading' && fiatList.exchangerId === fiatExchangerId ? 'Loading…' : 'Load list'}
+          </button>
+        </div>
+        {#if fiatList?.status === 'error' && fiatList.exchangerId === fiatExchangerId}
+          <div class="error-hint">{fiatList.error}</div>
+        {:else if !fiatList || fiatList.exchangerId !== fiatExchangerId}
+          <div class="hint">Click "Load list" to populate the currency picker for the chosen source.</div>
+        {:else}
+          <div class="hint">Shown alongside ACU in the deploy cost estimate.</div>
+        {/if}
+      </div>
+      <div class="toolbar">
+        <button onclick={fiatSave}>Save pricing source</button>
+        {#if fiatCurrencyId}
+          <button class="secondary" onclick={fiatClear}>Disable fiat</button>
+        {/if}
+      </div>
+      </Accordion.Content>
+    </Accordion.Item>
+
+    <div class="field" style="margin: 12px 0;">
       <label for="projectPicker">Project</label>
       <select id="projectPicker" onchange={onProjectChange}>
         {#each keys as k}
@@ -281,8 +423,11 @@
     </div>
 
     <!-- Identity -->
-    <div class="section">
-      <div class="section-title" class:dirty>Identity</div>
+    <Accordion.Item value="identity" class="section acc-item">
+      <Accordion.Header>
+        <Accordion.Trigger class={`section-title acc-trigger${dirty ? ' dirty' : ''}`}>Identity</Accordion.Trigger>
+      </Accordion.Header>
+      <Accordion.Content class="acc-content">
       <div class="field">
         <label for="f_projectName">Project Name</label>
         <input id="f_projectName" type="text"
@@ -311,11 +456,15 @@
           <div class="hint">Bundled file path, IPFS hash, or HTTPS URL</div>
         {/if}
       </div>
-    </div>
+      </Accordion.Content>
+    </Accordion.Item>
 
     <!-- Runtime -->
-    <div class="section">
-      <div class="section-title" class:dirty>Runtime</div>
+    <Accordion.Item value="runtime" class="section acc-item">
+      <Accordion.Header>
+        <Accordion.Trigger class={`section-title acc-trigger${dirty ? ' dirty' : ''}`}>Runtime</Accordion.Trigger>
+      </Accordion.Header>
+      <Accordion.Content class="acc-content">
       <div class="field">
         <label for="f_runtime">Runtime</label>
         <select id="f_runtime" onchange={(e) => patchField('runtime', (e.target as HTMLSelectElement).value)}>
@@ -384,11 +533,15 @@
           <label for="f_devtools" style="margin:0;text-transform:none;letter-spacing:0;">Enable DevTools</label>
         </div>
       </div>
-    </div>
+      </Accordion.Content>
+    </Accordion.Item>
 
     <!-- Execution -->
-    <div class="section">
-      <div class="section-title" class:dirty>Execution</div>
+    <Accordion.Item value="execution" class="section acc-item">
+      <Accordion.Header>
+        <Accordion.Trigger class={`section-title acc-trigger${dirty ? ' dirty' : ''}`}>Execution</Accordion.Trigger>
+      </Accordion.Header>
+      <Accordion.Content class="acc-content">
       <div class="field">
         <label for="f_assignType">Assignment Strategy</label>
         <select id="f_assignType" onchange={(e) => patchField('assignmentStrategy.type', (e.target as HTMLSelectElement).value)}>
@@ -462,11 +615,15 @@
           value={rd('maxAllowedStartDelayInMs', p.maxAllowedStartDelayInMs) ?? 10000}
           oninput={(e) => { const n = Number((e.target as HTMLInputElement).value); patchField('maxAllowedStartDelayInMs', isNaN(n) ? null : n); }} />
       </div>
-    </div>
+      </Accordion.Content>
+    </Accordion.Item>
 
     <!-- Scaling & Cost -->
-    <div class="section">
-      <div class="section-title" class:dirty>Scaling &amp; Cost</div>
+    <Accordion.Item value="scaling" class="section acc-item">
+      <Accordion.Header>
+        <Accordion.Trigger class={`section-title acc-trigger${dirty ? ' dirty' : ''}`}>Scaling &amp; Cost</Accordion.Trigger>
+      </Accordion.Header>
+      <Accordion.Content class="acc-content">
       <div class="field">
         <label for="f_replicas">Replicas</label>
         <input id="f_replicas" type="number"
@@ -529,6 +686,7 @@
         {:else if pricing?.status === 'ok' && pricing.fees}
           {@const fees = pricing.fees}
           {@const advice = pricing.advice}
+          {@const fiat = pricing.fiat && !pricing.fiat.error ? pricing.fiat : null}
 
           {#if advice}
             <div class="pricing-status-row pricing-{advice.status}">
@@ -538,17 +696,29 @@
 
             <div class="pricing-rows">
               <span class="pricing-label">Your price</span>
-              <span class="pricing-value">{satoshiToACU(advice.currentPrice)} {sym}/exec</span>
+              <span class="pricing-value">
+                {satoshiToACU(advice.currentPrice)} {sym}/exec
+                {#if fiat}{@const f = satoshiToFiat(advice.currentPrice, fiat.acuPriceFiat)}{#if f != null}<span class="pricing-fiat">(~{fmtFiat(f, fiat.currencySign, fiat.currencySymbol)})</span>{/if}{/if}
+              </span>
               {#if advice.averagePrice}
                 <span class="pricing-label">Market avg</span>
-                <span class="pricing-value">{satoshiToACU(advice.averagePrice)} {sym}/exec</span>
+                <span class="pricing-value">
+                  {satoshiToACU(advice.averagePrice)} {sym}/exec
+                  {#if fiat}{@const f = satoshiToFiat(advice.averagePrice, fiat.acuPriceFiat)}{#if f != null}<span class="pricing-fiat">(~{fmtFiat(f, fiat.currencySign, fiat.currencySymbol)})</span>{/if}{/if}
+                </span>
               {/if}
               {#if advice.suggestedPrice}
                 <span class="pricing-label">Suggested</span>
-                <span class="pricing-value">{satoshiToACU(advice.suggestedPrice)} {sym}/exec</span>
+                <span class="pricing-value">
+                  {satoshiToACU(advice.suggestedPrice)} {sym}/exec
+                  {#if fiat}{@const f = satoshiToFiat(advice.suggestedPrice, fiat.acuPriceFiat)}{#if f != null}<span class="pricing-fiat">(~{fmtFiat(f, fiat.currencySign, fiat.currencySymbol)})</span>{/if}{/if}
+                </span>
               {/if}
               <span class="pricing-label">Total cost</span>
-              <span class="pricing-value">{fees.maxTotalCostCACU} {sym}</span>
+              <span class="pricing-value">
+                {fees.maxTotalCostCACU} {sym}
+                {#if fiat}{@const f = cacuToFiat(fees.maxTotalCostCACU, fiat.acuPriceFiat)}{#if f != null}<span class="pricing-fiat">(~{fmtFiat(f, fiat.currencySign, fiat.currencySymbol)})</span>{/if}{/if}
+              </span>
             </div>
 
             {#if advice.distribution.length > 0}
@@ -587,11 +757,20 @@
             {/if}
             <div class="pricing-rows">
               <span class="pricing-label">Suggested</span>
-              <span class="pricing-value">{fees.suggestedCostPerExecutionCACU} {sym}/exec</span>
+              <span class="pricing-value">
+                {fees.suggestedCostPerExecutionCACU} {sym}/exec
+                {#if fiat}{@const f = cacuToFiat(fees.suggestedCostPerExecutionCACU, fiat.acuPriceFiat)}{#if f != null}<span class="pricing-fiat">(~{fmtFiat(f, fiat.currencySign, fiat.currencySymbol)})</span>{/if}{/if}
+              </span>
               <span class="pricing-label">Your max</span>
-              <span class="pricing-value">{fees.maxCostPerExecutionCACU} {sym}/exec</span>
+              <span class="pricing-value">
+                {fees.maxCostPerExecutionCACU} {sym}/exec
+                {#if fiat}{@const f = cacuToFiat(fees.maxCostPerExecutionCACU, fiat.acuPriceFiat)}{#if f != null}<span class="pricing-fiat">(~{fmtFiat(f, fiat.currencySign, fiat.currencySymbol)})</span>{/if}{/if}
+              </span>
               <span class="pricing-label">Total</span>
-              <span class="pricing-value">{fees.maxTotalCostCACU} {sym}</span>
+              <span class="pricing-value">
+                {fees.maxTotalCostCACU} {sym}
+                {#if fiat}{@const f = cacuToFiat(fees.maxTotalCostCACU, fiat.acuPriceFiat)}{#if f != null}<span class="pricing-fiat">(~{fmtFiat(f, fiat.currencySign, fiat.currencySymbol)})</span>{/if}{/if}
+              </span>
             </div>
             {#if parseFloat(fees.excessCostPerExecution) < 0}
               <div class="pricing-warn-note">⚠ Your max cost is below the suggested fee — may not match.</div>
@@ -603,11 +782,15 @@
           <div class="pricing-muted">Check the live market to see if your price will match processors.</div>
         {/if}
       </div>
-    </div>
+      </Accordion.Content>
+    </Accordion.Item>
 
     <!-- Advanced -->
-    <div class="section">
-      <div class="section-title" class:dirty>Advanced</div>
+    <Accordion.Item value="advanced" class="section acc-item">
+      <Accordion.Header>
+        <Accordion.Trigger class={`section-title acc-trigger${dirty ? ' dirty' : ''}`}>Advanced</Accordion.Trigger>
+      </Accordion.Header>
+      <Accordion.Content class="acc-content">
       <div class="field">
         <label for="f_mutability">Mutability</label>
         <select id="f_mutability" onchange={(e) => patchField('mutability', (e.target as HTMLSelectElement).value)}>
@@ -678,7 +861,10 @@
           oninput={(e) => patchField('includeEnvironmentVariables', (e.target as HTMLInputElement).value)} />
         <div class="hint">Variable names from .env passed to the deployment</div>
       </div>
-    </div>
+      </Accordion.Content>
+    </Accordion.Item>
+
+    </Accordion.Root>
 
     <div class="save-bar">
       {#if hasErrors && dirty}

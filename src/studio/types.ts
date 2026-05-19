@@ -20,12 +20,28 @@ export interface DeployOpenOutputMsg { type: 'deploy.openOutput'; }
 export interface DeployQueryProcessorsMsg { type: 'deploy.queryProcessors'; }
 export interface DeployCopyMsg { type: 'deploy.copy'; text: string; }
 export interface DeployDeregisterMsg { type: 'deploy.deregister'; origin: string; localId: number; }
+export type CoinGeckoPlan = 'demo' | 'pro';
+
 export interface PricingFetchMsg { type: 'pricing.fetch'; }
+export interface FiatFetchListMsg {
+  type: 'fiat.fetchList';
+  exchangerId: number;
+  apiKey?: string;
+  coingeckoPlan?: CoinGeckoPlan;
+}
+export interface FiatSaveMsg {
+  type: 'fiat.save';
+  exchangerId: number;
+  currencyId: string; // empty string disables fiat conversion
+  apiKey?: string;    // stored in SecretStorage per exchanger
+  coingeckoPlan?: CoinGeckoPlan;
+}
 export type InMsg =
   | NavigateMsg | ReadyMsg | WalletActionMsg | RefreshBalanceMsg
   | ConfigSaveMsg | ConfigOpenJsonMsg | ConfigChooseMsg
   | DeployStartMsg | DeployOpenOutputMsg | DeployQueryProcessorsMsg | DeployCopyMsg
-  | DeployDeregisterMsg | PricingFetchMsg;
+  | DeployDeregisterMsg | PricingFetchMsg
+  | FiatFetchListMsg | FiatSaveMsg;
 
 export interface SerializedFees {
   numberOfExecutions: string;
@@ -51,13 +67,52 @@ export interface SerializedAdvice {
   distribution: Array<{ range_min: string; range_max: string; count: number }>;
 }
 
+export interface PricingFiatInfo {
+  exchangerId: number;
+  exchangerName: string;
+  currencyId: string;
+  currencyName: string;
+  currencySign: string;
+  currencySymbol: string;
+  /** Price of 1 ACU in the selected fiat. */
+  acuPriceFiat: number;
+  /** ms epoch when the price was fetched. */
+  fetchedAt: number;
+  /** Set if the fiat lookup failed; conversion is then omitted. */
+  error?: string;
+}
+
 export interface PricingStateMsg {
   type: 'pricing.state';
   status: 'idle' | 'loading' | 'ok' | 'error';
   fees?: SerializedFees;
   advice?: SerializedAdvice;
+  fiat?: PricingFiatInfo;
   fallbackReason?: string;
   error?: string;
+}
+
+export interface FiatListItem {
+  id: string;
+  name: string;
+  sign: string;
+  symbol: string;
+}
+
+export interface FiatListStateMsg {
+  type: 'fiat.listState';
+  status: 'loading' | 'ok' | 'error';
+  exchangerId: number;
+  list?: FiatListItem[];
+  error?: string;
+}
+
+export interface FiatSelectionStateMsg {
+  type: 'fiat.selection';
+  exchangerId: number;
+  currencyId: string;
+  hasApiKey: boolean;
+  coingeckoPlan: CoinGeckoPlan;
 }
 
 export type DeployStageId =

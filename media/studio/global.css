@@ -158,6 +158,40 @@ select:focus, input:focus, textarea:focus { outline: 1px solid var(--vscode-focu
 .section { margin: 12px 0; }
 .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--vscode-descriptionForeground); font-weight: 600; border-bottom: 1px solid var(--vscode-panel-border, transparent); padding-bottom: 4px; margin-bottom: 8px; }
 .section-title.dirty::after { content: '●'; color: var(--vscode-charts-yellow, orange); margin-left: 6px; }
+
+/* Accordion sections (Bits UI Accordion primitives) */
+.acc-item { margin: 6px 0; }
+.acc-trigger {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--vscode-panel-border, transparent);
+  padding: 4px 0;
+  margin: 0 0 0 0;
+  color: var(--vscode-descriptionForeground);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+.acc-trigger:hover { color: var(--vscode-foreground); }
+.acc-trigger:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
+.acc-trigger::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 6px;
+  font-size: 9px;
+  opacity: 0.7;
+  transition: transform 0.15s ease;
+}
+.acc-trigger[data-state="open"]::before { transform: rotate(90deg); }
+.acc-content { overflow: hidden; padding-top: 8px; }
+.acc-content[data-state="closed"] { display: none; }
 .subsection-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--vscode-descriptionForeground); font-weight: 600; margin: 12px 0 6px; opacity: 0.8; }
 .checkbox-field { display: flex; align-items: center; gap: 6px; }
 .checkbox-field input { width: auto; }
@@ -439,6 +473,12 @@ input.field-error, textarea.field-error { border-color: var(--vscode-inputValida
 .pricing-value {
   font-family: var(--vscode-editor-font-family, monospace);
   text-align: right;
+}
+.pricing-fiat {
+  color: var(--vscode-descriptionForeground);
+  font-size: 10px;
+  margin-left: 4px;
+  font-family: var(--vscode-editor-font-family, monospace);
 }
 .pricing-muted { font-size: 10px; color: var(--vscode-descriptionForeground); font-style: italic; }
 .pricing-error-note { font-size: 11px; color: var(--vscode-errorForeground); }

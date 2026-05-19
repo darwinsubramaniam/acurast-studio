@@ -9,9 +9,13 @@ import { loadAcurastConfig } from '@acurast/sdk/deploy';
 import { toCacu } from '@acurast/sdk/matcher';
 import { loadPricing } from '../sdk/pricing';
 import { SYMBOL, MATCHER_ENDPOINTS, type AcurastNetwork } from '../sdk/constants';
-import type { Route, InMsg, WalletActionMsg, DeployState, DeployStage, DeployStageId, StageStatus, DeployJobId, ProcessorPubKey, ProcessorInfo, ChainEvent } from './types';
+import { Exchanger } from '../sdk/exchanger/exchanger';
+import { CoinGecko, type CoinGeckoPlan } from '../sdk/exchanger/coingecko';
+import type { Route, InMsg, WalletActionMsg, DeployState, DeployStage, DeployStageId, StageStatus, DeployJobId, ProcessorPubKey, ProcessorInfo, ChainEvent, PricingFiatInfo, FiatListItem } from './types';
 
 const BALANCE_POLL_MS = 30_000;
+const FIAT_PRICE_TTL_MS = 60_000;
+const FIAT_API_KEY_SECRET = (exchangerId: number) => `acurast.fiat.apiKey.${exchangerId}`;
 
 function defaultStages(): DeployStage[] {
   return [
@@ -33,11 +37,14 @@ export class StudioPanel implements vscode.WebviewViewProvider {
   private _deploy: DeployState | null = null;
   private _chainEventUnsub: UnsubEvent | undefined;
   private _chainWatchToken = 0;
+  private _exchanger = new Exchanger();
+  private _fiatPriceCache: { key: string; value: number; fetchedAt: number } | undefined;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly ctx: AcurastContext,
-    private readonly wallet: WalletService
+    private readonly wallet: WalletService,
+    private readonly secrets: vscode.SecretStorage
   ) {
     wallet.onDidChange(() => this.pushWallets());
     ctx.onDidChangeActiveConfig(() => {
@@ -157,6 +164,12 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       case 'pricing.fetch':
         void this.pushPricing();
         break;
+      case 'fiat.fetchList':
+        void this.pushFiatList(msg.exchangerId, msg.apiKey, msg.coingeckoPlan);
+        break;
+      case 'fiat.save':
+        await this.saveFiatSelection(msg.exchangerId, msg.currencyId, msg.apiKey, msg.coingeckoPlan);
+        break;
     }
   }
 
@@ -188,6 +201,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     await this.pushWallets();
     if (this._route === 'wallets') this.startBalancePoll();
     await this.pushConfig();
+    await this.pushFiatSelection();
     if (this._route === 'deploy') { this.pushDeploy(); if (!this._deploy) void this.pushPricing(); }
   }
 
@@ -277,6 +291,8 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     const result = await loadPricing({ config, walletAddress: activeWallet?.address, matcherUrl });
     const { fees, advice, fallbackReason, error } = result;
 
+    const fiat = await this.loadFiatConversion();
+
     this.post({
       type: 'pricing.state',
       status: 'ok',
@@ -302,9 +318,122 @@ export class StudioPanel implements vscode.WebviewViewProvider {
         averagePrice: advice.averagePrice?.toFixed() ?? null,
         distribution: advice.distribution,
       } : undefined,
+      fiat,
       fallbackReason,
       error,
     });
+  }
+
+  private async loadFiatConversion(): Promise<PricingFiatInfo | undefined> {
+    const cfg = vscode.workspace.getConfiguration('acurast');
+    const exchangerId = cfg.get<number>('fiat.exchangerId', 2);
+    const currencyId = (cfg.get<string>('fiat.currencyId', '') ?? '').trim();
+    if (!currencyId) return undefined;
+
+    const exchanger = this._exchanger.byId(exchangerId);
+    if (!exchanger) return undefined;
+
+    const details = exchanger.exchangerDetails();
+    this.applyCoinGeckoPlan(exchanger);
+    const apiKey = await this.secrets.get(FIAT_API_KEY_SECRET(exchangerId));
+    if (apiKey) exchanger.setApiKey(apiKey);
+
+    // Resolve currency metadata from the exchanger's fiat list (best-effort).
+    let meta: FiatListItem | undefined;
+    try {
+      const list = await exchanger.getListOfFiat();
+      meta = list.data.find(c => c.id === currencyId || c.symbol === currencyId.toUpperCase());
+    } catch {
+      // Metadata is best-effort; we still try the price.
+    }
+    const fiatSymbolForPrice = meta?.symbol ?? currencyId;
+
+    const cacheKey = `${exchangerId}:${fiatSymbolForPrice}`;
+    let acuPriceFiat: number;
+    try {
+      if (this._fiatPriceCache && this._fiatPriceCache.key === cacheKey &&
+          Date.now() - this._fiatPriceCache.fetchedAt < FIAT_PRICE_TTL_MS) {
+        acuPriceFiat = this._fiatPriceCache.value;
+      } else {
+        acuPriceFiat = await exchanger.getACULatestPrice(fiatSymbolForPrice);
+        this._fiatPriceCache = { key: cacheKey, value: acuPriceFiat, fetchedAt: Date.now() };
+      }
+    } catch (err: unknown) {
+      return {
+        exchangerId,
+        exchangerName: details.name,
+        currencyId,
+        currencyName: meta?.name ?? currencyId,
+        currencySign: meta?.sign ?? '',
+        currencySymbol: meta?.symbol ?? currencyId.toUpperCase(),
+        acuPriceFiat: 0,
+        fetchedAt: Date.now(),
+        error: (err as Error).message,
+      };
+    }
+
+    return {
+      exchangerId,
+      exchangerName: details.name,
+      currencyId,
+      currencyName: meta?.name ?? currencyId,
+      currencySign: meta?.sign ?? '',
+      currencySymbol: meta?.symbol ?? currencyId.toUpperCase(),
+      acuPriceFiat,
+      fetchedAt: Date.now(),
+    };
+  }
+
+  private async pushFiatList(exchangerId: number, apiKey?: string, coingeckoPlan?: CoinGeckoPlan) {
+    this.post({ type: 'fiat.listState', status: 'loading', exchangerId });
+    const exchanger = this._exchanger.byId(exchangerId);
+    if (!exchanger) {
+      this.post({ type: 'fiat.listState', status: 'error', exchangerId, error: `Unknown exchanger id ${exchangerId}` });
+      return;
+    }
+    this.applyCoinGeckoPlan(exchanger, coingeckoPlan);
+    // Prefer the just-typed key, fall back to the saved one.
+    const key = (apiKey && apiKey.trim()) || await this.secrets.get(FIAT_API_KEY_SECRET(exchangerId));
+    if (key) exchanger.setApiKey(key);
+    try {
+      const list = await exchanger.getListOfFiat();
+      this.post({ type: 'fiat.listState', status: 'ok', exchangerId, list: list.data });
+    } catch (err: unknown) {
+      this.post({ type: 'fiat.listState', status: 'error', exchangerId, error: (err as Error).message });
+    }
+  }
+
+  private async saveFiatSelection(exchangerId: number, currencyId: string, apiKey?: string, coingeckoPlan?: CoinGeckoPlan) {
+    const cfg = vscode.workspace.getConfiguration('acurast');
+    await cfg.update('fiat.exchangerId', exchangerId, vscode.ConfigurationTarget.Global);
+    await cfg.update('fiat.currencyId', currencyId, vscode.ConfigurationTarget.Global);
+    if (coingeckoPlan !== undefined) {
+      await cfg.update('fiat.coingecko.plan', coingeckoPlan, vscode.ConfigurationTarget.Global);
+    }
+    if (apiKey !== undefined) {
+      const trimmed = apiKey.trim();
+      if (trimmed) await this.secrets.store(FIAT_API_KEY_SECRET(exchangerId), trimmed);
+      else await this.secrets.delete(FIAT_API_KEY_SECRET(exchangerId));
+    }
+    this._fiatPriceCache = undefined;
+    await this.pushFiatSelection();
+    void this.pushPricing();
+  }
+
+  private async pushFiatSelection() {
+    const cfg = vscode.workspace.getConfiguration('acurast');
+    const exchangerId = cfg.get<number>('fiat.exchangerId', 2);
+    const currencyId = cfg.get<string>('fiat.currencyId', '') ?? '';
+    const coingeckoPlan = (cfg.get<string>('fiat.coingecko.plan', 'demo') as CoinGeckoPlan);
+    const hasApiKey = Boolean(await this.secrets.get(FIAT_API_KEY_SECRET(exchangerId)));
+    this.post({ type: 'fiat.selection', exchangerId, currencyId, hasApiKey, coingeckoPlan });
+  }
+
+  /** Applies the configured CoinGecko plan to the instance (no-op for other exchangers). */
+  private applyCoinGeckoPlan(exchanger: { exchangerDetails: () => { id: number } }, override?: CoinGeckoPlan) {
+    if (exchanger.exchangerDetails().id !== 2) return;
+    const plan = override ?? (vscode.workspace.getConfiguration('acurast').get<string>('fiat.coingecko.plan', 'demo') as CoinGeckoPlan);
+    (exchanger as CoinGecko).setPlan(plan);
   }
 
   private async openJson() {

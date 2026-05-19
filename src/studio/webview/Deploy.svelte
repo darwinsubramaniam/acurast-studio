@@ -17,6 +17,26 @@
     return n.toFixed(6).replace(/\.?0+$/, '') || '0';
   }
 
+  function satoshiToFiat(satoshi: string | null | undefined, acuPriceFiat: number): number | null {
+    if (!satoshi) return null;
+    const acu = parseFloat(satoshi) / 1e12;
+    if (!Number.isFinite(acu)) return null;
+    return acu * acuPriceFiat;
+  }
+
+  function fmtFiat(amount: number, sign: string, symbol: string): string {
+    const digits = amount >= 100 ? 2 : amount >= 1 ? 3 : 5;
+    const value = amount.toFixed(digits);
+    return sign ? `${sign}${value} ${symbol}` : `${value} ${symbol}`;
+  }
+
+  function cacuToFiat(cacu: string | null | undefined, acuPriceFiat: number): number | null {
+    if (!cacu) return null;
+    const n = parseFloat(cacu);
+    if (!Number.isFinite(n)) return null;
+    return n * acuPriceFiat;
+  }
+
   function fmtTime(ts: number): string {
     const d = new Date(ts);
     const p = (n: number) => String(n).padStart(2, '0');
@@ -67,6 +87,7 @@
       {:else if pricing.status === 'ok' && pricing.fees}
         {@const fees = pricing.fees}
         {@const advice = pricing.advice}
+        {@const fiat = pricing.fiat && !pricing.fiat.error ? pricing.fiat : null}
         {#if advice}
           <div class="pricing-status-row pricing-{advice.status}" style="margin-bottom:6px;">
             <span>
@@ -77,13 +98,22 @@
           </div>
           <div class="pricing-rows">
             <span class="pricing-label">Your price</span>
-            <span class="pricing-value">{satoshiToACU(advice.currentPrice)} / exec</span>
+            <span class="pricing-value">
+              {satoshiToACU(advice.currentPrice)} / exec
+              {#if fiat}{@const f = satoshiToFiat(advice.currentPrice, fiat.acuPriceFiat)}{#if f != null}<span class="pricing-fiat">(~{fmtFiat(f, fiat.currencySign, fiat.currencySymbol)})</span>{/if}{/if}
+            </span>
             {#if advice.suggestedPrice && advice.status !== 'sufficient'}
               <span class="pricing-label">Suggested</span>
-              <span class="pricing-value">{satoshiToACU(advice.suggestedPrice)} / exec</span>
+              <span class="pricing-value">
+                {satoshiToACU(advice.suggestedPrice)} / exec
+                {#if fiat}{@const f = satoshiToFiat(advice.suggestedPrice, fiat.acuPriceFiat)}{#if f != null}<span class="pricing-fiat">(~{fmtFiat(f, fiat.currencySign, fiat.currencySymbol)})</span>{/if}{/if}
+              </span>
             {/if}
             <span class="pricing-label">Total max</span>
-            <span class="pricing-value">{fees.maxTotalCostCACU}</span>
+            <span class="pricing-value">
+              {fees.maxTotalCostCACU}
+              {#if fiat}{@const f = cacuToFiat(fees.maxTotalCostCACU, fiat.acuPriceFiat)}{#if f != null}<span class="pricing-fiat">(~{fmtFiat(f, fiat.currencySign, fiat.currencySymbol)})</span>{/if}{/if}
+            </span>
           </div>
           {#if advice.status !== 'sufficient'}
             <div class="pricing-muted" style="margin-top:4px;">Adjust price in <button style="background:none;border:none;padding:0;color:var(--vscode-textLink-foreground);cursor:pointer;font:inherit;font-size:10px;" onclick={() => send('navigate', { route: 'settings' })}>Project Settings</button>.</div>
@@ -91,13 +121,26 @@
         {:else}
           <div class="pricing-rows">
             <span class="pricing-label">Max / exec</span>
-            <span class="pricing-value">{fees.maxCostPerExecutionCACU}</span>
+            <span class="pricing-value">
+              {fees.maxCostPerExecutionCACU}
+              {#if fiat}{@const f = cacuToFiat(fees.maxCostPerExecutionCACU, fiat.acuPriceFiat)}{#if f != null}<span class="pricing-fiat">(~{fmtFiat(f, fiat.currencySign, fiat.currencySymbol)})</span>{/if}{/if}
+            </span>
             <span class="pricing-label">Total max</span>
-            <span class="pricing-value">{fees.maxTotalCostCACU}</span>
+            <span class="pricing-value">
+              {fees.maxTotalCostCACU}
+              {#if fiat}{@const f = cacuToFiat(fees.maxTotalCostCACU, fiat.acuPriceFiat)}{#if f != null}<span class="pricing-fiat">(~{fmtFiat(f, fiat.currencySign, fiat.currencySymbol)})</span>{/if}{/if}
+            </span>
           </div>
           {#if pricing.fallbackReason === 'no-wallet'}
             <div class="pricing-muted" style="margin-top:4px;">Set an active wallet for live market pricing.</div>
           {/if}
+        {/if}
+        {#if pricing.fiat?.error}
+          <div class="pricing-muted" style="margin-top:4px;">Fiat conversion unavailable: {pricing.fiat.error}</div>
+        {:else if fiat}
+          <div class="pricing-muted" style="margin-top:4px;">
+            1 ACU ≈ {fmtFiat(fiat.acuPriceFiat, fiat.currencySign, fiat.currencySymbol)} · {fiat.exchangerName}
+          </div>
         {/if}
       {/if}
     </div>
