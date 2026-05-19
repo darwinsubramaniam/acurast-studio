@@ -1,6 +1,6 @@
 import esbuild from 'esbuild';
 import esbuildSvelte from 'esbuild-svelte';
-import sveltePreprocess from 'svelte-preprocess';
+import { sveltePreprocess } from 'svelte-preprocess';
 
 const dev = process.argv.includes('--dev');
 const watch = process.argv.includes('--watch');
