@@ -1,0 +1,280 @@
+{
+  "name": "acurast-studio",
+  "displayName": "Acurast Studio",
+  "description": "VS Code extension for Acurast serverless development — scaffolding, deployment, live logs, and cost estimation.",
+  "version": "0.1.0",
+  "publisher": "acurast",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other",
+    "Snippets",
+    "Debuggers"
+  ],
+  "keywords": [
+    "acurast",
+    "serverless",
+    "web3",
+    "deployment",
+    "blockchain"
+  ],
+  "activationEvents": [
+    "workspaceContains:acurast.json"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "acurast.newProject",
+        "title": "Init Project",
+        "category": "Acurast"
+      },
+      {
+        "command": "acurast.deploy",
+        "title": "Deploy",
+        "category": "Acurast",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "acurast.estimateCost",
+        "title": "Estimate Cost",
+        "category": "Acurast",
+        "icon": "$(symbol-numeric)"
+      },
+      {
+        "command": "acurast.openDashboard",
+        "title": "Open Dashboard",
+        "category": "Acurast",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "acurast.studio.home",
+        "title": "Go to Home",
+        "category": "Acurast",
+        "icon": "$(home)"
+      },
+      {
+        "command": "acurast.setActiveConfig",
+        "title": "Set as Active acurast.json",
+        "category": "Acurast"
+      },
+      {
+        "command": "acurast.chooseConfig",
+        "title": "Choose acurast.json…",
+        "category": "Acurast"
+      },
+      {
+        "command": "acurast.clearActiveConfig",
+        "title": "Clear Active acurast.json",
+        "category": "Acurast"
+      },
+      {
+        "command": "acurast.wallet.create",
+        "title": "Create Wallet",
+        "category": "Acurast"
+      },
+      {
+        "command": "acurast.wallet.import",
+        "title": "Import Wallet",
+        "category": "Acurast"
+      },
+      {
+        "command": "acurast.wallet.reveal",
+        "title": "Reveal Mnemonic",
+        "category": "Acurast"
+      },
+      {
+        "command": "acurast.wallet.delete",
+        "title": "Delete Wallet",
+        "category": "Acurast"
+      },
+      {
+        "command": "acurast.wallet.copyAddress",
+        "title": "Copy Wallet Address",
+        "category": "Acurast"
+      },
+      {
+        "command": "acurast.wallet.rename",
+        "title": "Rename Wallet",
+        "category": "Acurast"
+      },
+      {
+        "command": "acurast.wallet.editDescription",
+        "title": "Edit Wallet Description",
+        "category": "Acurast"
+      },
+      {
+        "command": "acurast.wallet.setActive",
+        "title": "Set Active Wallet",
+        "category": "Acurast"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "acurastStudio",
+          "title": "Acurast Studio",
+          "icon": "media/acurast-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "acurastStudio": [
+        {
+          "id": "acurastStudio",
+          "name": "Home",
+          "type": "webview"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "acurast.studio.home",
+          "when": "view == acurastStudio && acurast.studio.route != 'home'",
+          "group": "navigation@1"
+        },
+        {
+          "command": "acurast.deploy",
+          "when": "view == acurastStudio && acurast.isAcurastProject",
+          "group": "navigation@2"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "acurast.deploy",
+          "when": "acurast.isAcurastProject",
+          "group": "navigation"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "acurast.setActiveConfig",
+          "when": "resourceFilename == acurast.json",
+          "group": "acurast@1"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "acurast.setActiveConfig",
+          "when": "resourceFilename == acurast.json",
+          "group": "acurast@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "acurast.deploy",
+          "when": "acurast.isAcurastProject"
+        },
+        {
+          "command": "acurast.estimateCost",
+          "when": "acurast.isAcurastProject"
+        },
+        {
+          "command": "acurast.setActiveConfig",
+          "when": "false"
+        },
+        {
+          "command": "acurast.clearActiveConfig",
+          "when": "acurast.isAcurastProject"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Acurast",
+      "properties": {
+        "acurast.cliPath": {
+          "type": "string",
+          "default": "acurast",
+          "description": "Path to the Acurast CLI binary."
+        },
+        "acurast.network": {
+          "type": "string",
+          "enum": [
+            "mainnet",
+            "canary"
+          ],
+          "default": "mainnet",
+          "description": "Target Acurast network for balance queries and deploys."
+        },
+        "acurast.rpcOverrides": {
+          "type": "object",
+          "default": {},
+          "description": "Optional RPC endpoint overrides per network. Example: { \"mainnet\": \"wss://my-rpc.example.com\" }",
+          "properties": {
+            "mainnet": {
+              "type": "string"
+            },
+            "canary": {
+              "type": "string"
+            }
+          }
+        },
+        "acurast.useKeychainForMnemonic": {
+          "type": "boolean",
+          "default": true,
+          "description": "Store wallet mnemonic in OS keychain instead of .env file."
+        }
+      }
+    },
+    "jsonValidation": [
+      {
+        "fileMatch": "acurast.json",
+        "url": "./schemas/acurast.schema.json"
+      }
+    ],
+    "icons": {
+      "acurast-logo": {
+        "description": "Acurast logo",
+        "default": {
+          "fontPath": "./media/font/acurast-icons.woff",
+          "fontCharacter": "\\E000"
+        }
+      }
+    },
+    "languages": [
+      {
+        "id": "acurast-config",
+        "aliases": [
+          "Acurast Config"
+        ],
+        "filenames": [
+          "acurast.json"
+        ]
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build:font": "fantasticon",
+    "build": "npm run build:font && esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify",
+    "build:dev": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.0",
+    "@types/vscode": "^1.90.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.4",
+    "@typescript-eslint/parser": "^8.59.4",
+    "@vscode/vsce": "^3.9.1",
+    "esbuild": "^0.28.0",
+    "eslint": "^10.4.0",
+    "fantasticon": "^3.0.0",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "@acurast/sdk": "^1.2.0",
+    "@polkadot/api": "^16.5.6",
+    "@polkadot/api-augment": "^16.5.6",
+    "@polkadot/keyring": "^14.0.3",
+    "@polkadot/types": "^16.5.6",
+    "@polkadot/types-codec": "^16.5.6",
+    "@polkadot/util": "^14.0.3",
+    "@polkadot/util-crypto": "^14.0.3",
+    "@polkadot/wasm-crypto": "^7.5.4"
+  }
+}

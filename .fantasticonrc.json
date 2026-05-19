@@ -1,0 +1,13 @@
+{
+  "inputDir": "./media/icons",
+  "outputDir": "./media/font",
+  "name": "acurast-icons",
+  "fontTypes": ["woff", "woff2"],
+  "assetTypes": ["json"],
+  "normalize": false,
+  "fontHeight": 1000,
+  "descent": 100,
+  "codepoints": {
+    "acurast-logo": 57344
+  }
+}

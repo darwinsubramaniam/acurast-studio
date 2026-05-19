@@ -1,0 +1,80 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Acurast Job Configuration",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Human-readable name for the job."
+    },
+    "runtime": {
+      "type": "string",
+      "enum": ["node20", "shell", "cargo"],
+      "description": "Execution runtime.",
+      "default": "node20"
+    },
+    "execution": {
+      "type": "object",
+      "description": "Execution scheduling.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["interval", "once", "cron"],
+          "description": "Scheduling type."
+        },
+        "interval": {
+          "type": "number",
+          "description": "Interval in milliseconds (for type: interval)."
+        },
+        "maxExecutionTime": {
+          "type": "number",
+          "description": "Max execution time in milliseconds.",
+          "default": 20000
+        },
+        "cron": {
+          "type": "string",
+          "description": "Cron expression (for type: cron)."
+        }
+      },
+      "required": ["type"]
+    },
+    "maxCostPerExecution": {
+      "type": "string",
+      "description": "Maximum cost per execution in Planck (1 ACU = 1e12 Planck)."
+    },
+    "minReplicas": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Minimum number of processor replicas.",
+      "default": 1
+    },
+    "maxReplicas": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Maximum number of processor replicas.",
+      "default": 1
+    },
+    "assignmentStrategy": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["single", "competing"],
+          "description": "How processors are assigned."
+        }
+      }
+    },
+    "includeEnvironmentVariables": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "List of env var keys to encrypt and send to processors."
+    },
+    "enableDevtools": {
+      "type": "boolean",
+      "description": "Forward console logs to CLI via devtools protocol.",
+      "default": false
+    }
+  },
+  "required": ["execution"],
+  "additionalProperties": false
+}
