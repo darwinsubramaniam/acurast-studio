@@ -9,6 +9,7 @@
     "type": "git",
     "url": "https://github.com/darwinsubramaniam/acurast-studio"
   },
+  "icon": "media/Acurast-symbol-light-bg.png",
   "engines": {
     "vscode": "^1.90.0"
   },
