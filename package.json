@@ -270,10 +270,13 @@
     "esbuild": "^0.28.0",
     "esbuild-svelte": "^0.9.5",
     "eslint": "^10.4.0",
-    "fantasticon": "^3.0.0",
+    "fantasticon": "^4.1.0",
     "svelte": "^5.55.8",
     "svelte-preprocess": "^6.0.3",
     "typescript": "^6.0.3"
+  },
+  "overrides": {
+    "elliptic": "^6.6.1"
   },
   "dependencies": {
     "@acurast/sdk": "^1.2.0",
