@@ -325,6 +325,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
     "package": "vsce package",
+    "package:prerelease": "vsce package --pre-release",
     "test": "echo \"No tests configured yet\" && exit 0"
   },
   "devDependencies": {
