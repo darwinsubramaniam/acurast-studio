@@ -64,12 +64,26 @@ jobs:
             npx @vscode/vsce package -o acurast-studio.vsix
           fi
 
+      # Compute the release tag.
+      # For stable (tag push): use the pushed tag directly.
+      # For rc (workflow_dispatch): derive from package.json version + run number, e.g. v0.2.0-rc.5.
+      - name: Compute Release Tag
+        id: tag
+        run: |
+          if [ "${{ env.RELEASE_TYPE }}" = "rc" ]; then
+            VERSION=$(node -p "require('./package.json').version")
+            echo "TAG=v${VERSION}-rc.${{ github.run_number }}" >> $GITHUB_OUTPUT
+          else
+            echo "TAG=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
       # For 'rc' (Release Candidate) or 'stable' tag pushes, we create a GitHub Release
       # and attach the packaged .vsix. This allows manual testing/installation before/instead of Marketplace.
       - name: Create GitHub Release (RC or Stable)
         if: env.RELEASE_TYPE == 'rc' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.tag.outputs.TAG }}
           files: acurast-studio.vsix
           draft: ${{ env.RELEASE_TYPE == 'rc' }} # Draft release for RCs, published release for stable tags
           prerelease: ${{ env.RELEASE_TYPE == 'rc' }} # Mark as prerelease on GitHub for RCs
