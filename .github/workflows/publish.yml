@@ -1,0 +1,91 @@
+name: Publish Extension
+
+on:
+  push:
+    tags:
+      - 'v*' # Trigger automatically when a tag starting with v is pushed (e.g. v1.0.0)
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Type of release to perform'
+        required: true
+        default: 'rc'
+        type: choice
+        options:
+          - 'rc'            # Release Candidate (compiles .vsix and uploads to GitHub Release, does not publish to Marketplace)
+          - 'pre-release'    # Pre-release (Preview version directly to VS Code Marketplace)
+          - 'stable'         # Stable (Official production release to VS Code Marketplace)
+
+permissions:
+  contents: write # Required for creating GitHub Releases and uploading assets
+
+jobs:
+  publish:
+    name: Build, Package & Publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Linting
+        run: npm run lint
+
+      - name: Run Type Checking
+        run: npm run typecheck
+
+      # Determine what type of release this is
+      # If triggered by a tag (e.g., v1.0.0), it is a 'stable' release.
+      # If triggered manually, it uses the selected input.
+      - name: Set Release Environment
+        id: env
+        run: |
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "RELEASE_TYPE=stable" >> $GITHUB_ENV
+          else
+            echo "RELEASE_TYPE=${{ github.event.inputs.release_type }}" >> $GITHUB_ENV
+          fi
+
+      # Build & package the .vsix file.
+      # vsce package will automatically trigger "vscode:prepublish" (npm run build).
+      - name: Package Extension (.vsix)
+        run: |
+          if [ "${{ env.RELEASE_TYPE }}" = "pre-release" ]; then
+            npx @vscode/vsce package --pre-release -o acurast-studio-prerelease.vsix
+          else
+            npx @vscode/vsce package -o acurast-studio.vsix
+          fi
+
+      # For 'rc' (Release Candidate) or 'stable' tag pushes, we create a GitHub Release
+      # and attach the packaged .vsix. This allows manual testing/installation before/instead of Marketplace.
+      - name: Create GitHub Release (RC or Stable)
+        if: env.RELEASE_TYPE == 'rc' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+        uses: softprops/action-gh-release@v2
+        with:
+          files: acurast-studio.vsix
+          draft: ${{ env.RELEASE_TYPE == 'rc' }} # Draft release for RCs, published release for stable tags
+          prerelease: ${{ env.RELEASE_TYPE == 'rc' }} # Mark as prerelease on GitHub for RCs
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Publish to Visual Studio Marketplace if 'pre-release' or 'stable' is selected.
+      # Requires the VSCE_PAT secret to be set in your GitHub repository secrets.
+      - name: Publish to VS Code Marketplace
+        if: env.RELEASE_TYPE == 'stable' || env.RELEASE_TYPE == 'pre-release'
+        run: |
+          if [ "${{ env.RELEASE_TYPE }}" = "pre-release" ]; then
+            echo "Publishing Pre-release (Preview) version..."
+            npx @vscode/vsce publish --pre-release -p ${{ secrets.VSCE_PAT }}
+          else
+            echo "Publishing Stable (Production) version..."
+            npx @vscode/vsce publish -p ${{ secrets.VSCE_PAT }}
+          fi
