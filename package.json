@@ -355,7 +355,8 @@
     "vitest": "^4.1.7"
   },
   "overrides": {
-    "elliptic": "^6.6.1"
+    "elliptic": "^6.6.1",
+    "serialize-javascript": "^7.0.3"
   },
   "dependencies": {
     "@acurast/sdk": "^1.2.0",
