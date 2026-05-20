@@ -2,7 +2,7 @@
   "name": "acurast-studio",
   "displayName": "Acurast Studio",
   "description": "VS Code extension for Acurast serverless development — scaffolding, deployment, live logs, and cost estimation.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "dw3labs",
   "license": "MIT",
   "repository": {
