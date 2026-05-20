@@ -3,3 +3,6 @@ dist/
 *.vsix
 .env
 .acurast/
+out/
+.vscode-test/
+

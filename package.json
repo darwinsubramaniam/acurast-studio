@@ -326,21 +326,33 @@
     "lint": "eslint src --ext .ts",
     "package": "vsce package",
     "package:prerelease": "vsce package --pre-release",
-    "test": "echo \"No tests configured yet\" && exit 0"
+    "compile:tests": "tsc -p tsconfig.test.json",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
+    "test:integration": "npm run compile:tests && vscode-test",
+    "test": "npm run test:unit && npm run test:integration"
   },
   "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/svelte": "^5.3.1",
+    "@types/mocha": "^10.0.10",
     "@types/node": "^25.9.0",
     "@types/vscode": "^1.90.0",
     "@typescript-eslint/eslint-plugin": "^8.59.4",
     "@typescript-eslint/parser": "^8.59.4",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.9.1",
     "esbuild": "^0.28.0",
     "esbuild-svelte": "^0.9.5",
     "eslint": "^10.4.0",
     "fantasticon": "^4.1.0",
+    "jsdom": "^29.1.1",
     "svelte": "^5.55.8",
     "svelte-preprocess": "^6.0.3",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
   },
   "overrides": {
     "elliptic": "^6.6.1"

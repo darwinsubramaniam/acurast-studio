@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "ignoreDeprecations": "6.0",
+    "verbatimModuleSyntax": false,
+    "outDir": "out",
+    "types": ["node", "mocha"]
+  },
+  "include": ["src/test/suite/**/*.ts"],
+  "exclude": ["node_modules", "dist", "src/test/unit"]
+}

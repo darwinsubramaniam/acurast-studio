@@ -1,13 +1,18 @@
-import * as vscode from 'vscode';
 import { AcurastService, getBalance } from '@acurast/sdk/chain';
 import { RPC_ENDPOINTS, type AcurastNetwork } from './constants';
 
-class AcurastClient {
+type RpcOverrides = Partial<Record<AcurastNetwork, string>>;
+
+export class AcurastClient {
+  private getOverrides: () => RpcOverrides = () => ({});
   private services = new Map<AcurastNetwork, AcurastService>();
 
+  configure(getOverrides: () => RpcOverrides): void {
+    this.getOverrides = getOverrides;
+  }
+
   private getRpc(network: AcurastNetwork): string {
-    const overrides = vscode.workspace.getConfiguration('acurast').get<Partial<Record<AcurastNetwork, string>>>('rpcOverrides') ?? {};
-    return overrides[network] ?? RPC_ENDPOINTS[network];
+    return this.getOverrides()[network] ?? RPC_ENDPOINTS[network];
   }
 
   async service(network: AcurastNetwork): Promise<AcurastService> {

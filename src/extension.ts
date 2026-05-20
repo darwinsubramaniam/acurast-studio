@@ -6,6 +6,7 @@ import { registerWalletCommands } from './wallet/walletCommands';
 import { WalletStatusBar, SHOW_WALLETS_COMMAND_ID } from './wallet/walletStatusBar';
 import { StudioPanel } from './studio/studioPanel';
 import { acurastClient } from './sdk/acurastClient';
+import type { AcurastNetwork } from './sdk/constants';
 import { registerAcurastLanguageService } from './acurastLanguageService';
 
 async function ensureJsonSchema(extensionContext: vscode.ExtensionContext): Promise<void> {
@@ -25,6 +26,11 @@ async function ensureJsonSchema(extensionContext: vscode.ExtensionContext): Prom
 }
 
 export async function activate(extensionContext: vscode.ExtensionContext) {
+  acurastClient.configure(() =>
+    vscode.workspace.getConfiguration('acurast')
+      .get<Partial<Record<AcurastNetwork, string>>>('rpcOverrides') ?? {}
+  );
+
   ensureJsonSchema(extensionContext).catch(() => {});
 
   const ctx = new AcurastContext(extensionContext);
