@@ -25,6 +25,16 @@
     if (bal.status === 'ok' && bal.value != null) return { text: `${bal.value.toFixed(4)} ${bal.symbol ?? ''}`, cls: '' };
     return { text: bal.message || 'Failed', cls: 'error' };
   }
+
+  function isZeroBalance(bal: BalanceMsg): boolean {
+    return bal.status === 'ok' && bal.value != null && bal.value === 0;
+  }
+
+  function fundingUrl(network: string): string {
+    return network === 'mainnet'
+      ? 'https://docs.acurast.com/token-holders/how-to-get-acu/'
+      : 'https://faucet.acurast.com/';
+  }
 </script>
 
 {#if wallets.list.length === 0}
@@ -67,6 +77,16 @@
             {@html ICONS.refresh}
           </button>
         </div>
+        {#if isZeroBalance(balance)}
+          <div class="no-funds-banner">
+            <span>No funds yet.</span>
+            {#if wallets.network === 'canary'}
+              Get test <strong>cACU</strong> from the <a href={fundingUrl(wallets.network)}>Acurast Faucet</a>.
+            {:else}
+              Learn how to <a href={fundingUrl(wallets.network)}>get ACU</a>.
+            {/if}
+          </div>
+        {/if}
       {/if}
 
       <div class="actions">
