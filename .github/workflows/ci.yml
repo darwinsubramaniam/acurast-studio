@@ -31,8 +31,8 @@ jobs:
       - name: Run Type Checking
         run: npm run typecheck
 
+      - name: Build Extension
+        run: npm run build
+
       - name: Run Tests
         run: xvfb-run -a npm test
-
-      - name: Test Build Production
-        run: npm run build
