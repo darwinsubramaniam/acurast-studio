@@ -323,7 +323,7 @@
     "watch:webview": "node scripts/build-webview.mjs --dev --watch",
     "watch": "npm run watch:ext & npm run watch:webview",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src --ext .ts",
+    "lint": "eslint src",
     "package": "vsce package",
     "package:prerelease": "vsce package --pre-release",
     "compile:tests": "tsc -p tsconfig.test.json",
