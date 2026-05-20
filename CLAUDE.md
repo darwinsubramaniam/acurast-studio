@@ -24,9 +24,29 @@ Two separate bundles are produced:
 
 F5 in VS Code launches the Extension Development Host (config in `.vscode/launch.json`, preLaunchTask runs `build:dev`).
 
-There are no tests yet — `package.json` has no test script.
-
 After any code change in the dev host, **`Cmd+R` reloads** — webviews do not hot-reload.
+
+## Tests
+
+```bash
+npm run test:unit          # Vitest unit tests (Node, no VS Code)
+npm run test:integration   # VS Code integration tests (requires display; use xvfb-run in CI)
+npm test                   # both
+```
+
+Unit tests live in `src/test/unit/` and `src/test/webview/`. Integration tests live in `src/test/suite/` and are compiled separately via `tsconfig.test.json`.
+
+## Releasing
+
+See [RELEASE.md](./RELEASE.md) for the full step-by-step. Short version:
+
+| Goal | How |
+|---|---|
+| Testable build for internal review | Actions → Publish Extension → `rc` |
+| Marketplace preview for early adopters | Actions → Publish Extension → `pre-release` |
+| Production release | `git tag v{version} && git push origin v{version}` |
+
+Always bump `version` in `package.json` before tagging or dispatching.
 
 ## Architecture in one paragraph
 
