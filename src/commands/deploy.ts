@@ -81,7 +81,7 @@ export async function deploy({ ctx, wallet, output, studioPanel }: DeployOptions
   output.clear();
   output.show(true);
   output.appendLine(`[deploy] project=${config.projectName} network=${network}`);
-  studioPanel.beginDeploy({ project: config.projectName, network });
+  studioPanel.beginDeploy({ project: config.projectName, network, enableDevtools: !!config.enableDevtools });
 
   await vscode.window.withProgress(
     {
@@ -123,6 +123,7 @@ export async function deploy({ ctx, wallet, output, studioPanel }: DeployOptions
 
         output.appendLine(`[done] job registered`);
         studioPanel.endDeploy('ok');
+        if (config.enableDevtools) void studioPanel.fetchDevtoolsUrl();
         vscode.window.showInformationMessage(`Deployed "${config.projectName}" to ${network}.`);
         return result;
       } catch (err: unknown) {

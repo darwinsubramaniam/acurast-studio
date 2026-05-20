@@ -202,6 +202,28 @@
     {/each}
   </ul>
 
+  <!-- DevTools block -->
+  {#if d.devtoolsEnabled}
+    <div class="devtools-section">
+      <div class="devtools-head">
+        <h3>DevTools</h3>
+        <button disabled={!!d.devtoolsLoading} onclick={() => send('devtools.refreshKey')}>
+          {d.devtoolsLoading ? 'Fetching…' : d.devtoolsUrl ? '⟳ Refresh key' : 'Get URL'}
+        </button>
+      </div>
+      {#if d.devtoolsUrl}
+        <div class="devtools-url-row">
+          <span class="devtools-url" title={d.devtoolsUrl}>{d.devtoolsUrl}</span>
+          <button class="pk-copy" onclick={() => send('deploy.copy', { text: d.devtoolsUrl! })}>Copy</button>
+          <button onclick={() => send('devtools.openUrl', { url: d.devtoolsUrl! })}>Open</button>
+        </div>
+        <div class="devtools-hint">View key is time-limited. Click "⟳ Refresh key" if it expires.</div>
+      {:else if !d.devtoolsLoading}
+        <div class="devtools-hint">Click "Get URL" to generate a DevTools view key.</div>
+      {/if}
+    </div>
+  {/if}
+
   <!-- Processors block -->
   {#if d.jobIds.length}
     {@const proc = d.processors ?? { status: 'idle' }}

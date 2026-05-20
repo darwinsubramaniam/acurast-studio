@@ -402,6 +402,17 @@ input.field-error, textarea.field-error { border-color: var(--vscode-inputValida
 .pk-copy:hover { background: var(--vscode-toolbar-hoverBackground); }
 
 /* Lifecycle (chain events) */
+.devtools-section { margin-top: 10px; }
+.devtools-head {
+  display: flex; align-items: center; gap: 6px;
+  margin: 0 0 6px;
+}
+.devtools-head h3 { margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--vscode-descriptionForeground); flex: 1; }
+.devtools-head button { padding: 2px 8px; font-size: 11px; background: transparent; color: var(--vscode-foreground); border: 1px solid var(--vscode-panel-border, transparent); }
+.devtools-head button:hover { background: var(--vscode-toolbar-hoverBackground); }
+.devtools-url-row { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
+.devtools-url { flex: 1; font-size: 10px; font-family: var(--vscode-editor-font-family, monospace); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.85; }
+.devtools-hint { font-size: 10px; color: var(--vscode-descriptionForeground); margin-top: 2px; }
 .lc-section { margin-top: 10px; }
 .lc-head {
   display: flex; align-items: center; gap: 6px;

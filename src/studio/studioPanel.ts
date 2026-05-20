@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import { execFile } from 'child_process';
 import * as vscode from 'vscode';
 import { WalletService } from '../wallet/walletService';
 import { AcurastContext } from '../context';
@@ -186,6 +187,12 @@ export class StudioPanel implements vscode.WebviewViewProvider {
         break;
       case 'fiat.save':
         await this.saveFiatSelection(msg.exchangerId, msg.currencyId, msg.apiKey, msg.coingeckoPlan);
+        break;
+      case 'devtools.refreshKey':
+        await this.fetchDevtoolsUrl();
+        break;
+      case 'devtools.openUrl':
+        if (msg.url) await vscode.env.openExternal(vscode.Uri.parse(msg.url));
         break;
     }
   }
@@ -460,7 +467,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
 
   /* ---------------- Deploy state ---------------- */
 
-  beginDeploy(opts: { project: string; network: string }) {
+  beginDeploy(opts: { project: string; network: string; enableDevtools?: boolean }) {
     const stages = defaultStages();
     stages[0].status = 'active';
     this._deploy = {
@@ -472,6 +479,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       stages,
       chainEvents: [],
       watching: false,
+      devtoolsEnabled: !!opts.enableDevtools,
     };
     void this.stopChainWatch();
     void this.navigate('deploy');
@@ -570,6 +578,35 @@ export class StudioPanel implements vscode.WebviewViewProvider {
 
   private pushDeploy() {
     this.post({ type: 'deploy.state', state: this._deploy });
+  }
+
+  async fetchDevtoolsUrl(): Promise<void> {
+    const d = this._deploy;
+    if (!d || !d.jobIds.length) return;
+    const localId = d.jobIds[0].localId;
+    d.devtoolsLoading = true;
+    this.pushDeploy();
+    try {
+      const url = await this.runDevtoolsCommand(localId);
+      if (this._deploy) this._deploy.devtoolsUrl = url;
+    } catch {
+      // URL can be retried with the Refresh key button
+    } finally {
+      if (this._deploy) this._deploy.devtoolsLoading = false;
+      this.pushDeploy();
+    }
+  }
+
+  private runDevtoolsCommand(localId: number): Promise<string> {
+    return new Promise((resolve, reject) => {
+      execFile(this.ctx.cliPath, ['devtools', String(localId)], (err, stdout, stderr) => {
+        if (err) { reject(err); return; }
+        const combined = stdout + stderr;
+        const match = combined.match(/https?:\/\/\S+/);
+        if (match) resolve(match[0].replace(/[,;)\]'"]+$/, ''));
+        else reject(new Error('No URL in devtools output'));
+      });
+    });
   }
 
   private async queryProcessors() {

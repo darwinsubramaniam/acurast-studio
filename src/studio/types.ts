@@ -21,6 +21,8 @@ export interface DeployOpenOutputMsg { type: 'deploy.openOutput'; }
 export interface DeployQueryProcessorsMsg { type: 'deploy.queryProcessors'; }
 export interface DeployCopyMsg { type: 'deploy.copy'; text: string; }
 export interface DeployDeregisterMsg { type: 'deploy.deregister'; origin: string; localId: number; }
+export interface DevtoolsRefreshKeyMsg { type: 'devtools.refreshKey'; }
+export interface DevtoolsOpenUrlMsg { type: 'devtools.openUrl'; url: string; }
 export type CoinGeckoPlan = 'demo' | 'pro';
 
 export interface PricingFetchMsg { type: 'pricing.fetch'; }
@@ -42,7 +44,8 @@ export type InMsg =
   | ConfigSaveMsg | ConfigOpenJsonMsg | ConfigChooseMsg | ConfigNewProjectMsg
   | DeployStartMsg | DeployOpenOutputMsg | DeployQueryProcessorsMsg | DeployCopyMsg
   | DeployDeregisterMsg | PricingFetchMsg
-  | FiatFetchListMsg | FiatSaveMsg;
+  | FiatFetchListMsg | FiatSaveMsg
+  | DevtoolsRefreshKeyMsg | DevtoolsOpenUrlMsg;
 
 export interface SerializedFees {
   numberOfExecutions: string;
@@ -186,6 +189,9 @@ export interface DeployState {
   stages: DeployStage[];
   chainEvents: ChainEvent[];
   watching: boolean;
+  devtoolsEnabled?: boolean;
+  devtoolsUrl?: string;
+  devtoolsLoading?: boolean;
 }
 
 export interface BalanceMsg {
