@@ -1,9 +1,16 @@
 <script lang="ts">
   import type { Route, DeployState, WalletInfo } from '../types';
   import { ICONS } from './lib/icons';
+  import { send } from './lib/vscode';
 
   interface Props {
-    ctx: { isAcurastProject: boolean; configPath: string | null; configRel: string | null };
+    ctx: {
+      isAcurastProject: boolean;
+      configPath: string | null;
+      configRel: string | null;
+      configExists: boolean;
+      anyConfigExists: boolean;
+    };
     wallets: { list: WalletInfo[]; activeId: string | null };
     deploy: DeployState | null;
     navigate: (r: Route) => void;
@@ -16,9 +23,30 @@
       : 'Create or import to begin'
   );
 
-  let projectSub = $derived(
-    !ctx.isAcurastProject ? 'No acurast.json selected' : (ctx.configRel || 'acurast.json')
-  );
+  let isProjectSettingsDisabled = $derived.by(() => {
+    if (!ctx.isAcurastProject) return true;
+    if (!ctx.configExists && !ctx.anyConfigExists) return true;
+    return false;
+  });
+
+  let projectWarning = $derived(!ctx.configExists && ctx.isAcurastProject);
+
+  let projectSub = $derived.by(() => {
+    if (!ctx.isAcurastProject) {
+      if (!ctx.anyConfigExists) {
+        return 'Create it using the command acurast:init project';
+      }
+      return 'No acurast.json selected';
+    }
+    if (!ctx.configExists) {
+      if (ctx.anyConfigExists) {
+        return 'Targeted acurast.json is missing';
+      } else {
+        return 'Targeted acurast.json is missing. Create it using the command acurast:init project';
+      }
+    }
+    return ctx.configRel || 'acurast.json';
+  });
 
   let deploySub = $derived.by(() => {
     const d = deploy;
@@ -49,11 +77,11 @@
     <span class="chev">{@html ICONS.chev}</span>
   </button>
 
-  <button class="nav-card" onclick={() => navigate('settings')} disabled={!ctx.isAcurastProject}>
+  <button class="nav-card" onclick={() => navigate('settings')} disabled={isProjectSettingsDisabled}>
     <span class="icon">{@html ICONS.settings}</span>
     <div class="body">
       <div class="title">Project Settings</div>
-      <div class="sub">{projectSub}</div>
+      <div class="sub" style={projectWarning ? "color: var(--vscode-errorForeground); font-weight: 500;" : ""}>{projectSub}</div>
     </div>
     <span class="chev">{@html ICONS.chev}</span>
   </button>
@@ -76,3 +104,12 @@
     <span class="chev">{@html ICONS.chev}</span>
   </button>
 </div>
+
+{#if !ctx.anyConfigExists}
+  <div style="margin: 12px 0 6px; padding: 12px; border: 1px dashed var(--vscode-panel-border); border-radius: 4px; text-align: center; background: var(--vscode-textBlockQuote-background, rgba(0, 0, 0, 0.05));">
+    <div style="font-size: 11px; margin-bottom: 8px; color: var(--vscode-descriptionForeground);">No <code>acurast.json</code> found in this workspace.</div>
+    <button class="full" style="font-size: 12px; font-weight: 600;" onclick={() => send('config.newProject')}>
+      Initialize Acurast Project
+    </button>
+  </div>
+{/if}

@@ -41,6 +41,12 @@ export class AcurastContext {
         this.loadConfig();
       }
     });
+
+    const watcher = vscode.workspace.createFileSystemWatcher('**/acurast.json');
+    watcher.onDidCreate(() => this.detectProject());
+    watcher.onDidDelete(() => this.detectProject());
+    watcher.onDidChange(() => this.detectProject());
+    this.extensionContext.subscriptions.push(watcher);
   }
 
   /** Active acurast.json file path, or undefined. */
@@ -102,19 +108,18 @@ export class AcurastContext {
   private async detectProject() {
     const stored = this.extensionContext.workspaceState.get<string>(STATE_KEY);
 
-    // Prefer the stored path if it still exists
     if (stored) {
+      this._configPath = stored;
       try {
         await vscode.workspace.fs.stat(vscode.Uri.file(stored));
-        this._configPath = stored;
         await this.loadConfig();
         this.setIsAcurastProject(true);
-        this._onDidChangeActiveConfig.fire(this._configPath);
-        return;
       } catch {
-        // stored file is gone, fall through
-        await this.extensionContext.workspaceState.update(STATE_KEY, undefined);
+        this._config = undefined;
+        this.setIsAcurastProject(true);
       }
+      this._onDidChangeActiveConfig.fire(this._configPath);
+      return;
     }
 
     const folders = vscode.workspace.workspaceFolders ?? [];

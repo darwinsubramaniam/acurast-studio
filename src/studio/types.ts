@@ -15,6 +15,7 @@ export interface RefreshBalanceMsg { type: 'refreshBalance'; }
 export interface ConfigSaveMsg { type: 'config.save'; projectKey: string; patch: Record<string, unknown>; }
 export interface ConfigOpenJsonMsg { type: 'config.openJson'; }
 export interface ConfigChooseMsg { type: 'config.choose'; }
+export interface ConfigNewProjectMsg { type: 'config.newProject'; }
 export interface DeployStartMsg { type: 'deploy.start'; }
 export interface DeployOpenOutputMsg { type: 'deploy.openOutput'; }
 export interface DeployQueryProcessorsMsg { type: 'deploy.queryProcessors'; }
@@ -38,7 +39,7 @@ export interface FiatSaveMsg {
 }
 export type InMsg =
   | NavigateMsg | ReadyMsg | WalletActionMsg | RefreshBalanceMsg
-  | ConfigSaveMsg | ConfigOpenJsonMsg | ConfigChooseMsg
+  | ConfigSaveMsg | ConfigOpenJsonMsg | ConfigChooseMsg | ConfigNewProjectMsg
   | DeployStartMsg | DeployOpenOutputMsg | DeployQueryProcessorsMsg | DeployCopyMsg
   | DeployDeregisterMsg | PricingFetchMsg
   | FiatFetchListMsg | FiatSaveMsg;

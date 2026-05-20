@@ -48,7 +48,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
   ) {
     wallet.onDidChange(() => this.pushWallets());
     ctx.onDidChangeActiveConfig(() => {
-      this.pushContext();
+      void this.pushContext();
       void this.pushConfig();
     });
     vscode.workspace.onDidSaveTextDocument((doc) => {
@@ -56,7 +56,19 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     });
   }
 
-  private pushContext() {
+  private async pushContext() {
+    let configExists = false;
+    if (this.ctx.configPath) {
+      try {
+        await vscode.workspace.fs.stat(vscode.Uri.file(this.ctx.configPath));
+        configExists = true;
+      } catch {
+        configExists = false;
+      }
+    }
+    const found = await this.ctx.findAllConfigs();
+    const anyConfigExists = found.length > 0;
+
     this.post({
       type: 'context',
       isAcurastProject: this.ctx.isAcurastProject,
@@ -64,6 +76,8 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       configRel: this.ctx.configPath
         ? vscode.workspace.asRelativePath(this.ctx.configPath)
         : null,
+      configExists,
+      anyConfigExists,
     });
   }
 
@@ -143,6 +157,9 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       case 'config.choose':
         await vscode.commands.executeCommand('acurast.chooseConfig');
         break;
+      case 'config.newProject':
+        await vscode.commands.executeCommand('acurast.newProject');
+        break;
       case 'deploy.start':
         await vscode.commands.executeCommand('acurast.deploy');
         break;
@@ -197,7 +214,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
 
   private async pushAll() {
     this.post({ type: 'route', route: this._route });
-    this.pushContext();
+    await this.pushContext();
     await this.pushWallets();
     if (this._route === 'wallets') this.startBalancePoll();
     await this.pushConfig();

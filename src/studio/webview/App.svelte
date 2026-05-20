@@ -7,12 +7,24 @@
   import Settings from './Settings.svelte';
   import Deploy from './Deploy.svelte';
 
-  interface CtxState { isAcurastProject: boolean; configPath: string | null; configRel: string | null; }
+  interface CtxState {
+    isAcurastProject: boolean;
+    configPath: string | null;
+    configRel: string | null;
+    configExists: boolean;
+    anyConfigExists: boolean;
+  }
   interface WalletsState { list: WalletInfo[]; activeId: string | null; network: string; symbol: string; }
   interface ConfigState { data: unknown; projectKey: string | null; }
 
   let route = $state<Route>('home');
-  let ctx = $state<CtxState>({ isAcurastProject: false, configPath: null, configRel: null });
+  let ctx = $state<CtxState>({
+    isAcurastProject: false,
+    configPath: null,
+    configRel: null,
+    configExists: false,
+    anyConfigExists: false
+  });
   let wallets = $state<WalletsState>({ list: [], activeId: null, network: 'mainnet', symbol: 'ACU' });
   let balance = $state<BalanceMsg>({ status: 'idle' });
   let config = $state<ConfigState>({ data: null, projectKey: null });
@@ -34,7 +46,13 @@
           route = msg.route as Route;
           break;
         case 'context':
-          ctx = { isAcurastProject: msg.isAcurastProject as boolean, configPath: msg.configPath as string | null, configRel: msg.configRel as string | null };
+          ctx = {
+            isAcurastProject: msg.isAcurastProject as boolean,
+            configPath: msg.configPath as string | null,
+            configRel: msg.configRel as string | null,
+            configExists: msg.configExists as boolean,
+            anyConfigExists: msg.anyConfigExists as boolean
+          };
           break;
         case 'wallets.state':
           wallets = { list: msg.wallets as WalletInfo[], activeId: msg.activeId as string | null, network: msg.network as string, symbol: msg.symbol as string };
