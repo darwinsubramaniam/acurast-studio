@@ -2,7 +2,7 @@ import type { WalletInfo } from '../wallet/walletService';
 
 export type { WalletInfo };
 
-export type Route = 'home' | 'wallets' | 'settings' | 'deploy';
+export type Route = 'home' | 'wallets' | 'settings' | 'deploy' | 'history';
 
 export interface NavigateMsg { type: 'navigate'; route: Route; }
 export interface ReadyMsg { type: 'ready'; }
@@ -39,13 +39,20 @@ export interface FiatSaveMsg {
   apiKey?: string;    // stored in SecretStorage per exchanger
   coingeckoPlan?: CoinGeckoPlan;
 }
+export interface HistoryLoadMsg        { type: 'history.load'; offset?: number; }
+export interface HistoryFetchOnlineMsg { type: 'history.fetchOnline'; address: string; network: string; }
+export interface HistoryRemovePathMsg  { type: 'history.removePathInfo'; id: string; }
+export interface HistoryRemoveMsg      { type: 'history.remove'; id: string; }
+export interface HistoryOpenFolderMsg  { type: 'history.openFolder'; path: string; }
+
 export type InMsg =
   | NavigateMsg | ReadyMsg | WalletActionMsg | RefreshBalanceMsg
   | ConfigSaveMsg | ConfigOpenJsonMsg | ConfigChooseMsg | ConfigNewProjectMsg
   | DeployStartMsg | DeployOpenOutputMsg | DeployQueryProcessorsMsg | DeployCopyMsg
   | DeployDeregisterMsg | PricingFetchMsg
   | FiatFetchListMsg | FiatSaveMsg
-  | DevtoolsRefreshKeyMsg | DevtoolsOpenUrlMsg;
+  | DevtoolsRefreshKeyMsg | DevtoolsOpenUrlMsg
+  | HistoryLoadMsg | HistoryFetchOnlineMsg | HistoryRemovePathMsg | HistoryRemoveMsg | HistoryOpenFolderMsg;
 
 export interface SerializedFees {
   numberOfExecutions: string;
@@ -192,6 +199,46 @@ export interface DeployState {
   devtoolsEnabled?: boolean;
   devtoolsUrl?: string;
   devtoolsLoading?: boolean;
+}
+
+export interface StoredDeployment {
+  id: string;
+  project: string;
+  network: string;
+  startedAt: number;
+  finishedAt: number;
+  jobIds: DeployJobId[];
+  ipfsHash?: string;
+  txHash?: string;
+  projectPath?: string;
+}
+
+export interface OnlineJobRegistration {
+  startTime: number;
+  endTime: number;
+  intervalMs: string;
+  durationMs: number;
+  slots: number;
+  rewardPlanck: string;
+  strategy: 'Single' | 'Competing';
+  modules: string[];
+  scriptUrl?: string;
+}
+
+export interface StoredDeploymentWithMeta extends StoredDeployment {
+  pathExists: boolean;
+  registration?: OnlineJobRegistration;
+}
+
+export interface HistoryStateMsg {
+  type: 'history.state';
+  status: 'loading' | 'ok' | 'error';
+  records?: StoredDeploymentWithMeta[];
+  offset?: number;
+  hasMore?: boolean;
+  total?: number;
+  onlineRecords?: StoredDeploymentWithMeta[];
+  error?: string;
 }
 
 export interface BalanceMsg {

@@ -12,21 +12,23 @@ import { loadPricing } from '../sdk/pricing';
 import { SYMBOL, MATCHER_ENDPOINTS, type AcurastNetwork } from '../sdk/constants';
 import { Exchanger } from '../sdk/exchanger/exchanger';
 import { CoinGecko, type CoinGeckoPlan } from '../sdk/exchanger/coingecko';
-import type { Route, InMsg, WalletActionMsg, DeployState, DeployStage, DeployStageId, StageStatus, DeployJobId, ProcessorPubKey, ProcessorInfo, ChainEvent, PricingFiatInfo, FiatListItem } from './types';
+import { DeploymentStore } from '../deployments/deploymentStore';
+import type { Route, InMsg, WalletActionMsg, DeployState, DeployStage, DeployStageId, StageStatus, DeployJobId, ProcessorPubKey, ProcessorInfo, ChainEvent, PricingFiatInfo, FiatListItem, StoredDeploymentWithMeta, HistoryStateMsg, OnlineJobRegistration } from './types';
 
 const BALANCE_POLL_MS = 30_000;
 const FIAT_PRICE_TTL_MS = 60_000;
+const HISTORY_PAGE_SIZE = 15;
 const FIAT_API_KEY_SECRET = (exchangerId: number) => `acurast.fiat.apiKey.${exchangerId}`;
 
 function defaultStages(): DeployStage[] {
   return [
-    { id: 'bundle',      label: 'Package bundle',      status: 'pending' },
-    { id: 'upload',      label: 'Upload to IPFS',      status: 'pending' },
-    { id: 'prepare',     label: 'Prepare job',         status: 'pending' },
-    { id: 'submit',      label: 'Submit transaction',  status: 'pending' },
-    { id: 'match',       label: 'Match processor',     status: 'pending' },
-    { id: 'acknowledge', label: 'Acknowledge',         status: 'pending' },
-    { id: 'envvars',     label: 'Set env vars',        status: 'pending' },
+    { id: 'bundle', label: 'Package bundle', status: 'pending' },
+    { id: 'upload', label: 'Upload to IPFS', status: 'pending' },
+    { id: 'prepare', label: 'Prepare job', status: 'pending' },
+    { id: 'submit', label: 'Submit transaction', status: 'pending' },
+    { id: 'match', label: 'Match processor', status: 'pending' },
+    { id: 'acknowledge', label: 'Acknowledge', status: 'pending' },
+    { id: 'envvars', label: 'Set env vars', status: 'pending' },
   ];
 }
 
@@ -45,7 +47,8 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     private readonly extensionUri: vscode.Uri,
     private readonly ctx: AcurastContext,
     private readonly wallet: WalletService,
-    private readonly secrets: vscode.SecretStorage
+    private readonly secrets: vscode.SecretStorage,
+    private readonly deploymentStore: DeploymentStore
   ) {
     wallet.onDidChange(() => this.pushWallets());
     ctx.onDidChangeActiveConfig(() => {
@@ -99,6 +102,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       }
       if (route === 'settings') await this.pushConfig();
       if (route === 'deploy') { this.pushDeploy(); if (!this._deploy) void this.pushPricing(); }
+      if (route === 'history') await this.pushHistory();
     }
     // Reveal the view (auto-generated focus command)
     await vscode.commands.executeCommand('acurastStudio.focus');
@@ -142,6 +146,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
         }
         if (msg.route === 'settings') await this.pushConfig();
         if (msg.route === 'deploy') { this.pushDeploy(); if (!this._deploy) void this.pushPricing(); }
+        if (msg.route === 'history') await this.pushHistory();
         break;
       case 'wallet':
         await this.runWalletAction(msg);
@@ -194,6 +199,23 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       case 'devtools.openUrl':
         if (msg.url) await vscode.env.openExternal(vscode.Uri.parse(msg.url));
         break;
+      case 'history.load':
+        await this.pushHistory(msg.offset ?? 0);
+        break;
+      case 'history.fetchOnline':
+        await this.fetchOnlineHistory(msg.address, msg.network);
+        break;
+      case 'history.removePathInfo':
+        await this.deploymentStore.removePathInfo(msg.id);
+        await this.pushHistory();
+        break;
+      case 'history.remove':
+        await this.deploymentStore.remove(msg.id);
+        await this.pushHistory();
+        break;
+      case 'history.openFolder':
+        if (msg.path) await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(msg.path));
+        break;
     }
   }
 
@@ -227,6 +249,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     await this.pushConfig();
     await this.pushFiatSelection();
     if (this._route === 'deploy') { this.pushDeploy(); if (!this._deploy) void this.pushPricing(); }
+    if (this._route === 'history') await this.pushHistory();
   }
 
   private async pushWallets() {
@@ -376,7 +399,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     let acuPriceFiat: number;
     try {
       if (this._fiatPriceCache && this._fiatPriceCache.key === cacheKey &&
-          Date.now() - this._fiatPriceCache.fetchedAt < FIAT_PRICE_TTL_MS) {
+        Date.now() - this._fiatPriceCache.fetchedAt < FIAT_PRICE_TTL_MS) {
         acuPriceFiat = this._fiatPriceCache.value;
       } else {
         acuPriceFiat = await exchanger.getACULatestPrice(fiatSymbolForPrice);
@@ -573,7 +596,113 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       if (active) active.status = 'error';
       void this.stopChainWatch();
     }
+    if (result === 'ok') void this.saveDeploymentRecord(this._deploy);
     this.pushDeploy();
+  }
+
+  private async saveDeploymentRecord(d: DeployState): Promise<void> {
+    await this.deploymentStore.save({
+      id: crypto.randomUUID(),
+      project: d.project ?? 'unknown',
+      network: d.network ?? 'mainnet',
+      startedAt: d.startedAt,
+      finishedAt: d.finishedAt ?? Date.now(),
+      jobIds: d.jobIds,
+      ipfsHash: d.ipfsHash,
+      txHash: d.txHash,
+      projectPath: this.ctx.projectRoot ?? undefined,
+    });
+  }
+
+  private async pushHistory(offset = 0): Promise<void> {
+    const all = this.localHistoryWithMeta();
+    const records = all.slice(offset, offset + HISTORY_PAGE_SIZE);
+    this.post({
+      type: 'history.state',
+      status: 'ok',
+      records,
+      offset,
+      hasMore: offset + HISTORY_PAGE_SIZE < all.length,
+      total: all.length,
+    } satisfies HistoryStateMsg);
+  }
+
+  private localHistoryWithMeta(): StoredDeploymentWithMeta[] {
+    return this.deploymentStore.getAll()
+      .map((r): StoredDeploymentWithMeta => ({
+        ...r,
+        pathExists: r.projectPath ? fs.existsSync(r.projectPath) : false,
+      }))
+      .sort((a, b) => b.startedAt - a.startedAt);
+  }
+
+  private async fetchOnlineHistory(address: string, network: string): Promise<void> {
+    // Loading: don't include records — client keeps its accumulated list intact
+    this.post({ type: 'history.state', status: 'loading' } satisfies HistoryStateMsg);
+    try {
+      const svc = await acurastClient.service(network as AcurastNetwork);
+      const api = await svc.connect();
+      // Partial-key query: only fetch jobs for this address (avoids full-chain scan)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const multiOrigin = (api as any).createType('AcurastCommonMultiOrigin', { acurast: address });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const jobEntries: [any, any][] = await (api.query['acurast']['storedJobRegistration'] as any).entries(multiOrigin);
+      // Build a set of job keys already saved locally so we skip duplicates
+      const savedKeys = new Set(
+        this.deploymentStore.getAll()
+          .flatMap(r => r.jobIds.map(j => `${j.origin}:${j.localId}`))
+      );
+      const onlineRecords: StoredDeploymentWithMeta[] = jobEntries
+        .map(([key, value]) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const localId: number = (api as any).createType('u128', key.args.at(1)).toNumber();
+
+          let registration: OnlineJobRegistration | undefined;
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const job = (api as any).createType('Option<AcurastCommonJobRegistration>', value).unwrap();
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const j = job.toJSON() as any;
+            const sched = j.schedule ?? {};
+            const req = j.extra?.requirements ?? {};
+            const strat = req.assignmentStrategy ?? {};
+
+            let scriptUrl: string | undefined;
+            try {
+              const decoded = Buffer.from(String(j.script ?? '').replace(/^0x/, ''), 'hex').toString('utf8');
+              if (/^(https?|ipfs):\/\//i.test(decoded)) scriptUrl = decoded.trim();
+            } catch { /* not a URL — skip */ }
+
+            registration = {
+              startTime: Number(sched.startTime ?? 0),
+              endTime: Number(sched.endTime ?? 0),
+              intervalMs: String(sched.interval ?? 0),
+              durationMs: Number(sched.duration ?? 0),
+              slots: Number(req.slots ?? 1),
+              rewardPlanck: String(req.reward ?? 0),
+              strategy: strat.competing !== undefined ? 'Competing' : 'Single',
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              modules: (j.requiredModules ?? []).map((m: any) => String(m)),
+              scriptUrl,
+            };
+          } catch { /* value was None or codec mismatch — registration stays undefined */ }
+
+          return {
+            id: `online:${address}:${localId}`,
+            project: 'on-chain',
+            network,
+            startedAt: registration?.startTime ?? 0,
+            finishedAt: registration?.endTime ?? 0,
+            jobIds: [{ origin: address, localId }],
+            pathExists: false,
+            registration,
+          };
+        })
+        .filter(r => !savedKeys.has(`${r.jobIds[0].origin}:${r.jobIds[0].localId}`));
+      this.post({ type: 'history.state', status: 'ok', onlineRecords } satisfies HistoryStateMsg);
+    } catch (err) {
+      this.post({ type: 'history.state', status: 'error', error: (err as Error).message } satisfies HistoryStateMsg);
+    }
   }
 
   private pushDeploy() {
@@ -867,38 +996,38 @@ function flattenPubKeys(raw: unknown): ProcessorPubKey[] {
 // included; the chain emits whichever is current.
 const EVENT_MAP: Record<string, { kind: ChainEvent['kind']; label: string }> = {
   // acurast pallet — registration lifecycle
-  'acurast.JobRegistrationStored':     { kind: 'started',   label: 'Registration stored' },
-  'acurast.JobRegistrationStoredV2':   { kind: 'started',   label: 'Registration stored' },
-  'acurast.JobRegistrationRemoved':    { kind: 'finalized', label: 'Registration removed (deregistered)' },
-  'acurast.ExecutionEnvironmentsUpdated':   { kind: 'other', label: 'Env vars updated' },
+  'acurast.JobRegistrationStored': { kind: 'started', label: 'Registration stored' },
+  'acurast.JobRegistrationStoredV2': { kind: 'started', label: 'Registration stored' },
+  'acurast.JobRegistrationRemoved': { kind: 'finalized', label: 'Registration removed (deregistered)' },
+  'acurast.ExecutionEnvironmentsUpdated': { kind: 'other', label: 'Env vars updated' },
   'acurast.ExecutionEnvironmentsUpdatedV2': { kind: 'other', label: 'Env vars updated' },
-  'acurast.AllowedSourcesUpdated':   { kind: 'other', label: 'Allowed sources updated' },
+  'acurast.AllowedSourcesUpdated': { kind: 'other', label: 'Allowed sources updated' },
   'acurast.AllowedSourcesUpdatedV2': { kind: 'other', label: 'Allowed sources updated' },
 
   // acurastMarketplace pallet — matching / execution / finalization
-  'acurastMarketplace.JobRegistrationMatched':     { kind: 'started', label: 'Matched' },
-  'acurastMarketplace.JobRegistrationMatchedV2':   { kind: 'started', label: 'Matched' },
-  'acurastMarketplace.JobRegistrationAssigned':    { kind: 'started', label: 'Acknowledged by processor' },
-  'acurastMarketplace.JobRegistrationAssignedV2':  { kind: 'started', label: 'Acknowledged by processor' },
-  'acurastMarketplace.JobExecutionMatched':        { kind: 'started', label: 'Execution match' },
-  'acurastMarketplace.JobExecutionMatchedV2':      { kind: 'started', label: 'Execution match' },
+  'acurastMarketplace.JobRegistrationMatched': { kind: 'started', label: 'Matched' },
+  'acurastMarketplace.JobRegistrationMatchedV2': { kind: 'started', label: 'Matched' },
+  'acurastMarketplace.JobRegistrationAssigned': { kind: 'started', label: 'Acknowledged by processor' },
+  'acurastMarketplace.JobRegistrationAssignedV2': { kind: 'started', label: 'Acknowledged by processor' },
+  'acurastMarketplace.JobExecutionMatched': { kind: 'started', label: 'Execution match' },
+  'acurastMarketplace.JobExecutionMatchedV2': { kind: 'started', label: 'Execution match' },
 
-  'acurastMarketplace.Reported':         { kind: 'reported', label: 'Execution reported' },
-  'acurastMarketplace.ReportedV2':       { kind: 'reported', label: 'Execution reported' },
+  'acurastMarketplace.Reported': { kind: 'reported', label: 'Execution reported' },
+  'acurastMarketplace.ReportedV2': { kind: 'reported', label: 'Execution reported' },
   'acurastMarketplace.ExecutionSuccess': { kind: 'reported', label: 'Execution success' },
   'acurastMarketplace.ExecutionFailure': { kind: 'reported', label: 'Execution failure' },
 
-  'acurastMarketplace.JobFinalized':                  { kind: 'finalized', label: 'Finalized' },
-  'acurastMarketplace.JobAssignmentsCleanedUp':       { kind: 'finalized', label: 'Assignments cleaned up' },
-  'acurastMarketplace.JobMatcherEntryCleanedUp':      { kind: 'finalized', label: 'Matcher cleaned up' },
+  'acurastMarketplace.JobFinalized': { kind: 'finalized', label: 'Finalized' },
+  'acurastMarketplace.JobAssignmentsCleanedUp': { kind: 'finalized', label: 'Assignments cleaned up' },
+  'acurastMarketplace.JobMatcherEntryCleanedUp': { kind: 'finalized', label: 'Matcher cleaned up' },
   'acurastMarketplace.ProcessorAssignmentsCleanedUp': { kind: 'finalized', label: 'Processor assignments cleaned up' },
 
   'acurastMarketplace.JobBecameImmutable': { kind: 'other', label: 'Became immutable' },
-  'acurastMarketplace.JobScriptEdited':    { kind: 'other', label: 'Script edited' },
-  'acurastMarketplace.EditorTransferred':  { kind: 'other', label: 'Editor transferred' },
+  'acurastMarketplace.JobScriptEdited': { kind: 'other', label: 'Script edited' },
+  'acurastMarketplace.EditorTransferred': { kind: 'other', label: 'Editor transferred' },
 };
 
-function  lookupEvent(section: string, method: string): { kind: ChainEvent['kind']; label: string } {
+function lookupEvent(section: string, method: string): { kind: ChainEvent['kind']; label: string } {
   return EVENT_MAP[`${section}.${method}`] ?? { kind: 'other', label: method };
 }
 

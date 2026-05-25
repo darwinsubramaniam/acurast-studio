@@ -5,6 +5,7 @@ import { WalletService } from './wallet/walletService';
 import { registerWalletCommands } from './wallet/walletCommands';
 import { WalletStatusBar, SHOW_WALLETS_COMMAND_ID } from './wallet/walletStatusBar';
 import { StudioPanel } from './studio/studioPanel';
+import { DeploymentStore } from './deployments/deploymentStore';
 import { acurastClient } from './sdk/acurastClient';
 import type { AcurastNetwork } from './sdk/constants';
 import { registerAcurastLanguageService } from './acurastLanguageService';
@@ -37,7 +38,8 @@ export async function activate(extensionContext: vscode.ExtensionContext) {
   await ctx.initialize();
 
   const wallet = new WalletService(extensionContext.secrets);
-  const studioPanel = new StudioPanel(extensionContext.extensionUri, ctx, wallet, extensionContext.secrets);
+  const deploymentStore = new DeploymentStore(extensionContext.globalState);
+  const studioPanel = new StudioPanel(extensionContext.extensionUri, ctx, wallet, extensionContext.secrets, deploymentStore);
   const statusBar = new WalletStatusBar(wallet);
   const output = vscode.window.createOutputChannel('Acurast');
 

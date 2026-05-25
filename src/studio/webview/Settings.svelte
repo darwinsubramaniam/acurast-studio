@@ -2,6 +2,7 @@
   import type { Route, PricingStateMsg, SerializedAdvice, FiatListStateMsg, FiatSelectionStateMsg, CoinGeckoPlan } from '../types';
   import { send } from './lib/vscode';
   import { Accordion } from 'bits-ui';
+  import { planckToAcu, planckToFiat, acuToFiat, fmtFiat } from './lib/format';
 
   // Section ids match the Accordion.Item `value=` below. Open-by-default = listed here.
   let openSections = $state<string[]>(['identity', 'runtime', 'execution', 'scaling']);
@@ -266,31 +267,8 @@
     try { return JSON.stringify(v); } catch { return ''; }
   }
 
-  function satoshiToACU(satoshi: string | null | undefined): string {
-    if (!satoshi) return '—';
-    const n = parseFloat(satoshi) / 1e12;
-    return n.toFixed(6).replace(/\.?0+$/, '') || '0';
-  }
-
-  function satoshiToFiat(satoshi: string | null | undefined, rate: number): number | null {
-    if (!satoshi) return null;
-    const acu = parseFloat(satoshi) / 1e12;
-    if (!Number.isFinite(acu)) return null;
-    return acu * rate;
-  }
-
-  function cacuToFiat(cacu: string | null | undefined, rate: number): number | null {
-    if (!cacu) return null;
-    const n = parseFloat(cacu);
-    if (!Number.isFinite(n)) return null;
-    return n * rate;
-  }
-
-  function fmtFiat(amount: number, sign: string, symbol: string): string {
-    const digits = amount >= 100 ? 2 : amount >= 1 ? 3 : 5;
-    const value = amount.toFixed(digits);
-    return sign ? `${sign}${value} ${symbol}` : `${value} ${symbol}`;
-  }
+  const satoshiToACU = planckToAcu;
+  const satoshiToFiat = planckToFiat;
 
   function adviceIcon(status: SerializedAdvice['status']): string {
     return status === 'sufficient' ? '✓' : status === 'overpaying' ? '⚠' : '✗';
@@ -717,7 +695,7 @@
               <span class="pricing-label">Total cost</span>
               <span class="pricing-value">
                 {fees.maxTotalCostCACU} {sym}
-                {#if fiat}{@const f = cacuToFiat(fees.maxTotalCostCACU, fiat.acuPriceFiat)}{#if f != null}<span class="pricing-fiat">(~{fmtFiat(f, fiat.currencySign, fiat.currencySymbol)})</span>{/if}{/if}
+                {#if fiat}{@const f = acuToFiat(fees.maxTotalCostCACU, fiat.acuPriceFiat)}{#if f != null}<span class="pricing-fiat">(~{fmtFiat(f, fiat.currencySign, fiat.currencySymbol)})</span>{/if}{/if}
               </span>
             </div>
 
@@ -759,17 +737,17 @@
               <span class="pricing-label">Suggested</span>
               <span class="pricing-value">
                 {fees.suggestedCostPerExecutionCACU} {sym}/exec
-                {#if fiat}{@const f = cacuToFiat(fees.suggestedCostPerExecutionCACU, fiat.acuPriceFiat)}{#if f != null}<span class="pricing-fiat">(~{fmtFiat(f, fiat.currencySign, fiat.currencySymbol)})</span>{/if}{/if}
+                {#if fiat}{@const f = acuToFiat(fees.suggestedCostPerExecutionCACU, fiat.acuPriceFiat)}{#if f != null}<span class="pricing-fiat">(~{fmtFiat(f, fiat.currencySign, fiat.currencySymbol)})</span>{/if}{/if}
               </span>
               <span class="pricing-label">Your max</span>
               <span class="pricing-value">
                 {fees.maxCostPerExecutionCACU} {sym}/exec
-                {#if fiat}{@const f = cacuToFiat(fees.maxCostPerExecutionCACU, fiat.acuPriceFiat)}{#if f != null}<span class="pricing-fiat">(~{fmtFiat(f, fiat.currencySign, fiat.currencySymbol)})</span>{/if}{/if}
+                {#if fiat}{@const f = acuToFiat(fees.maxCostPerExecutionCACU, fiat.acuPriceFiat)}{#if f != null}<span class="pricing-fiat">(~{fmtFiat(f, fiat.currencySign, fiat.currencySymbol)})</span>{/if}{/if}
               </span>
               <span class="pricing-label">Total</span>
               <span class="pricing-value">
                 {fees.maxTotalCostCACU} {sym}
-                {#if fiat}{@const f = cacuToFiat(fees.maxTotalCostCACU, fiat.acuPriceFiat)}{#if f != null}<span class="pricing-fiat">(~{fmtFiat(f, fiat.currencySign, fiat.currencySymbol)})</span>{/if}{/if}
+                {#if fiat}{@const f = acuToFiat(fees.maxTotalCostCACU, fiat.acuPriceFiat)}{#if f != null}<span class="pricing-fiat">(~{fmtFiat(f, fiat.currencySign, fiat.currencySymbol)})</span>{/if}{/if}
               </span>
             </div>
             {#if parseFloat(fees.excessCostPerExecution) < 0}

@@ -1,7 +1,14 @@
 <script lang="ts">
-  import type { Route, DeployState, DeployJobId, ProcessorInfo, ChainEvent, PricingStateMsg } from '../types';
-  import { send } from './lib/vscode';
-  import { ICONS } from './lib/icons';
+  import type { Route, DeployState, PricingStateMsg } from "../types";
+  import { send } from "./lib/vscode";
+  import { ICONS } from "./lib/icons";
+  import {
+    planckToAcu,
+    planckToFiat,
+    acuToFiat,
+    fmtFiat,
+    fmtClock,
+  } from "./lib/format";
 
   interface Props {
     ctx: { isAcurastProject: boolean };
@@ -11,50 +18,22 @@
   }
   let { ctx, deploy, pricing }: Props = $props();
 
-  function satoshiToACU(satoshi: string | null | undefined): string {
-    if (!satoshi) return '—';
-    const n = parseFloat(satoshi) / 1e12;
-    return n.toFixed(6).replace(/\.?0+$/, '') || '0';
-  }
-
-  function satoshiToFiat(satoshi: string | null | undefined, acuPriceFiat: number): number | null {
-    if (!satoshi) return null;
-    const acu = parseFloat(satoshi) / 1e12;
-    if (!Number.isFinite(acu)) return null;
-    return acu * acuPriceFiat;
-  }
-
-  function fmtFiat(amount: number, sign: string, symbol: string): string {
-    const digits = amount >= 100 ? 2 : amount >= 1 ? 3 : 5;
-    const value = amount.toFixed(digits);
-    return sign ? `${sign}${value} ${symbol}` : `${value} ${symbol}`;
-  }
-
-  function cacuToFiat(cacu: string | null | undefined, acuPriceFiat: number): number | null {
-    if (!cacu) return null;
-    const n = parseFloat(cacu);
-    if (!Number.isFinite(n)) return null;
-    return n * acuPriceFiat;
-  }
-
-  function fmtTime(ts: number): string {
-    const d = new Date(ts);
-    const p = (n: number) => String(n).padStart(2, '0');
-    return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
-  }
+  const satoshiToACU = planckToAcu;
+  const satoshiToFiat = planckToFiat;
+  const fmtTime = fmtClock;
 
   function statusClass(d: DeployState): string {
-    if (d.active) return 'running';
-    if (d.result === 'ok') return 'ok';
-    if (d.result === 'error') return 'err';
-    return 'idle';
+    if (d.active) return "running";
+    if (d.result === "ok") return "ok";
+    if (d.result === "error") return "err";
+    return "idle";
   }
 
   function statusLabel(d: DeployState): string {
-    if (d.active) return 'Running';
-    if (d.result === 'ok') return 'Success';
-    if (d.result === 'error') return 'Failed';
-    return 'Idle';
+    if (d.active) return "Running";
+    if (d.result === "ok") return "Success";
+    if (d.result === "error") return "Failed";
+    return "Idle";
   }
 </script>
 
@@ -63,9 +42,13 @@
     <div style="margin: 12px 0; opacity:0.7;">{@html ICONS.deployments}</div>
     <p>No active deployment.</p>
     {#if ctx.isAcurastProject}
-      <button class="full" onclick={() => send('deploy.start')}>Deploy now</button>
+      <button class="full" onclick={() => send("deploy.start")}
+        >Deploy now</button
+      >
     {:else}
-      <p style="font-size:11px;">Select an <code>acurast.json</code> from Project Settings to enable deploy.</p>
+      <p style="font-size:11px;">
+        Select an <code>acurast.json</code> from Project Settings to enable deploy.
+      </p>
     {/if}
   </div>
 
@@ -73,73 +56,151 @@
     <div class="pricing-box" style="margin-top:8px;">
       <div class="pricing-box-header">
         <span class="pricing-box-title">Cost Estimate</span>
-        <button class="secondary" style="font-size:10px;padding:2px 8px;" disabled={pricing?.status === 'loading'} onclick={() => send('pricing.fetch')}>
-          {pricing?.status === 'loading' ? 'Checking…' : '⟳'}
+        <button
+          class="secondary"
+          style="font-size:10px;padding:2px 8px;"
+          disabled={pricing?.status === "loading"}
+          onclick={() => send("pricing.fetch")}
+        >
+          {pricing?.status === "loading" ? "Checking…" : "⟳"}
         </button>
       </div>
 
-      {#if !pricing || pricing.status === 'idle'}
+      {#if !pricing || pricing.status === "idle"}
         <div class="pricing-muted">Loading…</div>
-      {:else if pricing.status === 'loading'}
+      {:else if pricing.status === "loading"}
         <div class="pricing-muted">Fetching market data…</div>
-      {:else if pricing.status === 'error'}
+      {:else if pricing.status === "error"}
         <div class="pricing-error-note">{pricing.error}</div>
-      {:else if pricing.status === 'ok' && pricing.fees}
+      {:else if pricing.status === "ok" && pricing.fees}
         {@const fees = pricing.fees}
         {@const advice = pricing.advice}
-        {@const fiat = pricing.fiat && !pricing.fiat.error ? pricing.fiat : null}
+        {@const fiat =
+          pricing.fiat && !pricing.fiat.error ? pricing.fiat : null}
         {#if advice}
-          <div class="pricing-status-row pricing-{advice.status}" style="margin-bottom:6px;">
+          <div
+            class="pricing-status-row pricing-{advice.status}"
+            style="margin-bottom:6px;"
+          >
             <span>
-              {advice.status === 'sufficient' ? '✓' : advice.status === 'overpaying' ? '⚠' : '✗'}
-              {advice.status === 'sufficient' ? 'Sufficient' : advice.status === 'overpaying' ? 'Overpaying' : 'Insufficient'}
+              {advice.status === "sufficient"
+                ? "✓"
+                : advice.status === "overpaying"
+                  ? "⚠"
+                  : "✗"}
+              {advice.status === "sufficient"
+                ? "Sufficient"
+                : advice.status === "overpaying"
+                  ? "Overpaying"
+                  : "Insufficient"}
             </span>
-            <span class="pricing-match">{advice.matchedProcessors}/{advice.requiredProcessors} processors</span>
+            <span class="pricing-match"
+              >{advice.matchedProcessors}/{advice.requiredProcessors} processors</span
+            >
           </div>
           <div class="pricing-rows">
             <span class="pricing-label">Your price</span>
             <span class="pricing-value">
               {satoshiToACU(advice.currentPrice)} / exec
-              {#if fiat}{@const f = satoshiToFiat(advice.currentPrice, fiat.acuPriceFiat)}{#if f != null}<span class="pricing-fiat">(~{fmtFiat(f, fiat.currencySign, fiat.currencySymbol)})</span>{/if}{/if}
+              {#if fiat}{@const f = satoshiToFiat(
+                  advice.currentPrice,
+                  fiat.acuPriceFiat,
+                )}{#if f != null}<span class="pricing-fiat"
+                    >(~{fmtFiat(
+                      f,
+                      fiat.currencySign,
+                      fiat.currencySymbol,
+                    )})</span
+                  >{/if}{/if}
             </span>
-            {#if advice.suggestedPrice && advice.status !== 'sufficient'}
+            {#if advice.suggestedPrice && advice.status !== "sufficient"}
               <span class="pricing-label">Suggested</span>
               <span class="pricing-value">
                 {satoshiToACU(advice.suggestedPrice)} / exec
-                {#if fiat}{@const f = satoshiToFiat(advice.suggestedPrice, fiat.acuPriceFiat)}{#if f != null}<span class="pricing-fiat">(~{fmtFiat(f, fiat.currencySign, fiat.currencySymbol)})</span>{/if}{/if}
+                {#if fiat}{@const f = satoshiToFiat(
+                    advice.suggestedPrice,
+                    fiat.acuPriceFiat,
+                  )}{#if f != null}<span class="pricing-fiat"
+                      >(~{fmtFiat(
+                        f,
+                        fiat.currencySign,
+                        fiat.currencySymbol,
+                      )})</span
+                    >{/if}{/if}
               </span>
             {/if}
             <span class="pricing-label">Total max</span>
             <span class="pricing-value">
               {fees.maxTotalCostCACU}
-              {#if fiat}{@const f = cacuToFiat(fees.maxTotalCostCACU, fiat.acuPriceFiat)}{#if f != null}<span class="pricing-fiat">(~{fmtFiat(f, fiat.currencySign, fiat.currencySymbol)})</span>{/if}{/if}
+              {#if fiat}{@const f = acuToFiat(
+                  fees.maxTotalCostCACU,
+                  fiat.acuPriceFiat,
+                )}{#if f != null}<span class="pricing-fiat"
+                    >(~{fmtFiat(
+                      f,
+                      fiat.currencySign,
+                      fiat.currencySymbol,
+                    )})</span
+                  >{/if}{/if}
             </span>
           </div>
-          {#if advice.status !== 'sufficient'}
-            <div class="pricing-muted" style="margin-top:4px;">Adjust price in <button style="background:none;border:none;padding:0;color:var(--vscode-textLink-foreground);cursor:pointer;font:inherit;font-size:10px;" onclick={() => send('navigate', { route: 'settings' })}>Project Settings</button>.</div>
+          {#if advice.status !== "sufficient"}
+            <div class="pricing-muted" style="margin-top:4px;">
+              Adjust price in <button
+                style="background:none;border:none;padding:0;color:var(--vscode-textLink-foreground);cursor:pointer;font:inherit;font-size:10px;"
+                onclick={() => send("navigate", { route: "settings" })}
+                >Project Settings</button
+              >.
+            </div>
           {/if}
         {:else}
           <div class="pricing-rows">
             <span class="pricing-label">Max / exec</span>
             <span class="pricing-value">
               {fees.maxCostPerExecutionCACU}
-              {#if fiat}{@const f = cacuToFiat(fees.maxCostPerExecutionCACU, fiat.acuPriceFiat)}{#if f != null}<span class="pricing-fiat">(~{fmtFiat(f, fiat.currencySign, fiat.currencySymbol)})</span>{/if}{/if}
+              {#if fiat}{@const f = acuToFiat(
+                  fees.maxCostPerExecutionCACU,
+                  fiat.acuPriceFiat,
+                )}{#if f != null}<span class="pricing-fiat"
+                    >(~{fmtFiat(
+                      f,
+                      fiat.currencySign,
+                      fiat.currencySymbol,
+                    )})</span
+                  >{/if}{/if}
             </span>
             <span class="pricing-label">Total max</span>
             <span class="pricing-value">
               {fees.maxTotalCostCACU}
-              {#if fiat}{@const f = cacuToFiat(fees.maxTotalCostCACU, fiat.acuPriceFiat)}{#if f != null}<span class="pricing-fiat">(~{fmtFiat(f, fiat.currencySign, fiat.currencySymbol)})</span>{/if}{/if}
+              {#if fiat}{@const f = acuToFiat(
+                  fees.maxTotalCostCACU,
+                  fiat.acuPriceFiat,
+                )}{#if f != null}<span class="pricing-fiat"
+                    >(~{fmtFiat(
+                      f,
+                      fiat.currencySign,
+                      fiat.currencySymbol,
+                    )})</span
+                  >{/if}{/if}
             </span>
           </div>
-          {#if pricing.fallbackReason === 'no-wallet'}
-            <div class="pricing-muted" style="margin-top:4px;">Set an active wallet for live market pricing.</div>
+          {#if pricing.fallbackReason === "no-wallet"}
+            <div class="pricing-muted" style="margin-top:4px;">
+              Set an active wallet for live market pricing.
+            </div>
           {/if}
         {/if}
         {#if pricing.fiat?.error}
-          <div class="pricing-muted" style="margin-top:4px;">Fiat conversion unavailable: {pricing.fiat.error}</div>
+          <div class="pricing-muted" style="margin-top:4px;">
+            Fiat conversion unavailable: {pricing.fiat.error}
+          </div>
         {:else if fiat}
           <div class="pricing-muted" style="margin-top:4px;">
-            1 ACU ≈ {fmtFiat(fiat.acuPriceFiat, fiat.currencySign, fiat.currencySymbol)} · {fiat.exchangerName}
+            1 ACU ≈ {fmtFiat(
+              fiat.acuPriceFiat,
+              fiat.currencySign,
+              fiat.currencySymbol,
+            )} · {fiat.exchangerName}
           </div>
         {/if}
       {/if}
@@ -150,10 +211,17 @@
 
   <div class="dep-head">
     <div class="proj">
-      <div class="proj-name">{d.project ?? 'Unknown project'}{d.network ? ` · ${d.network}` : ''}</div>
-      <div class="proj-meta" title="Times for the deploy flow. The job continues executing on processors after this.">
+      <div class="proj-name">
+        {d.project ?? "Unknown project"}{d.network ? ` · ${d.network}` : ""}
+      </div>
+      <div
+        class="proj-meta"
+        title="Times for the deploy flow. The job continues executing on processors after this."
+      >
         Started {fmtTime(d.startedAt)}
-        {#if d.finishedAt} · {d.result === 'error' ? 'failed' : 'registered'} {fmtTime(d.finishedAt)}{/if}
+        {#if d.finishedAt}
+          · {d.result === "error" ? "failed" : "registered"}
+          {fmtTime(d.finishedAt)}{/if}
       </div>
     </div>
     <span class="dep-status {statusClass(d)}">{statusLabel(d)}</span>
@@ -164,7 +232,7 @@
   {/if}
 
   <!-- Job ID cards -->
-  {#each d.jobIds as j (j.origin + ':' + j.localId)}
+  {#each d.jobIds as j (j.origin + ":" + j.localId)}
     <div class="dep-id {j.deregistered ? 'deregistered' : ''}">
       <div class="label">
         Deployment ID
@@ -175,17 +243,32 @@
         <div class="id-origin" title={j.origin}>{j.origin}</div>
       </div>
       <div class="id-actions">
-        <button onclick={() => send('deploy.copy', { text: String(j.localId) })}>Copy ID</button>
-        <button onclick={() => send('deploy.copy', { text: j.origin })}>Copy origin</button>
+        <button onclick={() => send("deploy.copy", { text: String(j.localId) })}
+          >Copy ID</button
+        >
+        <button onclick={() => send("deploy.copy", { text: j.origin })}
+          >Copy origin</button
+        >
         {#if !j.deregistered}
-          <button class="danger" disabled={j.deregistering}
-            onclick={() => send('deploy.deregister', { origin: j.origin, localId: j.localId })}>
-            {j.deregistering ? 'Deregistering…' : 'Deregister'}
+          <button
+            class="danger"
+            disabled={j.deregistering}
+            onclick={() =>
+              send("deploy.deregister", {
+                origin: j.origin,
+                localId: j.localId,
+              })}
+          >
+            {j.deregistering ? "Deregistering…" : "Deregister"}
           </button>
         {/if}
       </div>
-      {#if j.deregisterTxHash}<div class="dereg-tx" title={j.deregisterTxHash}>tx {j.deregisterTxHash}</div>{/if}
-      {#if j.deregisterError}<div class="dereg-error">{j.deregisterError}</div>{/if}
+      {#if j.deregisterTxHash}<div class="dereg-tx" title={j.deregisterTxHash}>
+          tx {j.deregisterTxHash}
+        </div>{/if}
+      {#if j.deregisterError}<div class="dereg-error">
+          {j.deregisterError}
+        </div>{/if}
     </div>
   {/each}
 
@@ -207,38 +290,64 @@
     <div class="devtools-section">
       <div class="devtools-head">
         <h3>DevTools</h3>
-        <button disabled={!!d.devtoolsLoading} onclick={() => send('devtools.refreshKey')}>
-          {d.devtoolsLoading ? 'Fetching…' : d.devtoolsUrl ? '⟳ Refresh key' : 'Get URL'}
+        <button
+          disabled={!!d.devtoolsLoading}
+          onclick={() => send("devtools.refreshKey")}
+        >
+          {d.devtoolsLoading
+            ? "Fetching…"
+            : d.devtoolsUrl
+              ? "⟳ Refresh key"
+              : "Get URL"}
         </button>
       </div>
       {#if d.devtoolsUrl}
         <div class="devtools-url-row">
-          <span class="devtools-url" title={d.devtoolsUrl}>{d.devtoolsUrl}</span>
-          <button class="pk-copy" onclick={() => send('deploy.copy', { text: d.devtoolsUrl! })}>Copy</button>
-          <button onclick={() => send('devtools.openUrl', { url: d.devtoolsUrl! })}>Open</button>
+          <span class="devtools-url" title={d.devtoolsUrl}>{d.devtoolsUrl}</span
+          >
+          <button
+            class="pk-copy"
+            onclick={() => send("deploy.copy", { text: d.devtoolsUrl! })}
+            >Copy</button
+          >
+          <button
+            onclick={() => send("devtools.openUrl", { url: d.devtoolsUrl! })}
+            >Open</button
+          >
         </div>
-        <div class="devtools-hint">View key is time-limited. Click "⟳ Refresh key" if it expires.</div>
+        <div class="devtools-hint">
+          View key is time-limited. Click "⟳ Refresh key" if it expires.
+        </div>
       {:else if !d.devtoolsLoading}
-        <div class="devtools-hint">Click "Get URL" to generate a DevTools view key.</div>
+        <div class="devtools-hint">
+          Click "Get URL" to generate a DevTools view key.
+        </div>
       {/if}
     </div>
   {/if}
 
   <!-- Processors block -->
   {#if d.jobIds.length}
-    {@const proc = d.processors ?? { status: 'idle' }}
+    {@const proc = d.processors ?? { status: "idle" }}
     <div class="proc-section">
       <div class="proc-head">
-        <h3>Processors{proc.fetchedAt ? ` · ${fmtTime(proc.fetchedAt)}` : ''}</h3>
-        <button disabled={proc.status === 'loading'} onclick={() => send('deploy.queryProcessors')}>Refresh</button>
+        <h3>
+          Processors{proc.fetchedAt ? ` · ${fmtTime(proc.fetchedAt)}` : ""}
+        </h3>
+        <button
+          disabled={proc.status === "loading"}
+          onclick={() => send("deploy.queryProcessors")}>Refresh</button
+        >
       </div>
-      {#if proc.status === 'idle'}
-        <div class="proc-empty">Click "Refresh" to query assigned processors.</div>
-      {:else if proc.status === 'loading'}
+      {#if proc.status === "idle"}
+        <div class="proc-empty">
+          Click "Refresh" to query assigned processors.
+        </div>
+      {:else if proc.status === "loading"}
         <div class="proc-loading">Querying chain…</div>
-      {:else if proc.status === 'error'}
-        <div class="proc-error">{proc.message || 'Query failed'}</div>
-      {:else if proc.status === 'ok'}
+      {:else if proc.status === "error"}
+        <div class="proc-error">{proc.message || "Query failed"}</div>
+      {:else if proc.status === "ok"}
         {#if !proc.list?.length}
           <div class="proc-empty">No processors assigned yet.</div>
         {:else}
@@ -252,18 +361,28 @@
                   <span class="proc-noack">pending ack</span>
                 {/if}
                 {#if p.slot != null}<span>slot <b>{p.slot}</b></span>{/if}
-                {#if p.feePerExecution != null}<span>fee <b>{p.feePerExecution}</b></span>{/if}
-                {#if p.slaTotal != null}<span>SLA <b>{p.slaMet ?? '0'}/{p.slaTotal}</b></span>{/if}
-                {#if p.startDelay != null}<span>delay <b>{p.startDelay}ms</b></span>{/if}
+                {#if p.feePerExecution != null}<span
+                    >fee <b>{p.feePerExecution}</b></span
+                  >{/if}
+                {#if p.slaTotal != null}<span
+                    >SLA <b>{p.slaMet ?? "0"}/{p.slaTotal}</b></span
+                  >{/if}
+                {#if p.startDelay != null}<span
+                    >delay <b>{p.startDelay}ms</b></span
+                  >{/if}
               </div>
               {#if p.pubKeys?.length}
                 <div class="proc-keys">
                   <div class="proc-keys-label">Public keys (for topup)</div>
-                  {#each p.pubKeys as k (k.curve + ':' + k.key)}
+                  {#each p.pubKeys as k (k.curve + ":" + k.key)}
                     <div class="pk-row">
                       <span class="pk-curve">{k.curve}</span>
                       <span class="pk-key" title={k.key}>{k.key}</span>
-                      <button class="pk-copy" onclick={() => send('deploy.copy', { text: k.key })}>Copy</button>
+                      <button
+                        class="pk-copy"
+                        onclick={() => send("deploy.copy", { text: k.key })}
+                        >Copy</button
+                      >
                     </div>
                   {/each}
                 </div>
@@ -279,11 +398,21 @@
     {@const watching = !!d.watching}
     <div class="lc-section">
       <div class="lc-head">
-        <span class="lc-dot {watching ? '' : 'off'}" title={watching ? 'Live' : 'Not watching'}></span>
-        <h3>Lifecycle · {watching ? 'Live' : (events.length ? 'Stopped' : 'Idle')} · {events.length}</h3>
+        <span
+          class="lc-dot {watching ? '' : 'off'}"
+          title={watching ? "Live" : "Not watching"}
+        ></span>
+        <h3>
+          Lifecycle · {watching ? "Live" : events.length ? "Stopped" : "Idle"} ·
+          {events.length}
+        </h3>
       </div>
       {#if !events.length}
-        <div class="lc-empty">{watching ? 'Waiting for on-chain events…' : 'No on-chain events captured yet.'}</div>
+        <div class="lc-empty">
+          {watching
+            ? "Waiting for on-chain events…"
+            : "No on-chain events captured yet."}
+        </div>
       {:else}
         <ul class="lc-list">
           {#each events.slice().reverse() as e}
@@ -294,11 +423,15 @@
               <div style="flex:1; min-width:0;">
                 <span class="meth">{label}</span>
                 {#if showRaw}
-                  <span class="sec" title="raw event">({e.section}.{e.method})</span>
+                  <span class="sec" title="raw event"
+                    >({e.section}.{e.method})</span
+                  >
                 {:else}
                   <span class="sec"> · {e.section}</span>
                 {/if}
-                {#if e.jobLocalId != null}<span class="sec"> · job {e.jobLocalId}</span>{/if}
+                {#if e.jobLocalId != null}<span class="sec">
+                    · job {e.jobLocalId}</span
+                  >{/if}
                 {#if e.summary}<div class="payload">{e.summary}</div>{/if}
               </div>
             </li>
@@ -311,10 +444,15 @@
   <!-- Footer -->
   <div class="toolbar" style="margin-top:10px;">
     {#if !d.active}
-      <button disabled={!ctx.isAcurastProject} onclick={() => send('deploy.start')}>
-        {d.result === 'error' ? 'Retry deploy' : 'Deploy again'}
+      <button
+        disabled={!ctx.isAcurastProject}
+        onclick={() => send("deploy.start")}
+      >
+        {d.result === "error" ? "Retry deploy" : "Deploy again"}
       </button>
     {/if}
-    <button class="secondary" onclick={() => send('deploy.openOutput')}>Open output</button>
+    <button class="secondary" onclick={() => send("deploy.openOutput")}
+      >Open output</button
+    >
   </div>
 {/if}

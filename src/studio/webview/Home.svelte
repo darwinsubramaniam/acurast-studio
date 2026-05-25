@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { Route, DeployState, WalletInfo } from '../types';
-  import { ICONS } from './lib/icons';
-  import { send } from './lib/vscode';
+  import type { Route, DeployState, WalletInfo } from "../types";
+  import { ICONS } from "./lib/icons";
+  import { send } from "./lib/vscode";
 
   interface Props {
     ctx: {
@@ -19,8 +19,8 @@
 
   let walletSub = $derived(
     wallets.list.length
-      ? `${wallets.list.length} wallet${wallets.list.length === 1 ? '' : 's'}${wallets.activeId ? ' • active set' : ''}`
-      : 'Create or import to begin'
+      ? `${wallets.list.length} wallet${wallets.list.length === 1 ? "" : "s"}${wallets.activeId ? " • active set" : ""}`
+      : "Create or import to begin",
   );
 
   let isProjectSettingsDisabled = $derived.by(() => {
@@ -34,30 +34,31 @@
   let projectSub = $derived.by(() => {
     if (!ctx.isAcurastProject) {
       if (!ctx.anyConfigExists) {
-        return 'Create it using the command acurast:init project';
+        return "Create it using the command acurast:init project";
       }
-      return 'No acurast.json selected';
+      return "No acurast.json selected";
     }
     if (!ctx.configExists) {
       if (ctx.anyConfigExists) {
-        return 'Targeted acurast.json is missing';
+        return "Targeted acurast.json is missing";
       } else {
-        return 'Targeted acurast.json is missing. Create it using the command acurast:init project';
+        return "Targeted acurast.json is missing. Create it using the command acurast:init project";
       }
     }
-    return ctx.configRel || 'acurast.json';
+    return ctx.configRel || "acurast.json";
   });
 
   let deploySub = $derived.by(() => {
     const d = deploy;
-    if (!d) return 'No deployments yet';
+    if (!d) return "No deployments yet";
     if (d.active) {
-      const stage = d.stages?.find(s => s.status === 'active');
-      return stage ? `Running · ${stage.label}` : 'Running';
+      const stage = d.stages?.find((s) => s.status === "active");
+      return stage ? `Running · ${stage.label}` : "Running";
     }
-    if (d.result === 'ok') return 'Last deploy succeeded' + (d.project ? ` · ${d.project}` : '');
-    if (d.result === 'error') return 'Last deploy failed';
-    return 'Idle';
+    if (d.result === "ok")
+      return "Last deploy succeeded" + (d.project ? ` · ${d.project}` : "");
+    if (d.result === "error") return "Last deploy failed";
+    return "Idle";
   });
 </script>
 
@@ -68,7 +69,7 @@
 </div>
 
 <div class="nav-grid">
-  <button class="nav-card" onclick={() => navigate('wallets')}>
+  <button class="nav-card" onclick={() => navigate("wallets")}>
     <span class="icon">{@html ICONS.wallet}</span>
     <div class="body">
       <div class="title">Wallets</div>
@@ -77,20 +78,40 @@
     <span class="chev">{@html ICONS.chev}</span>
   </button>
 
-  <button class="nav-card" onclick={() => navigate('settings')} disabled={isProjectSettingsDisabled}>
+  <button
+    class="nav-card"
+    onclick={() => navigate("settings")}
+    disabled={isProjectSettingsDisabled}
+  >
     <span class="icon">{@html ICONS.settings}</span>
     <div class="body">
       <div class="title">Project Settings</div>
-      <div class="sub" style={projectWarning ? "color: var(--vscode-errorForeground); font-weight: 500;" : ""}>{projectSub}</div>
+      <div
+        class="sub"
+        style={projectWarning
+          ? "color: var(--vscode-errorForeground); font-weight: 500;"
+          : ""}
+      >
+        {projectSub}
+      </div>
     </div>
     <span class="chev">{@html ICONS.chev}</span>
   </button>
 
-  <button class="nav-card" onclick={() => navigate('deploy')}>
+  <button class="nav-card" onclick={() => navigate("deploy")}>
     <span class="icon">{@html ICONS.deployments}</span>
     <div class="body">
       <div class="title">Deployments</div>
       <div class="sub">{deploySub}</div>
+    </div>
+    <span class="chev">{@html ICONS.chev}</span>
+  </button>
+
+  <button class="nav-card" onclick={() => navigate("history")}>
+    <span class="icon">{@html ICONS.history}</span>
+    <div class="body">
+      <div class="title">History</div>
+      <div class="sub">All past deployments</div>
     </div>
     <span class="chev">{@html ICONS.chev}</span>
   </button>
@@ -106,9 +127,19 @@
 </div>
 
 {#if !ctx.anyConfigExists}
-  <div style="margin: 12px 0 6px; padding: 12px; border: 1px dashed var(--vscode-panel-border); border-radius: 4px; text-align: center; background: var(--vscode-textBlockQuote-background, rgba(0, 0, 0, 0.05));">
-    <div style="font-size: 11px; margin-bottom: 8px; color: var(--vscode-descriptionForeground);">No <code>acurast.json</code> found in this workspace.</div>
-    <button class="full" style="font-size: 12px; font-weight: 600;" onclick={() => send('config.newProject')}>
+  <div
+    style="margin: 12px 0 6px; padding: 12px; border: 1px dashed var(--vscode-panel-border); border-radius: 4px; text-align: center; background: var(--vscode-textBlockQuote-background, rgba(0, 0, 0, 0.05));"
+  >
+    <div
+      style="font-size: 11px; margin-bottom: 8px; color: var(--vscode-descriptionForeground);"
+    >
+      No <code>acurast.json</code> found in this workspace.
+    </div>
+    <button
+      class="full"
+      style="font-size: 12px; font-weight: 600;"
+      onclick={() => send("config.newProject")}
+    >
       Initialize Acurast Project
     </button>
   </div>
