@@ -50,7 +50,7 @@ Always bump `version` in `package.json` before tagging or dispatching.
 
 ## Architecture in one paragraph
 
-The extension is a single Node bundle (`dist/extension.js`) built by esbuild from `src/extension.ts`. It registers **one** webview view (`acurastStudio` of type webview, named "Home") in the Acurast Studio activity bar container. The webview is a **Svelte 5** SPA (`dist/studio/webview.js`) with an internal router (`home | wallets | settings | deploy`) — the root `App.svelte` holds all reactive state and dispatches to four route components. Global styles live in `media/studio/global.css`; `studioPanel.ts` reads `media/studio/webview.html` and substitutes `{{CSP}}`, `{{STYLE_URI}}`, `{{SCRIPT_URI}}`, `{{NONCE}}` sentinels at runtime. The webview talks to the host via `postMessage`; the host delegates to existing command implementations (`vscode.commands.executeCommand('acurast.wallet.create', id)` etc.) rather than re-implementing flows. Services (wallet storage, SDK client, project config) live outside the panel so commands triggered from the palette or status bar share the same backing logic.
+The extension is a single Node bundle (`dist/extension.js`) built by esbuild from `src/extension.ts`. It registers **one** webview view (`acurastStudio` of type webview, named "Home") in the Acurast Studio activity bar container. The webview is a **Svelte 5** SPA (`dist/studio/webview.js`) with an internal router (`home | wallets | settings | deploy | history`) — the root `App.svelte` holds all reactive state and dispatches to five route components. Global styles live in `media/studio/global.css`; `studioPanel.ts` reads `media/studio/webview.html` and substitutes `{{CSP}}`, `{{STYLE_URI}}`, `{{SCRIPT_URI}}`, `{{NONCE}}` sentinels at runtime. The webview talks to the host via `postMessage`; the host delegates to existing command implementations (`vscode.commands.executeCommand('acurast.wallet.create', id)` etc.) rather than re-implementing flows. Services (wallet storage, SDK client, project config) live outside the panel so commands triggered from the palette or status bar share the same backing logic.
 
 ## Key modules
 
@@ -66,17 +66,23 @@ The extension is a single Node bundle (`dist/extension.js`) built by esbuild fro
 
 - **`src/sdk/constants.ts`** — RPC endpoints and IPFS proxy defaults. Mainnet: `wss://public-rpc.mainnet.acurast.com`; Canary: `wss://public-rpc.canary.acurast.com`. IPFS uses Acurast's hosted proxy (`https://ipfs-proxy.acurast.prod.gke.papers.tech`) — no Pinata key needed for the default path.
 
-- **`src/studio/studioPanel.ts`** — Host class (~700 lines). Holds a `_route` field and posts `{type: 'route'}` to the webview on `navigate(route)`. Polls balance every 30s while on the `wallets` route. Sets context key `acurast.studio.route` so `view/title` menus can hide/show the Home button. The `html()` method reads `media/studio/webview.html` and replaces the four `{{...}}` sentinels — no inline template.
+- **`src/studio/studioPanel.ts`** — Host class (~900 lines). Holds a `_route` field and posts `{type: 'route'}` to the webview on `navigate(route)`. Polls balance every 30s while on the `wallets` route. Sets context key `acurast.studio.route` so `view/title` menus can hide/show the Home button. The `html()` method reads `media/studio/webview.html` and replaces the four `{{...}}` sentinels — no inline template. Handles history messages: `history.load` (paginated local records), `history.fetchOnline` (partial-key chain query for the active wallet's jobs), `history.remove`, `history.removePathInfo`, `history.openFolder`.
 
 - **`src/studio/types.ts`** — All shared TypeScript types used by both the host and the webview: `Route`, `InMsg`, all `*Msg` interfaces, `DeployStageId`, `StageStatus`, `DeployStage`, `DeployState`, etc. Re-exports `WalletInfo` from `../wallet/walletService`.
 
-- **`src/studio/webview/App.svelte`** — Svelte 5 root component. Holds all global state with `$state` runes (`route`, `wallets`, `balance`, `config`, `deploy`, `ctx`). Registers the `window.addEventListener('message')` handler in a `$effect` with cleanup. Routes to the four page components via `{#if}` blocks.
+- **`src/studio/webview/App.svelte`** — Svelte 5 root component. Holds all global state with `$state` runes (`route`, `wallets`, `balance`, `config`, `deploy`, `ctx`, `historyState`). Registers the `window.addEventListener('message')` handler in a `$effect` with cleanup. Routes to the five page components via `{#if}` blocks.
 
-- **`src/studio/webview/Home.svelte`**, **`Wallets.svelte`**, **`Settings.svelte`**, **`Deploy.svelte`** — Route components. Each receives typed props; uses `$derived`/`$derived.by` for computed values. All DOM events use `onclick={}` (Svelte 5 syntax — not `on:click`).
+- **`src/studio/webview/Home.svelte`**, **`Wallets.svelte`**, **`Settings.svelte`**, **`Deploy.svelte`**, **`History.svelte`** — Route components. Each receives typed props; uses `$derived`/`$derived.by` for computed values. All DOM events use `onclick={}` (Svelte 5 syntax — not `on:click`).
+
+- **`src/studio/webview/History.svelte`** — Two-section layout: **Local** (paginated via `history.load` with offset, accumulated client-side) and **On-chain** (accordion, fetched on demand via `history.fetchOnline`, client-side paginated). On-chain cards decode `JobRegistration` fields (schedule, slots, reward, modules, script URL) and show a derived status badge (active/scheduled/expired) from `startTime`/`endTime`.
+
+- **`src/deployments/deploymentStore.ts`** — Wraps `vscode.Memento` (globalState, key `acurast.deployments.v1`) for cross-workspace deployment history persistence. Methods: `getAll()`, `save(record)`, `removePathInfo(id)`, `remove(id)`.
 
 - **`src/studio/webview/lib/vscode.ts`** — Calls `acquireVsCodeApi()` once and exports a `send(type, extra)` helper. Import directly in any component — do not prop-drill the API.
 
 - **`src/studio/webview/lib/icons.ts`** — SVG string constants exported as `ICONS`. Use `{@html ICONS.xxx}` in templates (safe: these are static, not user input).
+
+- **`src/studio/webview/lib/format.ts`** — Shared formatting utilities for all webview components: `planckToAcu`, `planckToFiat`, `acuToFiat`, `fmtFiat`, `fmtTimestamp`, `fmtClock`, `truncate`, `fmtMs`. Add new display helpers here rather than inlining them in components.
 
 - **`media/studio/global.css`** — All VS Code theme-variable base styles shared across components (`.wallet-card`, `.nav-card`, `.stage`, etc.). Loaded via `<link>` in `webview.html`.
 
@@ -99,6 +105,10 @@ The extension is a single Node bundle (`dist/extension.js`) built by esbuild fro
 - **Icons.** Custom icons (Acurast logo, status bar) come from a webfont generated by `fantasticon` from SVGs in `media/icons/`. Output lives at `media/font/acurast-icons.woff{,2}`. `package.json` `contributes.icons` maps `acurast-logo` to codepoint `\E000`. To tweak the glyph size, edit the source SVG's viewBox (with `normalize: false` in `.fantasticonrc.json` to preserve the padding) and run `npm run build:font`. Codicons (`$(home)`, `$(cloud-upload)`, etc.) are used everywhere else and don't need the font build.
 
 - **Webview uses Svelte 5 runes only.** Use `$state`, `$derived`, `$derived.by`, `$effect`, `$props` — never Svelte 4 patterns (`$:`, `export let`, `writable()` stores). The `{@html}` directive is only acceptable for the static SVG strings in `lib/icons.ts`; never use it for user-supplied content. Svelte auto-escapes all `{expression}` interpolations.
+
+- **On-chain job queries use partial-key lookup.** `api.query.acurast.storedJobRegistration.entries(multiOrigin)` where `multiOrigin = api.createType('AcurastCommonMultiOrigin', { acurast: address })` fetches only a single user's jobs instead of scanning all chain jobs. Decode the value with `api.createType('Option<AcurastCommonJobRegistration>', value).unwrap().toJSON()` — same approach as the SDK's internal `codecToJobRegistration`. The job `localId` is extracted from `key.args.at(1)` cast to `u128`.
+
+- **Deployment history uses `globalState`, not `workspaceState`.** `DeploymentStore` writes to `extensionContext.globalState` (key `acurast.deployments.v1`) so the history is visible regardless of which workspace folder is open. `workspaceState` would hide records whenever the user switches projects.
 
 - **Status bar lives separately.** `WalletStatusBar` listens on `wallet.onDidChange`, hides when no active wallet exists, click executes `acurast.studio.showWallets` which calls `studioPanel.navigate('wallets')`.
 
