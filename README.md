@@ -4,10 +4,12 @@ VS Code extension for [Acurast](https://acurast.com) serverless development — 
 
 ## Features
 
-- **Acurast Studio panel** — activity bar view with wallet management, project config, and deployment in one place
+- **Acurast Studio panel** — activity bar view with wallet management, project config, deployment, and history in one place
 - **Wallet vault** — create, import, rename, and delete sr25519 wallets; mnemonics encrypted with AES-256-GCM + PBKDF2 at rest inside VS Code's SecretStorage
 - **One-click deploy** — packages your script, uploads to IPFS, and submits the job to Mainnet or Canary
-- **Cost estimation** — preview ACU spend before deploying
+- **Cost estimation** — preview ACU spend before deploying, with optional fiat conversion
+- **Deployment history** — persistent cross-workspace log of every deployment; records project path, tx hash, IPFS hash, and job IDs
+- **On-chain history** — fetch your live job registrations directly from the chain; shows schedule, slot count, reward, required modules, and derived status (active / scheduled / expired)
 - **`acurast.json` integration** — JSON schema validation, multi-config workspace support, right-click to set active config
 - **Live balance polling** — 30-second balance refresh on the Wallets route
 
