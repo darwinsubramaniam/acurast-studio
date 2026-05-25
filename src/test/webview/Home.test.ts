@@ -141,7 +141,7 @@ describe('navigation', () => {
   it('calls navigate("deploy") when Deployments card is clicked', async () => {
     const navigate = vi.fn();
     render(Home, { props: { ctx: BASE_CTX, wallets: BASE_WALLETS, deploy: null, navigate } });
-    await fireEvent.click(screen.getByRole('button', { name: /Deployments/i }));
+    await fireEvent.click(screen.getByRole('button', { name: /^Deployments/i }));
     expect(navigate).toHaveBeenCalledWith('deploy');
   });
 });
