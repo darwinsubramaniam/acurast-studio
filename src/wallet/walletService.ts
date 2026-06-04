@@ -5,7 +5,7 @@ import { encrypt, decrypt } from './crypto';
 import type { EncryptedBlob } from './crypto';
 
 const SECRETS_KEY = 'acurast.wallets.v2';
-const ACURAST_SS58_PREFIX = 42;
+export const ACURAST_SS58_PREFIX = 42;
 
 export interface WalletInfo {
   id: string;

@@ -22,8 +22,63 @@
   // Currently-selected wallet address to inspect.
   let selected = $state<string | null>(null);
 
+  // Module names the marketplace understands. Order here drives chip order.
+  const ALL_MODULES: string[] = ["DataEncryption", "LLM", "Shell"];
+
+  // Per-processor draft module set, keyed by processor address. Absent = no edit.
+  let edits = $state<Record<string, string[]>>({});
+  // Processor address whose advertiseFor tx is currently in flight.
+  let applying = $state<string | null>(null);
+
+  // Whenever a fresh query result arrives, drop drafts and clear the in-flight
+  // flag so cards re-baseline against the latest on-chain module set.
+  $effect(() => {
+    void processorsState;
+    edits = {};
+    applying = null;
+  });
+
   function walletName(addr: string): string {
     return wallets.list.find((w) => w.address === addr)?.name || truncate(addr);
+  }
+
+  function walletIdFor(addr: string | null): string | null {
+    return addr ? (wallets.list.find((w) => w.address === addr)?.id ?? null) : null;
+  }
+
+  function modulesOf(p: ManagedProcessor): string[] {
+    return edits[p.address] ?? p.ad?.availableModules ?? [];
+  }
+
+  function toggleModule(p: ManagedProcessor, m: string) {
+    const set = new Set(modulesOf(p));
+    if (set.has(m)) set.delete(m);
+    else set.add(m);
+    edits = { ...edits, [p.address]: ALL_MODULES.filter((x) => set.has(x)) };
+  }
+
+  function resetEdit(p: ManagedProcessor) {
+    const { [p.address]: _drop, ...rest } = edits;
+    edits = rest;
+  }
+
+  function moduleChanged(p: ManagedProcessor): boolean {
+    const orig = [...(p.ad?.availableModules ?? [])].sort().join(",");
+    const cur = [...modulesOf(p)].sort().join(",");
+    return orig !== cur;
+  }
+
+  function applyModules(p: ManagedProcessor) {
+    const walletId = walletIdFor(selected);
+    if (!walletId) return;
+    applying = p.address;
+    send("processors.advertise", {
+      walletId,
+      processor: p.address,
+      // Snapshot to a plain array — a $state proxy can't be structured-cloned by postMessage.
+      modules: $state.snapshot(modulesOf(p)),
+      network: wallets.network,
+    });
   }
 
   function query(address: string) {
@@ -193,13 +248,47 @@
                     {/if}
                   </div>
 
-                  {#if p.ad.availableModules && p.ad.availableModules.length}
+                  <div class="modules-edit">
+                    <span class="me-label">Modules</span>
                     <div class="chips">
-                      {#each p.ad.availableModules as m}
-                        <span class="chip">{m}</span>
+                      {#each ALL_MODULES as m}
+                        {@const on = modulesOf(p).includes(m)}
+                        <button
+                          type="button"
+                          class="chip toggle"
+                          class:on
+                          disabled={applying === p.address}
+                          title={on
+                            ? `Click to stop advertising ${m}`
+                            : `Click to advertise ${m}`}
+                          onclick={() => toggleModule(p, m)}
+                        >
+                          {#if on}<span class="tick">✓</span>{/if}{m}
+                        </button>
                       {/each}
                     </div>
-                  {/if}
+                    {#if moduleChanged(p)}
+                      <div class="apply-row">
+                        <span class="hint">
+                          Pending: {modulesOf(p).join(", ") || "(none)"}
+                        </span>
+                        <button
+                          type="button"
+                          class="link"
+                          disabled={applying === p.address}
+                          onclick={() => resetEdit(p)}>Reset</button
+                        >
+                        <button
+                          type="button"
+                          class="apply"
+                          disabled={applying === p.address || !walletIdFor(selected)}
+                          onclick={() => applyModules(p)}
+                        >
+                          {applying === p.address ? "Advertising…" : "Apply on-chain"}
+                        </button>
+                      </div>
+                    {/if}
+                  </div>
 
                   <div class="grid">
                     <div class="cell">
@@ -463,6 +552,83 @@
     border-radius: 10px;
     background: var(--vscode-badge-background);
     color: var(--vscode-badge-foreground);
+  }
+
+  .modules-edit {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .me-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--vscode-descriptionForeground);
+  }
+  .chip.toggle {
+    cursor: pointer;
+    border: 1px solid var(--vscode-panel-border);
+    background: transparent;
+    color: var(--vscode-descriptionForeground);
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .chip.toggle:hover:not(:disabled) {
+    border-color: var(--vscode-focusBorder);
+    color: var(--vscode-foreground);
+  }
+  .chip.toggle.on {
+    border-color: transparent;
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+  }
+  .chip.toggle:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+  .tick {
+    font-size: 10px;
+  }
+
+  .apply-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .apply-row .hint {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    margin-right: auto;
+  }
+  .link {
+    background: transparent;
+    border: none;
+    color: var(--vscode-textLink-foreground);
+    cursor: pointer;
+    font-size: 11px;
+    padding: 2px 4px;
+  }
+  .link:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .apply {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+  }
+  .apply:hover:not(:disabled) {
+    background: var(--vscode-button-hoverBackground);
+  }
+  .apply:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
   .badge {
     font-size: 9px;
