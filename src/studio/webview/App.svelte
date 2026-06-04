@@ -152,7 +152,16 @@
 {:else if route === "wallets"}
   <Wallets {wallets} {balance} />
 {:else if route === "settings"}
-  <Settings {ctx} {config} {navigate} {pricing} {fiatList} {fiatSelection} />
+  <Settings
+    {ctx}
+    {config}
+    {navigate}
+    {pricing}
+    {fiatList}
+    {fiatSelection}
+    {wallets}
+    {processorsState}
+  />
 {:else if route === "deploy"}
   <Deploy {ctx} {deploy} {navigate} {pricing} />
 {:else if route === "history"}
