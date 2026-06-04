@@ -58,9 +58,26 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     ctx.onDidChangeActiveConfig(() => {
       void this.pushContext();
       void this.pushConfig();
+      void this.pushNetworkMismatch();
     });
     vscode.workspace.onDidSaveTextDocument((doc) => {
-      if (this.ctx.configPath && doc.fileName === this.ctx.configPath) this.pushConfig();
+      if (this.ctx.configPath && doc.fileName === this.ctx.configPath) {
+        void this.pushConfig();
+        void this.pushNetworkMismatch();
+      }
+    });
+    // The target network lives in settings; reflect changes immediately so the
+    // panel title and the wallet view never lag behind which chain is active.
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('acurast.network')) {
+        this.updateViewTitle();
+        void this.pushWallets();
+        void this.pushNetworkMismatch();
+        // Refresh whatever the active view shows for the old network. The
+        // processors/history views re-query webview-side off the new
+        // `wallets.network`; balance is host-driven, so refresh it here.
+        if (this._route === 'wallets') void this.pushBalance();
+      }
     });
   }
 
@@ -93,6 +110,21 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     return vscode.workspace.getConfiguration('acurast').get<AcurastNetwork>('network', 'mainnet');
   }
 
+  /** Network shown to the user, e.g. "Mainnet" / "Canary". */
+  private get networkLabel(): string {
+    const n = this.network;
+    return n.charAt(0).toUpperCase() + n.slice(1);
+  }
+
+  /**
+   * Stamp the active network onto the view header so it reads
+   * "Acurast Studio: Mainnet" — a constant cue for which chain the panel talks
+   * to, independent of the route the user is on.
+   */
+  private updateViewTitle() {
+    if (this._view) this._view.title = this.networkLabel;
+  }
+
   async navigate(route: Route) {
     this._route = route;
     this.updateRouteContext();
@@ -118,6 +150,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
 
   resolveWebviewView(view: vscode.WebviewView) {
     this._view = view;
+    this.updateViewTitle();
     view.webview.options = {
       enableScripts: true,
       localResourceRoots: [this.extensionUri],
@@ -234,6 +267,10 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       case 'history.openFolder':
         if (msg.path) await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(msg.path));
         break;
+      case 'network.setTarget':
+        await this.setTargetNetwork(msg.network);
+        vscode.window.setStatusBarMessage(`Acurast network: ${msg.network}`, 2000);
+        break;
     }
   }
 
@@ -265,9 +302,37 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     await this.pushWallets();
     if (this._route === 'wallets') this.startBalancePoll();
     await this.pushConfig();
+    await this.pushNetworkMismatch();
     await this.pushFiatSelection();
     if (this._route === 'deploy') { this.pushDeploy(); if (!this._deploy) void this.pushPricing(); }
     if (this._route === 'history') await this.pushHistory();
+  }
+
+  /**
+   * Compares the project's deploy network (acurast.json) against the Studio
+   * target (the `acurast.network` setting that drives balance/processors/history)
+   * and posts both so the webview can warn when they diverge.
+   */
+  private async pushNetworkMismatch() {
+    let projectNetwork: string | null = null;
+    if (this.ctx.configPath) {
+      try {
+        projectNetwork = (loadAcurastConfig({ filePath: this.ctx.configPath })?.network ?? 'mainnet') as string;
+      } catch {
+        projectNetwork = null;
+      }
+    }
+    this.post({ type: 'network.mismatch', projectNetwork, targetNetwork: this.network });
+  }
+
+  /** Align the Studio target network (the `acurast.network` setting) to `network`. */
+  private async setTargetNetwork(network: string) {
+    const cfg = vscode.workspace.getConfiguration('acurast');
+    const target =
+      cfg.inspect<string>('network')?.workspaceValue !== undefined
+        ? vscode.ConfigurationTarget.Workspace
+        : vscode.ConfigurationTarget.Global;
+    await cfg.update('network', network, target);
   }
 
   private async pushWallets() {

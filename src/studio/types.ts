@@ -56,6 +56,8 @@ export interface JobDiagnoseMsg        { type: 'history.diagnose'; origin: strin
 export interface HistoryRemovePathMsg  { type: 'history.removePathInfo'; id: string; }
 export interface HistoryRemoveMsg      { type: 'history.remove'; id: string; }
 export interface HistoryOpenFolderMsg  { type: 'history.openFolder'; path: string; }
+/** Align the Studio target network (`acurast.network` setting) to `network`. */
+export interface NetworkSetTargetMsg   { type: 'network.setTarget'; network: string; }
 
 export type InMsg =
   | NavigateMsg | ReadyMsg | WalletActionMsg | RefreshBalanceMsg
@@ -65,7 +67,8 @@ export type InMsg =
   | FiatFetchListMsg | FiatSaveMsg
   | DevtoolsRefreshKeyMsg | DevtoolsOpenUrlMsg
   | ProcessorsQueryMsg | ProcessorsAdvertiseMsg
-  | HistoryLoadMsg | HistoryFetchOnlineMsg | JobDiagnoseMsg | HistoryRemovePathMsg | HistoryRemoveMsg | HistoryOpenFolderMsg;
+  | HistoryLoadMsg | HistoryFetchOnlineMsg | JobDiagnoseMsg | HistoryRemovePathMsg | HistoryRemoveMsg | HistoryOpenFolderMsg
+  | NetworkSetTargetMsg;
 
 export interface SerializedFees {
   numberOfExecutions: string;

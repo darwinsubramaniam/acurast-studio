@@ -59,7 +59,7 @@ The extension is a single Node bundle (`dist/extension.js`) built by esbuild fro
 
 ## Key modules
 
-- **`src/extension.ts`** — `activate()` wires everything: `AcurastContext`, `WalletService`, `StudioPanel`, `WalletStatusBar`, command registrations, SDK disposal hook. Sets initial `acurast.studio.route = 'home'` context key.
+- **`src/extension.ts`** — `activate()` wires everything: `AcurastContext`, `WalletService`, `StudioPanel`, `AcurastStatusBar`, command registrations, SDK disposal hook. Sets initial `acurast.studio.route = 'home'` context key.
 
 - **`src/context.ts` — `AcurastContext`** — Source of truth for "which `acurast.json` is active". Stores the selected path in `workspaceState` under `acurast.activeConfigPath`. Detection order on activation: stored path → workspace-root `acurast.json` → recursive `findFiles('**/acurast.json')` if exactly one match. Exposes `configPath` (the file) and `projectRoot` (its dirname). Fires `onDidChangeActiveConfig`. Sets context key `acurast.isAcurastProject`.
 
@@ -115,7 +115,9 @@ The extension is a single Node bundle (`dist/extension.js`) built by esbuild fro
 
 - **Deployment history uses `globalState`, not `workspaceState`.** `DeploymentStore` writes to `extensionContext.globalState` (key `acurast.deployments.v1`) so the history is visible regardless of which workspace folder is open. `workspaceState` would hide records whenever the user switches projects.
 
-- **Status bar lives separately.** `WalletStatusBar` listens on `wallet.onDidChange`, hides when no active wallet exists, click executes `acurast.studio.showWallets` which calls `studioPanel.navigate('wallets')`.
+- **Two network sources — keep them distinct.** There is no single "current network". (1) The **`acurast.network` setting** is the *Studio target* — it drives wallet **balance**, **processor** lookups, **on-chain history**, and the status-bar label. (2) The **`network` field inside `acurast.json`** is the *project deploy target* — it drives **deploy** (`deploy.ts`), **cost estimate** (`estimateCost.ts`), and **pricing** (`studioPanel.pushPricing`). They legitimately differ (balance/processors are wallet-scoped; deploy is project-scoped), so the design **warns on mismatch rather than forcing them equal**: the status bar shows a `$(warning)` + `statusBarItem.warningBackground` state, `studioPanel.pushNetworkMismatch()` posts `{type:'network.mismatch', projectNetwork, targetNetwork}` to drive `NetworkMismatchBanner.svelte` in the Deploy/Settings views (one-click "Use <projectNetwork> in Studio" → `network.setTarget`), and the deploy confirm dialog appends a mismatch note. When you add a network-dependent feature, decide which source it belongs to.
+
+- **Status bar lives separately.** `AcurastStatusBar` (`src/wallet/acurastStatusBar.ts`) takes `WalletService` + `AcurastContext`, listens on `wallet.onDidChange`, `onDidChangeConfiguration('acurast.network')`, `ctx.onDidChangeActiveConfig`, and `onDidSaveTextDocument` (for acurast.json edits). Shows the target network then the active wallet name (`Mainnet · <name>`, full address in the hover tooltip), with a warning state when the project network diverges (see above). Hides when no active wallet exists, right-aligned (priority 100). Clicking opens a quick-pick (`acurast.studio.statusBarMenu`, registered by the class itself) to switch network (confirmed via modal; writes `acurast.network` to the workspace override if one exists, else global user settings), copy the active address, or open the Wallets view (`acurast.studio.showWallets`).
 
 - **The right-click "Set as Active acurast.json"** menu entry in `explorer/context` / `editor/context` uses `when: "resourceFilename == acurast.json"`. The command is hidden from the command palette (`when: "false"`) because it requires a URI argument; use `acurast.chooseConfig` for the palette flow.
 

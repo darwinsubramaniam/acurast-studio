@@ -81,10 +81,24 @@
     });
   }
 
+  // Network the current selection was last queried under, so we can re-query
+  // when the user switches the target network.
+  let queriedNetwork = $state<string | null>(null);
+
   function query(address: string) {
     selected = address;
+    queriedNetwork = wallets.network;
     send("processors.query", { address, network: wallets.network });
   }
+
+  // Re-query when the target network changes while a wallet is selected, so the
+  // list never shows processors from the previously-targeted network.
+  $effect(() => {
+    const net = wallets.network;
+    if (selected && queriedNetwork !== null && net !== queriedNetwork) {
+      query(selected);
+    }
+  });
 
   // Auto-select when there's exactly one wallet; otherwise let the user pick.
   // Runs once wallets arrive — guarded by `selected` so it doesn't re-fire.

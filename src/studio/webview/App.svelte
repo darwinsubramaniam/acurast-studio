@@ -19,6 +19,7 @@
   import Deploy from "./Deploy.svelte";
   import History from "./History.svelte";
   import Processors from "./Processors.svelte";
+  import NetworkMismatchBanner from "./NetworkMismatchBanner.svelte";
 
   interface CtxState {
     isAcurastProject: boolean;
@@ -60,6 +61,9 @@
   let fiatSelection = $state<FiatSelectionStateMsg | null>(null);
   let historyState = $state<HistoryStateMsg | null>(null);
   let processorsState = $state<ProcessorsStateMsg | null>(null);
+  // Project (acurast.json) vs Studio target network — set from the host so the
+  // Deploy/Settings views can warn when they diverge.
+  let networkMismatch = $state<{ projectNetwork: string | null; targetNetwork: string } | null>(null);
   // Per-job diagnosis results, keyed by `${origin}:${localId}`.
   let diagnoses = $state<Record<string, DiagnosisStateMsg>>({});
   let activeWalletAddress = $derived(
@@ -120,6 +124,12 @@
         case "processors.state":
           processorsState = msg as unknown as ProcessorsStateMsg;
           break;
+        case "network.mismatch":
+          networkMismatch = {
+            projectNetwork: msg.projectNetwork as string | null,
+            targetNetwork: msg.targetNetwork as string,
+          };
+          break;
         case "diagnosis.state": {
           const d = msg as unknown as DiagnosisStateMsg;
           diagnoses = { ...diagnoses, [d.key]: d };
@@ -160,6 +170,14 @@
 {:else if route === "wallets"}
   <Wallets {wallets} {balance} />
 {:else if route === "settings"}
+  {#if networkMismatch}
+    <NetworkMismatchBanner
+      projectNetwork={networkMismatch.projectNetwork}
+      targetNetwork={networkMismatch.targetNetwork}
+      context="settings"
+      {navigate}
+    />
+  {/if}
   <Settings
     {ctx}
     {config}
@@ -171,6 +189,14 @@
     {processorsState}
   />
 {:else if route === "deploy"}
+  {#if networkMismatch}
+    <NetworkMismatchBanner
+      projectNetwork={networkMismatch.projectNetwork}
+      targetNetwork={networkMismatch.targetNetwork}
+      context="deploy"
+      {navigate}
+    />
+  {/if}
   <Deploy {ctx} {deploy} {navigate} {pricing} {diagnoses} />
 {:else if route === "history"}
   <History
