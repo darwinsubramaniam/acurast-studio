@@ -2,7 +2,7 @@
   import type { Route, PricingStateMsg, SerializedAdvice, FiatListStateMsg, FiatSelectionStateMsg, CoinGeckoPlan, WalletInfo, ProcessorsStateMsg, ManagedProcessor } from '../types';
   import { send } from './lib/vscode';
   import { Accordion } from 'bits-ui';
-  import { planckToAcu, planckToFiat, acuToFiat, fmtFiat, fmtRelative, truncate, fmtMs } from './lib/format';
+  import { planckToAcu, planckToFiat, acuToFiat, fmtFiat, fmtRelative, truncate, fmtDuration } from './lib/format';
 
   // Section ids match the Accordion.Item `value=` below. Open-by-default = listed here.
   let openSections = $state<string[]>(['identity', 'runtime', 'execution', 'scaling']);
@@ -104,7 +104,7 @@
   // Display-only human-readable echo of a millisecond field (stored value stays ms).
   function msHuman(v: unknown): string {
     const n = Number(v);
-    return Number.isFinite(n) && n > 0 ? fmtMs(n) : '';
+    return Number.isFinite(n) && n > 0 ? fmtDuration(n) : '';
   }
 
   // Read an instantMatch field from a stored config, tolerating both the SDK's

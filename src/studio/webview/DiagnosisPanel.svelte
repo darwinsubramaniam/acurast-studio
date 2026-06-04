@@ -23,9 +23,11 @@
       <div class="diag-line fail">Diagnosis failed: {state.error}</div>
     {:else if state.status === "ok" && state.result}
       {@const r = state.result}
-      <div class="diag-summary status-{r.jobStatus}">
+      <div class="diag-summary status-{r.jobStatus}" class:expired={r.expired}>
         <strong>{r.summary}</strong>
-        {#if r.found}<span class="diag-status">status: {r.jobStatus}</span>{/if}
+        {#if r.found}<span class="diag-status"
+            >status: {r.expired ? "expired" : r.jobStatus}</span
+          >{/if}
       </div>
 
       {#if r.checks.length}
@@ -154,5 +156,9 @@
   }
   .status-assigned strong {
     color: var(--vscode-testing-iconPassed, var(--vscode-charts-green, #3fb950));
+  }
+  /* Expiry overrides the green "assigned" tint — an ended job isn't healthy. */
+  .diag-summary.expired strong {
+    color: var(--vscode-editorWarning-foreground, #d29922);
   }
 </style>
