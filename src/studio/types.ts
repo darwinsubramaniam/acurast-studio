@@ -293,6 +293,10 @@ export interface StoredDeploymentWithMeta extends StoredDeployment {
   registration?: OnlineJobRegistration;
 }
 
+/** Lifecycle status of a local record's job, resolved from the chain.
+ * `none` = no matching registration found on-chain (deregistered / cleaned). */
+export type LocalJobStatus = 'active' | 'scheduled' | 'expired' | 'none';
+
 export interface HistoryStateMsg {
   type: 'history.state';
   status: 'loading' | 'ok' | 'error';
@@ -301,6 +305,9 @@ export interface HistoryStateMsg {
   hasMore?: boolean;
   total?: number;
   onlineRecords?: StoredDeploymentWithMeta[];
+  /** Per-record on-chain status, keyed by record id. Posted asynchronously
+   * after the local list, once the chain query for that page resolves. */
+  statuses?: Record<string, LocalJobStatus>;
   error?: string;
 }
 
