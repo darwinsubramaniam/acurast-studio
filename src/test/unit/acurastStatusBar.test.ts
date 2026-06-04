@@ -21,20 +21,57 @@ vi.mock('vscode', () => {
     fire(event: T) { this.listeners.forEach(l => l(event)); }
   }
   class MarkdownString {
-    constructor(public value: string) {}
+    value: string;
+    constructor(v?: string) { this.value = v ?? ''; }
+    appendMarkdown(v: string) { this.value += v; return this; }
   }
+  class ThemeColor { constructor(public id: string) {} }
   return {
     EventEmitter,
     MarkdownString,
+    ThemeColor,
     StatusBarAlignment: { Right: 1, Left: 2 },
-    window: { createStatusBarItem: vi.fn(() => mockItem) },
+    QuickPickItemKind: { Separator: -1, Default: 0 },
+    ConfigurationTarget: { Global: 1, Workspace: 2 },
+    window: {
+      createStatusBarItem: vi.fn(() => mockItem),
+      showQuickPick: vi.fn(),
+      showWarningMessage: vi.fn(),
+      setStatusBarMessage: vi.fn(),
+    },
+    commands: {
+      registerCommand: vi.fn(() => ({ dispose: () => {} })),
+      executeCommand: vi.fn(),
+    },
+    env: { clipboard: { writeText: vi.fn() } },
+    workspace: {
+      getConfiguration: vi.fn(() => ({
+        get: (_key: string, def: unknown) => def,
+        inspect: () => ({}),
+        update: vi.fn(),
+      })),
+      onDidChangeConfiguration: vi.fn(() => ({ dispose: () => {} })),
+      onDidSaveTextDocument: vi.fn(() => ({ dispose: () => {} })),
+    },
   };
 });
 
-import { WalletStatusBar } from '../../wallet/walletStatusBar';
+vi.mock('@acurast/sdk/deploy', () => ({
+  // No active project in these tests → no acurast.json network → no mismatch.
+  loadAcurastConfig: vi.fn(() => undefined),
+}));
+
+import { AcurastStatusBar } from '../../wallet/acurastStatusBar';
 import type { WalletInfo, WalletChange } from '../../wallet/walletService';
 
 type ChangeListener = (e: WalletChange) => void;
+
+function makeCtx() {
+  return {
+    configPath: undefined as string | undefined,
+    onDidChangeActiveConfig: vi.fn(() => ({ dispose: () => {} })),
+  };
+}
 
 function makeWalletMock(active?: WalletInfo) {
   let listener: ChangeListener | undefined;
@@ -66,17 +103,17 @@ beforeEach(() => {
   mockItem.command = undefined;
 });
 
-describe('WalletStatusBar', () => {
+describe('AcurastStatusBar', () => {
   describe('construction', () => {
-    it('sets the command on the status bar item', () => {
+    it('wires the status bar item to the quick-pick menu command', () => {
       const wallet = makeWalletMock();
-      new WalletStatusBar(wallet as any);
-      expect(mockItem.command).toBe('acurast.studio.showWallets');
+      new AcurastStatusBar(wallet as any, makeCtx() as any);
+      expect(mockItem.command).toBe('acurast.studio.statusBarMenu');
     });
 
     it('subscribes to wallet.onDidChange', () => {
       const wallet = makeWalletMock();
-      new WalletStatusBar(wallet as any);
+      new AcurastStatusBar(wallet as any, makeCtx() as any);
       expect(wallet.onDidChange).toHaveBeenCalledOnce();
     });
   });
@@ -84,7 +121,7 @@ describe('WalletStatusBar', () => {
   describe('with no active wallet', () => {
     it('calls hide() on the status bar item', async () => {
       const wallet = makeWalletMock(undefined);
-      new WalletStatusBar(wallet as any);
+      new AcurastStatusBar(wallet as any, makeCtx() as any);
       await flush();
       expect(mockItem.hide).toHaveBeenCalled();
       expect(mockItem.show).not.toHaveBeenCalled();
@@ -94,23 +131,22 @@ describe('WalletStatusBar', () => {
   describe('with an active wallet', () => {
     it('calls show() on the status bar item', async () => {
       const wallet = makeWalletMock(WALLET);
-      new WalletStatusBar(wallet as any);
+      new AcurastStatusBar(wallet as any, makeCtx() as any);
       await flush();
       expect(mockItem.show).toHaveBeenCalled();
       expect(mockItem.hide).not.toHaveBeenCalled();
     });
 
-    it('sets text with wallet name and abbreviated address', async () => {
+    it('sets text with network first then wallet name', async () => {
       const wallet = makeWalletMock(WALLET);
-      new WalletStatusBar(wallet as any);
+      new AcurastStatusBar(wallet as any, makeCtx() as any);
       await flush();
-      const short = `${WALLET.address.slice(0, 6)}…${WALLET.address.slice(-4)}`;
-      expect(mockItem.text).toBe(`$(acurast-logo) ${WALLET.name} ${short}`);
+      expect(mockItem.text).toBe(`$(acurast-logo) Mainnet · ${WALLET.name}`);
     });
 
     it('sets tooltip containing the name and full address', async () => {
       const wallet = makeWalletMock(WALLET);
-      new WalletStatusBar(wallet as any);
+      new AcurastStatusBar(wallet as any, makeCtx() as any);
       await flush();
       expect(mockItem.tooltip.value).toContain(WALLET.name);
       expect(mockItem.tooltip.value).toContain(WALLET.address);
@@ -118,7 +154,7 @@ describe('WalletStatusBar', () => {
 
     it('includes description in tooltip when present', async () => {
       const wallet = makeWalletMock(WALLET);
-      new WalletStatusBar(wallet as any);
+      new AcurastStatusBar(wallet as any, makeCtx() as any);
       await flush();
       expect(mockItem.tooltip.value).toContain(WALLET.description);
     });
@@ -126,7 +162,7 @@ describe('WalletStatusBar', () => {
     it('omits description from tooltip when empty', async () => {
       const noDesc = { ...WALLET, description: '' };
       const wallet = makeWalletMock(noDesc);
-      new WalletStatusBar(wallet as any);
+      new AcurastStatusBar(wallet as any, makeCtx() as any);
       await flush();
       expect(mockItem.tooltip.value).not.toContain('_');
     });
@@ -135,7 +171,7 @@ describe('WalletStatusBar', () => {
   describe('onDidChange', () => {
     it('hides the item when wallet is removed', async () => {
       const wallet = makeWalletMock(WALLET);
-      new WalletStatusBar(wallet as any);
+      new AcurastStatusBar(wallet as any, makeCtx() as any);
       await flush();
 
       wallet.getActive.mockResolvedValue(undefined);
@@ -147,7 +183,7 @@ describe('WalletStatusBar', () => {
 
     it('updates text when active wallet changes', async () => {
       const wallet = makeWalletMock(WALLET);
-      new WalletStatusBar(wallet as any);
+      new AcurastStatusBar(wallet as any, makeCtx() as any);
       await flush();
 
       const updated = { ...WALLET, name: 'Renamed' };
@@ -162,7 +198,7 @@ describe('WalletStatusBar', () => {
   describe('dispose()', () => {
     it('disposes the status bar item', () => {
       const wallet = makeWalletMock();
-      const bar = new WalletStatusBar(wallet as any);
+      const bar = new AcurastStatusBar(wallet as any, makeCtx() as any);
       bar.dispose();
       expect(mockItem.dispose).toHaveBeenCalled();
     });
