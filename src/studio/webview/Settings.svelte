@@ -107,6 +107,15 @@
     return Number.isFinite(n) && n > 0 ? fmtMs(n) : '';
   }
 
+  // Read an instantMatch field from a stored config, tolerating both the SDK's
+  // array shape `[{ processor, maxAllowedStartDelayInMs }]` and the legacy
+  // single-object shape `{ processor, ... }`.
+  function imField(p: Record<string, unknown>, field: string): unknown {
+    const im = getNested(p, 'assignmentStrategy', 'instantMatch');
+    const first = Array.isArray(im) ? im[0] : im;
+    return first && typeof first === 'object' ? (first as Record<string, unknown>)[field] : undefined;
+  }
+
   function getNested(p: Record<string, unknown>, ...keys: string[]): unknown {
     let cur: unknown = p;
     for (const k of keys) {
@@ -172,14 +181,32 @@
       }
     }
 
-    // Clean up assignmentStrategy
+    // Clean up assignmentStrategy. The SDK validates instantMatch as an ARRAY
+    // of { processor, maxAllowedStartDelayInMs } (it calls .map on it), so
+    // normalize our internal single-object draft into that shape on the way out.
     if (patch.assignmentStrategy && typeof patch.assignmentStrategy === 'object') {
       const as = patch.assignmentStrategy as Record<string, unknown>;
       if (as.type === 'Competing') {
         delete as.instantMatch;
-      } else if (as.instantMatch && typeof as.instantMatch === 'object') {
-        const im = as.instantMatch as Record<string, unknown>;
-        if (!im.processor || String(im.processor).trim() === '') delete as.instantMatch;
+      } else if (as.instantMatch != null) {
+        const cur = currentProject() ?? {};
+        const raw = Array.isArray(as.instantMatch) ? as.instantMatch[0] : as.instantMatch;
+        const im = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+        const proc = im.processor;
+        if (!proc || String(proc).trim() === '') {
+          delete as.instantMatch;
+        } else {
+          // Required by the schema; fall back to the prior value, then the
+          // schedule's top-level maxStartDelay, then 10s.
+          const candidates = [im.maxAllowedStartDelayInMs, imField(cur, 'maxAllowedStartDelayInMs'),
+            rd('maxAllowedStartDelayInMs', cur.maxAllowedStartDelayInMs)];
+          let delay = 10000;
+          for (const c of candidates) {
+            const n = Number(c);
+            if (c != null && Number.isFinite(n) && n >= 0) { delay = n; break; }
+          }
+          as.instantMatch = [{ processor: String(proc).trim(), maxAllowedStartDelayInMs: delay }];
+        }
       }
     }
 
@@ -373,7 +400,7 @@
     {@const assignType = (rd('assignmentStrategy.type', getNested(p, 'assignmentStrategy', 'type')) ?? 'Single') as string}
     {@const mutability = (rd('mutability', p.mutability) ?? 'Immutable') as string}
     {@const modules = (rd('requiredModules', p.requiredModules) ?? []) as string[]}
-    {@const imProcessor = rd('assignmentStrategy.instantMatch.processor', getNested(p, 'assignmentStrategy', 'instantMatch', 'processor')) as string | null | undefined}
+    {@const imProcessor = rd('assignmentStrategy.instantMatch.processor', imField(p, 'processor')) as string | null | undefined}
 
     {#snippet durEcho(v: unknown)}
       {@const h = msHuman(v)}
@@ -609,9 +636,9 @@
           <div class="field">
             <label for="f_imDelay">Instant Match Max Start Delay (ms)</label>
             <input id="f_imDelay" type="number"
-              value={rd('assignmentStrategy.instantMatch.maxAllowedStartDelayInMs', getNested(p, 'assignmentStrategy', 'instantMatch', 'maxAllowedStartDelayInMs')) ?? 10000}
+              value={rd('assignmentStrategy.instantMatch.maxAllowedStartDelayInMs', imField(p, 'maxAllowedStartDelayInMs')) ?? 10000}
               oninput={(e) => { const n = Number((e.target as HTMLInputElement).value); patchField('assignmentStrategy.instantMatch.maxAllowedStartDelayInMs', isNaN(n) ? null : n); }} />
-            {@render durEcho(rd('assignmentStrategy.instantMatch.maxAllowedStartDelayInMs', getNested(p, 'assignmentStrategy', 'instantMatch', 'maxAllowedStartDelayInMs')) ?? 10000)}
+            {@render durEcho(rd('assignmentStrategy.instantMatch.maxAllowedStartDelayInMs', imField(p, 'maxAllowedStartDelayInMs')) ?? 10000)}
           </div>
         {/if}
       {/if}

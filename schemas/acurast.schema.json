@@ -76,19 +76,22 @@
               "default": "Single"
             },
             "instantMatch": {
-              "type": "object",
-              "description": "Pin the job to a specific processor (Single strategy only).",
-              "required": ["processor"],
-              "additionalProperties": false,
-              "properties": {
-                "processor": {
-                  "type": "string",
-                  "description": "SS58 address of the target processor."
-                },
-                "maxAllowedStartDelayInMs": {
-                  "type": "number",
-                  "description": "Maximum allowed start delay for this processor (ms).",
-                  "minimum": 0
+              "type": "array",
+              "description": "Pin the job to specific processor(s) for instant assignment, bypassing the open matcher (Single strategy only). Each entry targets one processor.",
+              "items": {
+                "type": "object",
+                "required": ["processor", "maxAllowedStartDelayInMs"],
+                "additionalProperties": false,
+                "properties": {
+                  "processor": {
+                    "type": "string",
+                    "description": "SS58 address of the target processor."
+                  },
+                  "maxAllowedStartDelayInMs": {
+                    "type": "number",
+                    "description": "Maximum allowed start delay for this processor (ms).",
+                    "minimum": 0
+                  }
                 }
               }
             }
