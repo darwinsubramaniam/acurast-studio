@@ -54,11 +54,20 @@ export async function deploy({ ctx, wallet, output, studioPanel }: DeployOptions
   const network = (config.network ?? 'mainnet') as AcurastNetwork;
   const symbol = SYMBOL[network];
 
+  // The deploy targets acurast.json's network — call out when that differs from
+  // the network Acurast Studio (balance/processors/status bar) is pointed at, so
+  // a stale status-bar reading doesn't mislead about where this job lands.
+  const studioNetwork = vscode.workspace.getConfiguration('acurast').get<string>('network', 'mainnet');
+  const mismatchNote =
+    studioNetwork !== network
+      ? `\n\n⚠️ Acurast Studio is targeting ${studioNetwork}, but this deploys to ${network} (from acurast.json).`
+      : '';
+
   const confirm = await vscode.window.showWarningMessage(
     `Deploy "${config.projectName}" to ${network}?`,
     {
       modal: true,
-      detail: `Replicas: ${config.numberOfReplicas ?? 1}\nMax cost/exec: ${config.maxCostPerExecution ?? 'n/a'} (planck ${symbol})`,
+      detail: `Replicas: ${config.numberOfReplicas ?? 1}\nMax cost/exec: ${config.maxCostPerExecution ?? 'n/a'} (planck ${symbol})${mismatchNote}`,
     },
     'Deploy'
   );

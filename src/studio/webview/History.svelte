@@ -53,6 +53,8 @@
   let fetchingOnline = $state(false);
   let onlineError = $state<string | null>(null);
   let onlineFetched = $state(false);
+  // Network the on-chain results were fetched under, to detect a target switch.
+  let fetchedNetwork = $state<string | null>(null);
 
   let onlineTotalPages = $derived(
     Math.ceil(onlineRecords.length / ONLINE_PAGE),
@@ -121,11 +123,21 @@
     onlineError = null;
     onlineFetched = false;
     onlineRecords = [];
+    fetchedNetwork = activeNetwork;
     send("history.fetchOnline", {
       address: activeWalletAddress,
       network: activeNetwork,
     });
   }
+
+  // Re-fetch on-chain jobs when the target network changes, so an open section
+  // never keeps showing the previously-targeted network's jobs.
+  $effect(() => {
+    const net = activeNetwork;
+    if (onlineOpen && onlineFetched && fetchedNetwork !== null && net !== fetchedNetwork) {
+      fetchOnline();
+    }
+  });
 
   const fmt = fmtTimestamp;
 
