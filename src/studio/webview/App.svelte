@@ -9,6 +9,7 @@
     FiatSelectionStateMsg,
     HistoryStateMsg,
     ProcessorsStateMsg,
+    DiagnosisStateMsg,
   } from "../types";
   import { send } from "./lib/vscode";
   import { ICONS } from "./lib/icons";
@@ -59,6 +60,8 @@
   let fiatSelection = $state<FiatSelectionStateMsg | null>(null);
   let historyState = $state<HistoryStateMsg | null>(null);
   let processorsState = $state<ProcessorsStateMsg | null>(null);
+  // Per-job diagnosis results, keyed by `${origin}:${localId}`.
+  let diagnoses = $state<Record<string, DiagnosisStateMsg>>({});
   let activeWalletAddress = $derived(
     wallets.list.find((w) => w.id === wallets.activeId)?.address ?? null,
   );
@@ -117,6 +120,11 @@
         case "processors.state":
           processorsState = msg as unknown as ProcessorsStateMsg;
           break;
+        case "diagnosis.state": {
+          const d = msg as unknown as DiagnosisStateMsg;
+          diagnoses = { ...diagnoses, [d.key]: d };
+          break;
+        }
       }
     }
     window.addEventListener("message", onMessage);
@@ -163,12 +171,13 @@
     {processorsState}
   />
 {:else if route === "deploy"}
-  <Deploy {ctx} {deploy} {navigate} {pricing} />
+  <Deploy {ctx} {deploy} {navigate} {pricing} {diagnoses} />
 {:else if route === "history"}
   <History
     {historyState}
     {activeWalletAddress}
     activeNetwork={wallets.network}
+    {diagnoses}
   />
 {:else if route === "processors"}
   <Processors {wallets} {processorsState} />

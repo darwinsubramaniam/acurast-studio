@@ -3,17 +3,34 @@
     HistoryStateMsg,
     StoredDeploymentWithMeta,
     OnlineJobRegistration,
+    DiagnosisStateMsg,
   } from "../types";
   import { send } from "./lib/vscode";
   import { ICONS } from "./lib/icons";
   import { planckToAcu, fmtTimestamp, fmtMs, truncate } from "./lib/format";
+  import DiagnosisPanel from "./DiagnosisPanel.svelte";
 
   interface Props {
     historyState: HistoryStateMsg | null;
     activeWalletAddress: string | null;
     activeNetwork: string;
+    diagnoses: Record<string, DiagnosisStateMsg>;
   }
-  let { historyState, activeWalletAddress, activeNetwork }: Props = $props();
+  let { historyState, activeWalletAddress, activeNetwork, diagnoses }: Props =
+    $props();
+
+  // Trigger an on-chain diagnosis for a record's first job id.
+  function diagnose(rec: StoredDeploymentWithMeta) {
+    const job = rec.jobIds[0];
+    if (!job) return;
+    send("history.diagnose", {
+      origin: job.origin,
+      localId: job.localId,
+      network: rec.network,
+    });
+  }
+  const diagKey = (rec: StoredDeploymentWithMeta): string =>
+    rec.jobIds[0] ? `${rec.jobIds[0].origin}:${rec.jobIds[0].localId}` : "";
 
   // ── Local section ────────────────────────────────────────────────────────────
   let accumulated = $state<StoredDeploymentWithMeta[]>([]);
@@ -177,6 +194,23 @@
                 </div>
               {/if}
             {/if}
+            {#if rec.jobIds[0]}
+              {@const dstate = diagnoses[diagKey(rec)]}
+              <div class="h-card-actions">
+                <button
+                  class="diag-btn"
+                  onclick={() => diagnose(rec)}
+                  disabled={dstate?.status === "loading"}
+                >
+                  {dstate?.status === "loading"
+                    ? "Diagnosing…"
+                    : dstate
+                      ? "Re-run diagnosis"
+                      : "Diagnose"}
+                </button>
+              </div>
+              <DiagnosisPanel state={dstate} />
+            {/if}
           </div>
         {/each}
       </div>
@@ -294,6 +328,23 @@
                   <div class="h-card-meta">
                     On-chain only &middot; not in local history
                   </div>
+                {/if}
+                {#if rec.jobIds[0]}
+                  {@const dstate = diagnoses[diagKey(rec)]}
+                  <div class="h-card-actions">
+                    <button
+                      class="diag-btn"
+                      onclick={() => diagnose(rec)}
+                      disabled={dstate?.status === "loading"}
+                    >
+                      {dstate?.status === "loading"
+                        ? "Diagnosing…"
+                        : dstate
+                          ? "Re-run diagnosis"
+                          : "Diagnose"}
+                    </button>
+                  </div>
+                  <DiagnosisPanel state={dstate} />
                 {/if}
               </div>
             {/each}
@@ -461,6 +512,26 @@
   .h-card-meta {
     font-size: 11px;
     color: var(--vscode-descriptionForeground);
+  }
+
+  .h-card-actions {
+    margin-top: 6px;
+  }
+  .diag-btn {
+    font-size: 11px;
+    padding: 2px 10px;
+    background: transparent;
+    color: var(--vscode-textLink-foreground);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .diag-btn:hover:not(:disabled) {
+    background: var(--vscode-toolbar-hoverBackground);
+  }
+  .diag-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
   }
 
   .h-card-row {

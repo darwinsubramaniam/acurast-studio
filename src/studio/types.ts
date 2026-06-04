@@ -52,6 +52,7 @@ export interface ProcessorsAdvertiseMsg {
 }
 export interface HistoryLoadMsg        { type: 'history.load'; offset?: number; }
 export interface HistoryFetchOnlineMsg { type: 'history.fetchOnline'; address: string; network: string; }
+export interface JobDiagnoseMsg        { type: 'history.diagnose'; origin: string; localId: number; network: string; }
 export interface HistoryRemovePathMsg  { type: 'history.removePathInfo'; id: string; }
 export interface HistoryRemoveMsg      { type: 'history.remove'; id: string; }
 export interface HistoryOpenFolderMsg  { type: 'history.openFolder'; path: string; }
@@ -64,7 +65,7 @@ export type InMsg =
   | FiatFetchListMsg | FiatSaveMsg
   | DevtoolsRefreshKeyMsg | DevtoolsOpenUrlMsg
   | ProcessorsQueryMsg | ProcessorsAdvertiseMsg
-  | HistoryLoadMsg | HistoryFetchOnlineMsg | HistoryRemovePathMsg | HistoryRemoveMsg | HistoryOpenFolderMsg;
+  | HistoryLoadMsg | HistoryFetchOnlineMsg | JobDiagnoseMsg | HistoryRemovePathMsg | HistoryRemoveMsg | HistoryOpenFolderMsg;
 
 export interface SerializedFees {
   numberOfExecutions: string;
@@ -300,6 +301,51 @@ export interface HistoryStateMsg {
   hasMore?: boolean;
   total?: number;
   onlineRecords?: StoredDeploymentWithMeta[];
+  error?: string;
+}
+
+// ── Job diagnosis ─────────────────────────────────────────────────────────────
+// Explains why an on-chain job is / isn't matching by evaluating every gate the
+// marketplace enforces. Produced by AcurastClient.diagnoseJob.
+export type DiagnosisStatus = 'pass' | 'fail' | 'warn' | 'info';
+
+export interface DiagnosisCheck {
+  /** Stable id e.g. 'modules' | 'whitelist' | 'consumers' | 'fee' | 'version' | 'reputation' | 'resources' | 'startWindow' | 'assignment' | 'heartbeat'. */
+  id: string;
+  label: string;
+  status: DiagnosisStatus;
+  detail: string;
+}
+
+export interface ProcessorDiagnosis {
+  address: string;
+  /** True if every hard gate (modules/consumers/fee/version/resources) passes. */
+  eligible: boolean;
+  checks: DiagnosisCheck[];
+}
+
+export interface JobDiagnosis {
+  found: boolean;
+  origin: string;
+  localId: number;
+  network: string;
+  /** 'open' = registered but unmatched, 'assigned' = matched, 'unknown' = no status / not found. */
+  jobStatus: 'open' | 'assigned' | 'unknown';
+  assignedSlots?: number;
+  /** One-line overall verdict shown as the panel heading. */
+  summary: string;
+  /** Job-level checks (start window, assignment strategy). */
+  checks: DiagnosisCheck[];
+  /** Per whitelisted processor; empty when the job is public (any processor). */
+  processors: ProcessorDiagnosis[];
+}
+
+export interface DiagnosisStateMsg {
+  type: 'diagnosis.state';
+  /** `${origin}:${localId}` — keys the result per job in the webview. */
+  key: string;
+  status: 'loading' | 'ok' | 'error';
+  result?: JobDiagnosis;
   error?: string;
 }
 

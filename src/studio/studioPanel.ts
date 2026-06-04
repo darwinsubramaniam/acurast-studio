@@ -13,7 +13,7 @@ import { SYMBOL, MATCHER_ENDPOINTS, type AcurastNetwork } from '../sdk/constants
 import { Exchanger } from '../sdk/exchanger/exchanger';
 import { CoinGecko, type CoinGeckoPlan } from '../sdk/exchanger/coingecko';
 import { DeploymentStore } from '../deployments/deploymentStore';
-import type { Route, InMsg, WalletActionMsg, DeployState, DeployStage, DeployStageId, StageStatus, DeployJobId, ProcessorPubKey, ProcessorInfo, ChainEvent, PricingFiatInfo, FiatListItem, StoredDeploymentWithMeta, HistoryStateMsg, OnlineJobRegistration, ProcessorsStateMsg } from './types';
+import type { Route, InMsg, WalletActionMsg, DeployState, DeployStage, DeployStageId, StageStatus, DeployJobId, ProcessorPubKey, ProcessorInfo, ChainEvent, PricingFiatInfo, FiatListItem, StoredDeploymentWithMeta, HistoryStateMsg, OnlineJobRegistration, ProcessorsStateMsg, DiagnosisStateMsg } from './types';
 
 const BALANCE_POLL_MS = 30_000;
 const FIAT_PRICE_TTL_MS = 60_000;
@@ -215,6 +215,9 @@ export class StudioPanel implements vscode.WebviewViewProvider {
         break;
       case 'history.fetchOnline':
         await this.fetchOnlineHistory(msg.address, msg.network);
+        break;
+      case 'history.diagnose':
+        await this.diagnoseJob(msg.origin, msg.localId, msg.network);
         break;
       case 'history.removePathInfo':
         await this.deploymentStore.removePathInfo(msg.id);
@@ -719,6 +722,17 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       this.post({ type: 'history.state', status: 'ok', onlineRecords } satisfies HistoryStateMsg);
     } catch (err) {
       this.post({ type: 'history.state', status: 'error', error: (err as Error).message } satisfies HistoryStateMsg);
+    }
+  }
+
+  private async diagnoseJob(origin: string, localId: number, network: string): Promise<void> {
+    const key = `${origin}:${localId}`;
+    this.post({ type: 'diagnosis.state', key, status: 'loading' } satisfies DiagnosisStateMsg);
+    try {
+      const result = await acurastClient.diagnoseJob(network as AcurastNetwork, origin, localId);
+      this.post({ type: 'diagnosis.state', key, status: 'ok', result } satisfies DiagnosisStateMsg);
+    } catch (err) {
+      this.post({ type: 'diagnosis.state', key, status: 'error', error: (err as Error).message } satisfies DiagnosisStateMsg);
     }
   }
 
