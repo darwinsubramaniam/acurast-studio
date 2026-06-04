@@ -46,7 +46,8 @@ export function registerAcurastLanguageService(
     const diags = await ls.doValidation(lsDoc, jsonDoc, { schemaValidation: 'error' });
     diagCollection.set(
       doc.uri,
-      diags.map(d => new vscode.Diagnostic(toVsRange(d.range), d.message,
+      diags.map(d => new vscode.Diagnostic(toVsRange(d.range),
+        typeof d.message === 'string' ? d.message : d.message.value,
         ((d.severity ?? 2) - 1) as vscode.DiagnosticSeverity))
     );
   }
