@@ -1,83 +1,131 @@
 # Release Guide
 
-There are three release types, all driven by `.github/workflows/publish.yml`.
+Releases are **100% tag-driven**. You never hand-edit the version in
+`package.json` — the git tag is the single source of truth for both the
+**channel** (rc / pre-release / stable) and the **version**. CI rewrites
+`package.json` to match the tag before packaging.
+
+Push a tag → the right thing happens. That's the whole workflow.
+
+```bash
+git tag v0.4.0-rc.1 && git push origin v0.4.0-rc.1   # release candidate
+git tag v0.5.0-pre  && git push origin v0.5.0-pre     # marketplace preview
+git tag v0.6.0      && git push origin v0.6.0          # stable release
+```
+
+---
+
+## How the tag maps to a release
+
+| Git tag         | Channel      | `package.json` becomes | Marketplace          | GitHub Release        |
+|-----------------|--------------|------------------------|----------------------|-----------------------|
+| `v0.4.0-rc.1`   | RC           | `0.4.0`                | ❌ not published      | Draft (pre-release)   |
+| `v0.5.0-pre`    | Pre-release  | `0.5.0`                | ✅ Preview (`--pre-release`) | none           |
+| `v0.6.0`        | Stable       | `0.6.0`                | ✅ Stable             | Published + notes     |
+
+The Marketplace **rejects any pre-release suffix in the version field** — a
+version must be strictly `major.minor.patch`. So the `-rc.N` / `-pre` suffix
+lives only in the git tag; CI strips it to derive the numeric version that goes
+into the `.vsix`.
+
+---
+
+## Versioning convention (odd-minor)
+
+The Marketplace won't serve a pre-release and a stable that share the same
+version number — a pre-release must be a *higher* version than the latest
+stable. We follow Microsoft's recommended scheme to keep the channels apart:
+
+- **Stable** → even minor: `0.4.0`, `0.6.0`, `0.8.0`, …
+- **Pre-release** → next odd minor: `0.5.0`, `0.7.0`, `0.9.0`, …
+
+So the lifecycle of an upcoming release looks like:
+
+```bash
+git tag v0.5.0-rc.1 && git push origin v0.5.0-rc.1   # test the .vsix internally
+git tag v0.5.0-pre  && git push origin v0.5.0-pre     # ship to preview channel
+git tag v0.6.0      && git push origin v0.6.0          # promote to stable
+```
+
+CI emits a **warning** (never a hard failure) if you tag a stable with an odd
+minor or a pre-release with an even minor — so you can deviate if you ever need
+to, but you'll be reminded.
 
 ---
 
 ## RC (Release Candidate)
 
-Use this to produce a testable `.vsix` for internal review without touching the Marketplace.
+A testable `.vsix` for internal review without touching the Marketplace.
 
-**Steps:**
+```bash
+git tag v0.4.0-rc.1 && git push origin v0.4.0-rc.1
+```
 
-1. Bump `version` in `package.json` if needed, commit and push to `main`.
-2. Go to **Actions → Publish Extension → Run workflow**.
-3. Select `rc` and click **Run workflow**.
+- Lints, typechecks, and packages `acurast-studio.vsix` as version `0.4.0`.
+- Creates a **draft, pre-release** GitHub Release for the tag with the `.vsix` attached.
+- Nothing is published to the Marketplace.
 
-**What happens:**
-- Lints, typechecks, and packages `acurast-studio.vsix`.
-- Creates a **draft** GitHub Release tagged `v{version}-rc.{run_number}` (e.g. `v0.2.1-rc.5`).
-- Attaches the `.vsix` to the release as a downloadable asset.
-- Nothing is published to the VS Code Marketplace.
+Install it locally — download the `.vsix` from the draft release, then:
 
-**To install the RC locally:**
-Download the `.vsix` from the draft release and run:
 ```bash
 code --install-extension acurast-studio.vsix
 ```
+
+Iterate by bumping the rc counter: `v0.4.0-rc.2`, `v0.4.0-rc.3`, …
 
 ---
 
 ## Pre-release (Marketplace Preview)
 
-Use this to publish a preview version directly to the VS Code Marketplace. Users who opt in to pre-releases will receive it automatically.
+Publishes a preview version to the Marketplace. Users who opt in to pre-releases
+receive it automatically.
 
-**Steps:**
+```bash
+git tag v0.5.0-pre && git push origin v0.5.0-pre
+```
 
-1. Bump `version` in `package.json` to an odd minor (VS Code Marketplace convention for pre-releases, e.g. `0.3.0`), commit and push to `main`. *(Optional but recommended.)*
-2. Ensure the `VSCE_PAT` secret is set in the repository settings.
-3. Go to **Actions → Publish Extension → Run workflow**.
-4. Select `pre-release` and click **Run workflow**.
-
-**What happens:**
-- Lints, typechecks, and packages `acurast-studio-prerelease.vsix` with `--pre-release`.
-- Publishes directly to the VS Code Marketplace as a **Preview** version.
+- Packages with `--pre-release` as version `0.5.0` (use the odd minor).
+- Publishes the exact built artifact to the Marketplace **Preview** channel.
 - No GitHub Release is created.
+
+Requires the `VSCE_PAT` secret (see below).
 
 ---
 
 ## Stable Release
 
-Use this to publish the official production version to the VS Code Marketplace.
+Publishes the official production version to the Marketplace.
 
-**Steps:**
+```bash
+git tag v0.6.0 && git push origin v0.6.0
+```
 
-1. Bump `version` in `package.json` to the final version (e.g. `0.2.1`), commit and push to `main`.
-2. Ensure the `VSCE_PAT` secret is set in the repository settings.
-3. Create and push a version tag:
-   ```bash
-   git tag v0.2.1
-   git push origin v0.2.1
-   ```
+- Packages `acurast-studio.vsix` as version `0.6.0` (use the even minor).
+- Publishes the exact built artifact to the Marketplace as **stable**.
+- Creates a **published** GitHub Release with auto-generated notes and the `.vsix` attached.
 
-**What happens:**
-- The tag push triggers the workflow automatically (no manual dispatch needed).
-- Lints, typechecks, and packages `acurast-studio.vsix`.
-- Creates a **published** GitHub Release for the tag with auto-generated release notes and the `.vsix` attached.
-- Publishes to the VS Code Marketplace as a **stable** version.
+Requires the `VSCE_PAT` secret (see below).
 
 ---
 
-## Summary
+## Notes
 
-| Type | Trigger | Marketplace | GitHub Release |
-|---|---|---|---|
-| RC | Manual (`workflow_dispatch` → `rc`) | No | Draft |
-| Pre-release | Manual (`workflow_dispatch` → `pre-release`) | Yes (Preview) | No |
-| Stable | Push tag `v*` | Yes (Stable) | Published |
+- **No manual "Run workflow" button.** `workflow_dispatch` was removed — every
+  release is a tag. CI (`.github/workflows/ci.yml`) already runs the full
+  lint + typecheck + build + test suite on every push to `main` and on PRs, so
+  tag your release commit after CI is green on `main`.
+- **CI does not commit the version bump back.** The `package.json` rewrite is
+  ephemeral (CI workspace only). Your committed `version` is just a dev default;
+  the tag overrides it at build time. Keep `version` in `package.json` roughly
+  in sync for sanity, but it is not authoritative.
+- **Re-tagging.** If you need to redo a release, delete the tag locally and
+  remotely (`git tag -d v0.6.0 && git push origin :refs/tags/v0.6.0`) and push a
+  new one. You cannot re-publish the same version to the Marketplace.
 
 ---
 
 ## Required secret
 
-`VSCE_PAT` — a Personal Access Token from the [Visual Studio Marketplace publisher portal](https://marketplace.visualstudio.com/manage). Required for pre-release and stable publishes. Not needed for RC.
+`VSCE_PAT` — a Personal Access Token from the
+[Visual Studio Marketplace publisher portal](https://marketplace.visualstudio.com/manage).
+Required for pre-release and stable publishes. Not needed for RC.

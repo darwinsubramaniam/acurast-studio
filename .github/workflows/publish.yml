@@ -1,20 +1,25 @@
 name: Publish Extension
 
+# Tag-driven releases. The git tag is the single source of truth — it decides
+# the channel AND the version. package.json is rewritten in CI to match the tag,
+# so you never hand-bump the version before tagging.
+#
+#   Tag                Channel       package.json   Marketplace        GitHub Release
+#   -----------------  ------------  -------------  -----------------  -----------------
+#   v0.4.0-rc.1        rc            0.4.0          no                 draft (pre-release)
+#   v0.5.0-pre         pre-release   0.5.0          yes (--pre-release) none
+#   v0.6.0             stable        0.6.0          yes (stable)       published
+#
+# Convention (soft-checked, warning only): stable uses an EVEN minor, pre-release
+# uses the next ODD minor. RC carries no channel of its own — it mirrors the
+# stable/pre version it is a candidate for.
+
 on:
   push:
     tags:
-      - 'v*' # Trigger automatically when a tag starting with v is pushed (e.g. v1.0.0)
-  workflow_dispatch:
-    inputs:
-      release_type:
-        description: 'Type of release to perform'
-        required: true
-        default: 'rc'
-        type: choice
-        options:
-          - 'rc'            # Release Candidate (compiles .vsix and uploads to GitHub Release, does not publish to Marketplace)
-          - 'pre-release'    # Pre-release (Preview version directly to VS Code Marketplace)
-          - 'stable'         # Stable (Official production release to VS Code Marketplace)
+      - 'v[0-9]+.[0-9]+.[0-9]+'        # stable        e.g. v0.6.0
+      - 'v[0-9]+.[0-9]+.[0-9]+-pre'    # pre-release   e.g. v0.5.0-pre
+      - 'v[0-9]+.[0-9]+.[0-9]+-rc.*'   # rc            e.g. v0.4.0-rc.1
 
 permissions:
   contents: write # Required for creating GitHub Releases and uploading assets
@@ -42,64 +47,95 @@ jobs:
       - name: Run Type Checking
         run: npm run typecheck
 
-      # Determine what type of release this is
-      # If triggered by a tag (e.g., v1.0.0), it is a 'stable' release.
-      # If triggered manually, it uses the selected input.
-      - name: Set Release Environment
-        id: env
+      # Parse the tag into a channel (rc | pre | stable) and a strict
+      # major.minor.patch version. The Marketplace rejects any pre-release
+      # suffix in the version field, so the suffix only lives in the git tag.
+      - name: Parse Tag
+        id: tag
         run: |
-          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/v* ]]; then
-            echo "RELEASE_TYPE=stable" >> $GITHUB_ENV
+          TAG="${GITHUB_REF_NAME}"
+          RAW="${TAG#v}"                       # strip leading "v"
+
+          if [[ "$RAW" =~ ^[0-9]+\.[0-9]+\.[0-9]+-rc\..+$ ]]; then
+            CHANNEL=rc
+            VERSION="${RAW%-rc.*}"
+          elif [[ "$RAW" =~ ^[0-9]+\.[0-9]+\.[0-9]+-pre$ ]]; then
+            CHANNEL=pre
+            VERSION="${RAW%-pre}"
+          elif [[ "$RAW" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            CHANNEL=stable
+            VERSION="$RAW"
           else
-            echo "RELEASE_TYPE=${{ github.event.inputs.release_type }}" >> $GITHUB_ENV
+            echo "::error::Unrecognized tag '$TAG'. Expected vX.Y.Z, vX.Y.Z-pre, or vX.Y.Z-rc.N"
+            exit 1
           fi
 
-      # Build & package the .vsix file.
-      # vsce package will automatically trigger "vscode:prepublish" (npm run build).
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Derived version '$VERSION' is not major.minor.patch"
+            exit 1
+          fi
+
+          # Soft odd/even-minor convention check (warning only, never blocks).
+          MINOR="$(echo "$VERSION" | cut -d. -f2)"
+          if [[ "$CHANNEL" == "stable" && $((MINOR % 2)) -ne 0 ]]; then
+            echo "::warning::Stable release with ODD minor ($VERSION). Convention is EVEN minor for stable."
+          fi
+          if [[ "$CHANNEL" == "pre" && $((MINOR % 2)) -eq 0 ]]; then
+            echo "::warning::Pre-release with EVEN minor ($VERSION). Convention is ODD minor for pre-release."
+          fi
+
+          echo "CHANNEL=$CHANNEL" >> "$GITHUB_OUTPUT"
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Tag '$TAG' -> channel=$CHANNEL version=$VERSION"
+
+      # Rewrite package.json to the version derived from the tag so the packaged
+      # .vsix carries the right number. Ephemeral (CI only) — not committed back.
+      - name: Set package.json version
+        run: npm pkg set version="${{ steps.tag.outputs.VERSION }}"
+
+      # Build & package the .vsix. `vsce package` triggers "vscode:prepublish"
+      # (npm run build). Pre-release builds get the --pre-release flag.
       - name: Package Extension (.vsix)
         run: |
-          if [ "${{ env.RELEASE_TYPE }}" = "pre-release" ]; then
-            npx @vscode/vsce package --pre-release -o acurast-studio-prerelease.vsix
+          if [ "${{ steps.tag.outputs.CHANNEL }}" = "pre" ]; then
+            npx @vscode/vsce package --pre-release -o acurast-studio.vsix
           else
             npx @vscode/vsce package -o acurast-studio.vsix
           fi
 
-      # Compute the release tag.
-      # For stable (tag push): use the pushed tag directly.
-      # For rc (workflow_dispatch): derive from package.json version + run number, e.g. v0.2.0-rc.5.
-      - name: Compute Release Tag
-        id: tag
-        run: |
-          if [ "${{ env.RELEASE_TYPE }}" = "rc" ]; then
-            VERSION=$(node -p "require('./package.json').version")
-            echo "TAG=v${VERSION}-rc.${{ github.run_number }}" >> $GITHUB_OUTPUT
-          else
-            echo "TAG=${{ github.ref_name }}" >> $GITHUB_OUTPUT
-          fi
-
-      # For 'rc' (Release Candidate) or 'stable' tag pushes, we create a GitHub Release
-      # and attach the packaged .vsix. This allows manual testing/installation before/instead of Marketplace.
-      - name: Create GitHub Release (RC or Stable)
-        if: env.RELEASE_TYPE == 'rc' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+      # RC: testable artifact only — draft GitHub pre-release, never the Marketplace.
+      - name: Create Draft GitHub Release (RC)
+        if: steps.tag.outputs.CHANNEL == 'rc'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.tag.outputs.TAG }}
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
           files: acurast-studio.vsix
-          draft: ${{ env.RELEASE_TYPE == 'rc' }} # Draft release for RCs, published release for stable tags
-          prerelease: ${{ env.RELEASE_TYPE == 'rc' }} # Mark as prerelease on GitHub for RCs
+          draft: true
+          prerelease: true
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Publish to Visual Studio Marketplace if 'pre-release' or 'stable' is selected.
-      # Requires the VSCE_PAT secret to be set in your GitHub repository secrets.
-      - name: Publish to VS Code Marketplace
-        if: env.RELEASE_TYPE == 'stable' || env.RELEASE_TYPE == 'pre-release'
-        run: |
-          if [ "${{ env.RELEASE_TYPE }}" = "pre-release" ]; then
-            echo "Publishing Pre-release (Preview) version..."
-            npx @vscode/vsce publish --pre-release -p ${{ secrets.VSCE_PAT }}
-          else
-            echo "Publishing Stable (Production) version..."
-            npx @vscode/vsce publish -p ${{ secrets.VSCE_PAT }}
-          fi
+      # Pre-release: publish the exact built artifact to the Marketplace preview channel.
+      - name: Publish Pre-release to Marketplace
+        if: steps.tag.outputs.CHANNEL == 'pre'
+        run: npx @vscode/vsce publish --pre-release --packagePath acurast-studio.vsix -p ${{ secrets.VSCE_PAT }}
+
+      # Stable: publish the exact built artifact + a published GitHub Release with notes.
+      - name: Publish Stable to Marketplace
+        if: steps.tag.outputs.CHANNEL == 'stable'
+        run: npx @vscode/vsce publish --packagePath acurast-studio.vsix -p ${{ secrets.VSCE_PAT }}
+
+      - name: Create GitHub Release (Stable)
+        if: steps.tag.outputs.CHANNEL == 'stable'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          files: acurast-studio.vsix
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -38,15 +38,20 @@ Unit tests live in `src/test/unit/` and `src/test/webview/`. Integration tests l
 
 ## Releasing
 
-See [RELEASE.md](./RELEASE.md) for the full step-by-step. Short version:
+See [RELEASE.md](./RELEASE.md) for the full step-by-step. Releases are **100%
+tag-driven** — the git tag decides both the channel and the version, and CI
+rewrites `package.json` to match before packaging. No manual `workflow_dispatch`.
 
-| Goal | How |
-|---|---|
-| Testable build for internal review | Actions → Publish Extension → `rc` |
-| Marketplace preview for early adopters | Actions → Publish Extension → `pre-release` |
-| Production release | `git tag v{version} && git push origin v{version}` |
+| Goal | Push tag | Result |
+|---|---|---|
+| Testable build for internal review | `v0.4.0-rc.1` | Draft GitHub pre-release with `.vsix`; no Marketplace |
+| Marketplace preview for early adopters | `v0.5.0-pre` | Marketplace Preview (`--pre-release`) |
+| Production release | `v0.6.0` | Marketplace stable + published GitHub Release |
 
-Always bump `version` in `package.json` before tagging or dispatching.
+Convention (CI warns, never blocks): stable = **even** minor, pre-release = next
+**odd** minor. You do **not** hand-bump `package.json` — the tag's `X.Y.Z` is
+authoritative; the `-rc.N`/`-pre` suffix lives only in the tag (the Marketplace
+version field must be strict `major.minor.patch`).
 
 ## Architecture in one paragraph
 
