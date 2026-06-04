@@ -335,7 +335,13 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     const matcherUrl = matcherOverrides[network] ?? MATCHER_ENDPOINTS[network];
     const activeWallet = await this.wallet.getActive();
 
-    const result = await loadPricing({ config, walletAddress: activeWallet?.address, matcherUrl });
+    let result;
+    try {
+      result = await loadPricing({ config, walletAddress: activeWallet?.address, matcherUrl });
+    } catch (err: unknown) {
+      this.post({ type: 'pricing.state', status: 'error', error: (err as Error).message });
+      return;
+    }
     const { fees, advice, fallbackReason, error } = result;
 
     const fiat = await this.loadFiatConversion();

@@ -3,12 +3,14 @@ import { AssignmentStrategyVariant } from '@acurast/sdk/types';
 import type { AcurastProjectConfig } from '@acurast/sdk/types';
 import type { PricingAdvice } from '@acurast/sdk/matcher';
 import { BigNumber } from 'bignumber.js';
+import { normalizeMinProcessorVersions } from './configCompat';
 
 export type { PricingAdvice };
 export type FeeAnalysis = ReturnType<typeof getFeeAnalysis>;
 
 export type PricingFallbackReason =
   | 'instant-match'
+  | 'targeted'
   | 'no-wallet'
   | 'no-matcher-url'
   | 'matcher-error'
@@ -29,10 +31,13 @@ export interface LoadPricingOptions {
 }
 
 export async function loadPricing({
-  config,
+  config: rawConfig,
   walletAddress,
   matcherUrl,
 }: LoadPricingOptions): Promise<PricingResult> {
+  // Coerce quoted numeric min-versions (e.g. "122") to numbers so the SDK's
+  // job conversion doesn't throw — see normalizeMinProcessorVersions.
+  const config = normalizeMinProcessorVersions(rawConfig);
   const fees = getFeeAnalysis(config);
 
   const hasInstantMatch =
@@ -42,6 +47,12 @@ export async function loadPricing({
 
   if (hasInstantMatch) {
     return { config, fees, fallbackReason: 'instant-match' };
+  }
+  // A processor whitelist targets specific devices. The matcher `check` RPC
+  // ignores `processorWhitelist`, so its matched-count would describe the open
+  // market, not your targeted processors — making it misleading. Skip it.
+  if (Array.isArray(config.processorWhitelist) && config.processorWhitelist.length > 0) {
+    return { config, fees, fallbackReason: 'targeted' };
   }
   if (!walletAddress) {
     return { config, fees, fallbackReason: 'no-wallet' };

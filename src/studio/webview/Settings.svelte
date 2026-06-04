@@ -667,6 +667,9 @@
           {@const fiat = pricing.fiat && !pricing.fiat.error ? pricing.fiat : null}
 
           {#if advice}
+            {@const priceAdequate = advice.suggestedPrice != null && parseFloat(advice.currentPrice) >= parseFloat(advice.suggestedPrice)}
+            {@const nonPriceBlocker = advice.status === 'insufficient' && priceAdequate}
+            {@const tunnelGate = advice.status === 'insufficient' && Number(getNested(p, 'minProcessorVersions', 'android') ?? 0) >= 122}
             <div class="pricing-status-row pricing-{advice.status}">
               <span>{adviceIcon(advice.status)} {adviceLabel(advice.status)}</span>
               <span class="pricing-match">{advice.matchedProcessors} / {advice.requiredProcessors} processors</span>
@@ -719,7 +722,15 @@
               </div>
             {/if}
 
-            {#if advice.status !== 'sufficient' && advice.suggestedPrice}
+            {#if tunnelGate}
+              <div class="pricing-warn-note" style="margin-top:6px;">
+                No public {(rd('network', p.network) ?? 'mainnet')} processor advertises a tunnel-capable build (Android ≥ 122 / Processor 1.26.0-rc1+) right now. Tunnel jobs run on your <strong>own</strong> processor — deploy and it will pick up the job once online. Price is not the blocker.
+              </div>
+            {:else if nonPriceBlocker}
+              <div class="pricing-warn-note" style="margin-top:6px;">
+                Your price already meets the suggested rate — 0 matches is from a non-price requirement (min processor version, required modules, attestation, or reputation), not cost. Adjusting the price won't help.
+              </div>
+            {:else if advice.status !== 'sufficient' && advice.suggestedPrice}
               <button class="secondary" style="margin-top:6px;font-size:11px;" onclick={() => applySuggestedPrice(advice!.suggestedPrice)}>
                 Apply suggested price ({satoshiToACU(advice.suggestedPrice)} {sym})
               </button>
@@ -730,6 +741,7 @@
               <div class="pricing-muted">
                 {pricing.fallbackReason === 'no-wallet' ? 'Set an active wallet to get live market pricing.' :
                  pricing.fallbackReason === 'instant-match' ? 'Instant-match job — static estimate only.' :
+                 pricing.fallbackReason === 'targeted' ? 'Targeting whitelisted processors — market pricing skipped (the matcher ignores your whitelist). Static estimate only.' :
                  'Live pricing unavailable — static estimate.'}
               </div>
             {/if}

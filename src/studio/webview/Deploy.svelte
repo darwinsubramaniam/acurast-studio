@@ -78,6 +78,10 @@
         {@const fiat =
           pricing.fiat && !pricing.fiat.error ? pricing.fiat : null}
         {#if advice}
+          {@const nonPriceBlocker =
+            advice.status === "insufficient" &&
+            advice.suggestedPrice != null &&
+            parseFloat(advice.currentPrice) >= parseFloat(advice.suggestedPrice)}
           <div
             class="pricing-status-row pricing-{advice.status}"
             style="margin-bottom:6px;"
@@ -144,7 +148,17 @@
                   >{/if}{/if}
             </span>
           </div>
-          {#if advice.status !== "sufficient"}
+          {#if nonPriceBlocker}
+            <div class="pricing-muted" style="margin-top:4px;">
+              Price already meets the suggested rate — 0 matches is from a
+              non-price requirement (processor version, modules, attestation, or
+              reputation). Check requirements in <button
+                style="background:none;border:none;padding:0;color:var(--vscode-textLink-foreground);cursor:pointer;font:inherit;font-size:10px;"
+                onclick={() => send("navigate", { route: "settings" })}
+                >Project Settings</button
+              >.
+            </div>
+          {:else if advice.status !== "sufficient"}
             <div class="pricing-muted" style="margin-top:4px;">
               Adjust price in <button
                 style="background:none;border:none;padding:0;color:var(--vscode-textLink-foreground);cursor:pointer;font:inherit;font-size:10px;"
@@ -187,6 +201,15 @@
           {#if pricing.fallbackReason === "no-wallet"}
             <div class="pricing-muted" style="margin-top:4px;">
               Set an active wallet for live market pricing.
+            </div>
+          {:else if pricing.fallbackReason === "targeted"}
+            <div class="pricing-muted" style="margin-top:4px;">
+              Targeting whitelisted processors — market pricing skipped (it
+              ignores your whitelist).
+            </div>
+          {:else if pricing.fallbackReason === "instant-match"}
+            <div class="pricing-muted" style="margin-top:4px;">
+              Instant-match job — static estimate only.
             </div>
           {/if}
         {/if}

@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { deployProject, loadAcurastConfig } from '@acurast/sdk/deploy';
+import { normalizeMinProcessorVersions } from '../sdk/configCompat';
 import { walletFromMnemonic, convertConfigToJob } from '@acurast/sdk/chain';
 import { AcurastContext } from '../context';
 import { WalletService } from '../wallet/walletService';
@@ -43,10 +44,10 @@ export async function deploy({ ctx, wallet, output, studioPanel }: DeployOptions
 
   // Resolve relative paths against the project root (the directory holding acurast.json),
   // because the SDK reads fileUrl via fs.statSync against process.cwd().
-  const resolvedConfig = {
+  const resolvedConfig = normalizeMinProcessorVersions({
     ...config,
     fileUrl: resolveAgainst(projectRoot, config.fileUrl),
-  } as typeof config;
+  } as typeof config);
 
   const bundleFolder = path.join(projectRoot, '.acurast', 'bundles');
 

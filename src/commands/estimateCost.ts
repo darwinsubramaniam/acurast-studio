@@ -72,6 +72,7 @@ function renderToOutput(result: PricingResult, symbol: string, output: vscode.Ou
   if (fallbackReason) {
     const reasons: Record<typeof fallbackReason, string> = {
       'instant-match': 'Instant-match job — live market pricing skipped.',
+      'targeted': 'Targeting whitelisted processors — live market pricing skipped (it ignores your whitelist).',
       'no-wallet': 'No active wallet — live market pricing skipped.',
       'no-matcher-url': 'No matcher URL configured.',
       'matcher-error': `Matcher API error: ${error}. Falling back to static fee estimation.`,
