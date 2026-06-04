@@ -1,3 +1,5 @@
+import { DateTime } from 'luxon';
+
 /** Planck (÷ 1e12) → ACU string, trailing zeros stripped. */
 export function planckToAcu(planck: string | null | undefined): string {
   if (!planck) return '—';
@@ -32,14 +34,12 @@ export function fmtFiat(amount: number, sign: string, symbol: string): string {
 /** ms epoch → locale date+time string, '—' for falsy input. */
 export function fmtTimestamp(ts: number): string {
   if (!ts) return '—';
-  return new Date(ts).toLocaleString();
+  return DateTime.fromMillis(ts).toLocaleString(DateTime.DATETIME_SHORT);
 }
 
 /** ms epoch → HH:MM:SS string (for live event logs). */
 export function fmtClock(ts: number): string {
-  const d = new Date(ts);
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  return DateTime.fromMillis(ts).toFormat('HH:mm:ss');
 }
 
 /** Truncate a string to n chars on each side with an ellipsis in the middle. */
@@ -47,6 +47,12 @@ export function truncate(s: string | undefined, n = 10): string {
   if (!s) return '—';
   if (s.length <= n * 2 + 1) return s;
   return s.slice(0, n) + '…' + s.slice(-6);
+}
+
+/** ms epoch → relative time like '3 minutes ago', '2 hours ago'; '—' for falsy. */
+export function fmtRelative(ts: number): string {
+  if (!ts) return '—';
+  return DateTime.fromMillis(ts).toRelative() ?? '—';
 }
 
 /** Millisecond duration → human-readable '30s', '5m', '2h'. */
