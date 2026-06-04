@@ -359,7 +359,7 @@
     "serialize-javascript": "^7.0.3"
   },
   "dependencies": {
-    "@acurast/sdk": "^1.2.0",
+    "@acurast/sdk": "^1.2.2",
     "@internationalized/date": "^3.12.1",
     "@polkadot/api": "^16.5.6",
     "@polkadot/api-augment": "^16.5.6",
