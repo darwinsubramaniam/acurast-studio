@@ -1,7 +1,13 @@
 <script lang="ts">
-  import type { Route, DeployState, PricingStateMsg } from "../types";
+  import type {
+    Route,
+    DeployState,
+    PricingStateMsg,
+    DiagnosisStateMsg,
+  } from "../types";
   import { send } from "./lib/vscode";
   import { ICONS } from "./lib/icons";
+  import DiagnosisPanel from "./DiagnosisPanel.svelte";
   import {
     planckToAcu,
     planckToFiat,
@@ -16,8 +22,9 @@
     deploy: DeployState | null;
     navigate: (r: Route) => void;
     pricing: PricingStateMsg | null;
+    diagnoses: Record<string, DiagnosisStateMsg>;
   }
-  let { ctx, deploy, pricing }: Props = $props();
+  let { ctx, deploy, pricing, diagnoses }: Props = $props();
 
   const satoshiToACU = planckToAcu;
   const satoshiToFiat = planckToFiat;
@@ -286,7 +293,29 @@
             {j.deregistering ? "Deregistering…" : "Deregister"}
           </button>
         {/if}
+        {#if d.network}
+          {@const dstate = diagnoses[`${j.origin}:${j.localId}`]}
+          <button
+            class="diag-btn"
+            disabled={dstate?.status === "loading"}
+            onclick={() =>
+              send("history.diagnose", {
+                origin: j.origin,
+                localId: j.localId,
+                network: d.network,
+              })}
+          >
+            {dstate?.status === "loading"
+              ? "Diagnosing…"
+              : dstate
+                ? "Re-run diagnosis"
+                : "Why not matched?"}
+          </button>
+        {/if}
       </div>
+      {#if d.network}
+        <DiagnosisPanel state={diagnoses[`${j.origin}:${j.localId}`]} />
+      {/if}
       {#if j.deregisterTxHash}<div class="dereg-tx" title={j.deregisterTxHash}>
           tx {j.deregisterTxHash}
         </div>{/if}
