@@ -20,7 +20,7 @@ git tag v0.6.0      && git push origin v0.6.0          # stable release
 | Git tag         | Channel      | `package.json` becomes | Marketplace          | GitHub Release        |
 |-----------------|--------------|------------------------|----------------------|-----------------------|
 | `v0.4.0-rc.1`   | RC           | `0.4.0`                | ❌ not published      | Draft (pre-release)   |
-| `v0.5.0-pre`    | Pre-release  | `0.5.0`                | ✅ Preview (`--pre-release`) | none           |
+| `v0.5.0-pre`    | Pre-release  | `0.5.0`                | ✅ Preview (`--pre-release`) | Published (pre-release) |
 | `v0.6.0`        | Stable       | `0.6.0`                | ✅ Stable             | Published + notes     |
 
 The Marketplace **rejects any pre-release suffix in the version field** — a
@@ -86,7 +86,7 @@ git tag v0.5.0-pre && git push origin v0.5.0-pre
 
 - Packages with `--pre-release` as version `0.5.0` (use the odd minor).
 - Publishes the exact built artifact to the Marketplace **Preview** channel.
-- No GitHub Release is created.
+- Creates a **published, pre-release** GitHub Release with auto-generated notes and the `.vsix` attached.
 
 Requires the `VSCE_PAT` secret (see below).
 

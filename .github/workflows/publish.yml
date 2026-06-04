@@ -7,7 +7,7 @@ name: Publish Extension
 #   Tag                Channel       package.json   Marketplace        GitHub Release
 #   -----------------  ------------  -------------  -----------------  -----------------
 #   v0.4.0-rc.1        rc            0.4.0          no                 draft (pre-release)
-#   v0.5.0-pre         pre-release   0.5.0          yes (--pre-release) none
+#   v0.5.0-pre         pre-release   0.5.0          yes (--pre-release) published (pre-release)
 #   v0.6.0             stable        0.6.0          yes (stable)       published
 #
 # Convention (soft-checked, warning only): stable uses an EVEN minor, pre-release
@@ -121,6 +121,22 @@ jobs:
       - name: Publish Pre-release to Marketplace
         if: steps.tag.outputs.CHANNEL == 'pre'
         run: npx @vscode/vsce publish --pre-release --packagePath acurast-studio.vsix -p ${{ secrets.VSCE_PAT }}
+
+      # Pre-release: also publish a GitHub pre-release with notes + the .vsix so
+      # early adopters have a visible changelog (the Marketplace preview channel
+      # carries no notes of its own).
+      - name: Create GitHub Release (Pre-release)
+        if: steps.tag.outputs.CHANNEL == 'pre'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          files: acurast-studio.vsix
+          draft: false
+          prerelease: true
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Stable: publish the exact built artifact + a published GitHub Release with notes.
       - name: Publish Stable to Marketplace
