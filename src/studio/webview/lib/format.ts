@@ -1,4 +1,9 @@
-import { DateTime, Duration } from 'luxon';
+import { fmtAgo } from '../../../lib/duration';
+export { fmtDuration } from '../../../lib/duration';
+
+// Date/time helpers use the native Intl APIs (no luxon/dayjs dependency).
+const DATETIME_SHORT = new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' });
+const CLOCK_24H = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 
 /** Planck (÷ 1e12) → ACU string, trailing zeros stripped. */
 export function planckToAcu(planck: string | null | undefined): string {
@@ -34,12 +39,12 @@ export function fmtFiat(amount: number, sign: string, symbol: string): string {
 /** ms epoch → locale date+time string, '—' for falsy input. */
 export function fmtTimestamp(ts: number): string {
   if (!ts) return '—';
-  return DateTime.fromMillis(ts).toLocaleString(DateTime.DATETIME_SHORT);
+  return DATETIME_SHORT.format(ts);
 }
 
 /** ms epoch → HH:MM:SS string (for live event logs). */
 export function fmtClock(ts: number): string {
-  return DateTime.fromMillis(ts).toFormat('HH:mm:ss');
+  return CLOCK_24H.format(ts);
 }
 
 /** Truncate a string to n chars on each side with an ellipsis in the middle. */
@@ -49,29 +54,9 @@ export function truncate(s: string | undefined, n = 10): string {
   return s.slice(0, n) + '…' + s.slice(-6);
 }
 
-/** ms epoch → relative time like '3 minutes ago', '2 hours ago'; '—' for falsy. */
+/** ms epoch → relative time like '3 minutes ago', '2 hours ago', '2 years ago'; '—' for falsy. */
 export function fmtRelative(ts: number): string {
   if (!ts) return '—';
-  return DateTime.fromMillis(ts).toRelative() ?? '—';
+  return fmtAgo(Date.now() - ts);
 }
 
-/**
- * Millisecond duration → compact human-readable string, largest unit first.
- * Sub-second shows as `500ms`; otherwise the two most-significant non-zero
- * units are kept: `30s`, `1m 30s`, `2h 5m`, `1d 3h`. '—' for empty/invalid.
- * The stored value stays in ms — this is display-only.
- */
-export function fmtMs(ms: string | number): string {
-  const n = Number(ms);
-  if (!Number.isFinite(n) || n <= 0) return '—';
-  if (n < 1000) return `${Math.round(n)}ms`;
-  // Round to whole seconds so 59 999 ms reads as '1m', not '60s'.
-  const dur = Duration.fromMillis(Math.round(n / 1000) * 1000)
-    .shiftTo('days', 'hours', 'minutes', 'seconds');
-  const parts: string[] = [];
-  if (dur.days) parts.push(`${dur.days}d`);
-  if (dur.hours) parts.push(`${dur.hours}h`);
-  if (dur.minutes) parts.push(`${dur.minutes}m`);
-  if (dur.seconds) parts.push(`${dur.seconds}s`);
-  return parts.slice(0, 2).join(' ') || '0s';
-}

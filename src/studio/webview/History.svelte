@@ -9,7 +9,7 @@
   import { untrack } from "svelte";
   import { send } from "./lib/vscode";
   import { ICONS } from "./lib/icons";
-  import { planckToAcu, fmtTimestamp, fmtMs, truncate } from "./lib/format";
+  import { planckToAcu, fmtTimestamp, fmtDuration, truncate } from "./lib/format";
   import DiagnosisPanel from "./DiagnosisPanel.svelte";
 
   interface Props {
@@ -371,9 +371,9 @@
                   <div class="h-card-row">
                     <span class="h-label">Slots</span><span>{r.slots}</span>
                     <span class="h-label" style="margin-left:8px">Every</span
-                    ><span>{fmtMs(r.intervalMs)}</span>
+                    ><span>{fmtDuration(r.intervalMs)}</span>
                     <span class="h-label" style="margin-left:8px">Run</span
-                    ><span>{fmtMs(r.durationMs)}</span>
+                    ><span>{fmtDuration(r.durationMs)}</span>
                   </div>
                   <div class="h-card-row">
                     <span class="h-label">Reward</span><span

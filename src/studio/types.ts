@@ -317,7 +317,7 @@ export interface HistoryStateMsg {
 export type DiagnosisStatus = 'pass' | 'fail' | 'warn' | 'info';
 
 export interface DiagnosisCheck {
-  /** Stable id e.g. 'modules' | 'whitelist' | 'consumers' | 'fee' | 'version' | 'reputation' | 'resources' | 'startWindow' | 'assignment' | 'heartbeat'. */
+  /** Stable id e.g. 'lifecycle' | 'modules' | 'whitelist' | 'consumers' | 'fee' | 'version' | 'reputation' | 'resources' | 'startWindow' | 'assignment' | 'heartbeat'. */
   id: string;
   label: string;
   status: DiagnosisStatus;
@@ -339,6 +339,10 @@ export interface JobDiagnosis {
   /** 'open' = registered but unmatched, 'assigned' = matched, 'unknown' = no status / not found. */
   jobStatus: 'open' | 'assigned' | 'unknown';
   assignedSlots?: number;
+  /** True once the schedule's end has passed (now > schedule.endTime). The chain keeps a matched job 'assigned' forever, so this is the real lifecycle signal. */
+  expired?: boolean;
+  /** schedule.endTime in ms — for display in the verdict. */
+  endTime?: number;
   /** One-line overall verdict shown as the panel heading. */
   summary: string;
   /** Job-level checks (start window, assignment strategy). */
