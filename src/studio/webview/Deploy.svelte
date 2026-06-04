@@ -8,6 +8,7 @@
     acuToFiat,
     fmtFiat,
     fmtClock,
+    fmtMs,
   } from "./lib/format";
 
   interface Props {
@@ -391,7 +392,7 @@
                     >SLA <b>{p.slaMet ?? "0"}/{p.slaTotal}</b></span
                   >{/if}
                 {#if p.startDelay != null}<span
-                    >delay <b>{p.startDelay}ms</b></span
+                    >delay <b title={`${p.startDelay}ms`}>{fmtMs(p.startDelay)}</b></span
                   >{/if}
               </div>
               {#if p.pubKeys?.length}
