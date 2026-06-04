@@ -5,6 +5,7 @@ import { StudioPanel } from '../studio/studioPanel';
 import { newProject } from './newProject';
 import { deploy } from './deploy';
 import { estimateCost } from './estimateCost';
+import { advertiseModules } from './advertiseModules';
 import { setActiveConfig, chooseConfig, clearActiveConfig } from './projectConfig';
 
 export interface CommandDeps {
@@ -20,6 +21,9 @@ export function registerCommands(deps: CommandDeps): vscode.Disposable[] {
     vscode.commands.registerCommand('acurast.newProject', () => newProject(ctx)),
     vscode.commands.registerCommand('acurast.deploy', () => deploy({ ctx, wallet, output, studioPanel })),
     vscode.commands.registerCommand('acurast.estimateCost', () => estimateCost({ ctx, wallet, output })),
+    vscode.commands.registerCommand('acurast.processor.advertiseModules', (args) =>
+      advertiseModules({ wallet, output, studioPanel }, args)
+    ),
     vscode.commands.registerCommand('acurast.openDashboard', () => {
       vscode.env.openExternal(vscode.Uri.parse('https://console.acurast.com'));
     }),

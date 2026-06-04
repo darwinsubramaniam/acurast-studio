@@ -202,6 +202,14 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       case 'processors.query':
         await this.fetchProcessors(msg.address, msg.network);
         break;
+      case 'processors.advertise':
+        await vscode.commands.executeCommand('acurast.processor.advertiseModules', {
+          walletId: msg.walletId,
+          processor: msg.processor,
+          modules: msg.modules,
+          network: msg.network,
+        });
+        break;
       case 'history.load':
         await this.pushHistory(msg.offset ?? 0);
         break;
@@ -778,6 +786,11 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       d.processors = { status: 'error', message: (err as Error).message, fetchedAt: Date.now() };
     }
     this.pushDeploy();
+  }
+
+  /** Public entrypoint used by commands (e.g. advertiseModules) to refresh the Processors view. */
+  async refreshProcessors(address: string, network: string) {
+    await this.fetchProcessors(address, network);
   }
 
   private async fetchProcessors(address: string, network: string) {

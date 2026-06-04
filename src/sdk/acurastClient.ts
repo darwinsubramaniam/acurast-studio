@@ -1,4 +1,5 @@
 import { AcurastService, getBalance, getHumanReadableVersion, fetchDeviceVersions } from '@acurast/sdk/chain';
+import type { KeyringPair } from '@polkadot/keyring/types';
 import { RPC_ENDPOINTS, type AcurastNetwork } from './constants';
 import type { ManagedProcessor, ManagedProcessorsResult } from '../studio/types';
 
@@ -129,6 +130,93 @@ export class AcurastClient {
     /* eslint-enable @typescript-eslint/no-explicit-any */
 
     return { managerIds, processors };
+  }
+
+  /**
+   * Prepares (but does not submit) an `acurastProcessorManager.advertiseFor`
+   * extrinsic that re-publishes a managed processor's marketplace advertisement
+   * with a new `availableModules` set. Every other field (pricing, memory,
+   * storage, allowed consumers) is read back from chain and preserved verbatim,
+   * so only the module list changes.
+   *
+   * Returns the exact, human-readable extrinsic args for a confirm-before-sign
+   * preview, plus a `submit(signer)` closure that signs and sends the SAME tx
+   * and resolves with the tx hash once in a block (rejecting with the decoded
+   * module error on failure).
+   *
+   * Requires the processor to already have an advertisement — advertiseFor
+   * upserts the whole struct, and we can only reconstruct it from an existing
+   * pricing entry. Processors that have never advertised must start from the app.
+   */
+  async prepareAdvertiseModules(
+    network: AcurastNetwork,
+    processor: string,
+    modules: string[],
+  ): Promise<{
+    preview: { section: string; method: string; args: unknown };
+    submit: (signer: KeyringPair) => Promise<string>;
+  }> {
+    const svc = await this.service(network);
+    const api = svc.api;
+    if (!api) throw new Error('SDK service has no api after connect');
+
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const mp = (api.query as any).acurastMarketplace;
+    const restrOpt: any = await mp.storedAdvertisementRestriction(processor);
+    const priceOpt: any = await mp.storedAdvertisementPricing(processor);
+
+    const hasRestr = restrOpt && (restrOpt.isSome ?? restrOpt.toJSON() != null);
+    const hasPrice = priceOpt && (priceOpt.isSome ?? priceOpt.toJSON() != null);
+    if (!hasRestr || !hasPrice) {
+      throw new Error(
+        'This processor has no marketplace advertisement to update. Start advertising from the Acurast app first.',
+      );
+    }
+
+    const restr = typeof restrOpt.unwrap === 'function' ? restrOpt.unwrap() : restrOpt;
+    const price = typeof priceOpt.unwrap === 'function' ? priceOpt.unwrap() : priceOpt;
+
+    // Pass the existing codec values straight through so pricing/consumers are
+    // re-encoded exactly as stored; only availableModules is swapped.
+    const advertisement = {
+      pricing: price,
+      maxMemory: restr.maxMemory,
+      networkRequestQuota: restr.networkRequestQuota,
+      storageCapacity: restr.storageCapacity,
+      allowedConsumers: restr.allowedConsumers,
+      availableModules: modules,
+    };
+
+    const tx = (api.tx as any).acurastProcessorManager.advertiseFor(processor, advertisement);
+    // toHuman() of the call is exactly what gets signed — the faithful preview.
+    const human = tx.method.toHuman() as { section: string; method: string; args: unknown };
+
+    const submit = (signer: KeyringPair): Promise<string> =>
+      new Promise<string>((resolve, reject) => {
+        let unsub: (() => void) | undefined;
+        tx.signAndSend(signer, (result: any) => {
+          const { status, dispatchError, txHash } = result;
+          if (dispatchError) {
+            let msg: string;
+            if (dispatchError.isModule) {
+              const decoded = api.registry.findMetaError(dispatchError.asModule);
+              msg = `${decoded.section}.${decoded.name}: ${decoded.docs.join(' ')}`.trim();
+            } else {
+              msg = dispatchError.toString();
+            }
+            if (unsub) unsub();
+            reject(new Error(msg));
+            return;
+          }
+          if (status.isInBlock || status.isFinalized) {
+            if (unsub) unsub();
+            resolve(txHash.toString());
+          }
+        }).then((u: () => void) => { unsub = u; }).catch(reject);
+      });
+
+    return { preview: { section: human.section, method: human.method, args: human.args }, submit };
+    /* eslint-enable @typescript-eslint/no-explicit-any */
   }
 
   async dispose() {

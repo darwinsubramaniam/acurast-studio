@@ -40,6 +40,16 @@ export interface FiatSaveMsg {
   coingeckoPlan?: CoinGeckoPlan;
 }
 export interface ProcessorsQueryMsg    { type: 'processors.query'; address: string; network: string; }
+export interface ProcessorsAdvertiseMsg {
+  type: 'processors.advertise';
+  /** Vault id of the manager wallet that signs the advertiseFor extrinsic. */
+  walletId: string;
+  /** Processor address whose advertisement is being updated. */
+  processor: string;
+  /** Full replacement set of available modules to advertise. */
+  modules: string[];
+  network: string;
+}
 export interface HistoryLoadMsg        { type: 'history.load'; offset?: number; }
 export interface HistoryFetchOnlineMsg { type: 'history.fetchOnline'; address: string; network: string; }
 export interface HistoryRemovePathMsg  { type: 'history.removePathInfo'; id: string; }
@@ -53,7 +63,7 @@ export type InMsg =
   | DeployDeregisterMsg | PricingFetchMsg
   | FiatFetchListMsg | FiatSaveMsg
   | DevtoolsRefreshKeyMsg | DevtoolsOpenUrlMsg
-  | ProcessorsQueryMsg
+  | ProcessorsQueryMsg | ProcessorsAdvertiseMsg
   | HistoryLoadMsg | HistoryFetchOnlineMsg | HistoryRemovePathMsg | HistoryRemoveMsg | HistoryOpenFolderMsg;
 
 export interface SerializedFees {
