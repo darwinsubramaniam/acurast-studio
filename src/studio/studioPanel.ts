@@ -13,7 +13,7 @@ import { SYMBOL, MATCHER_ENDPOINTS, type AcurastNetwork } from '../sdk/constants
 import { Exchanger } from '../sdk/exchanger/exchanger';
 import { CoinGecko, type CoinGeckoPlan } from '../sdk/exchanger/coingecko';
 import { DeploymentStore } from '../deployments/deploymentStore';
-import type { Route, InMsg, WalletActionMsg, DeployState, DeployStage, DeployStageId, StageStatus, DeployJobId, ProcessorPubKey, ProcessorInfo, ChainEvent, PricingFiatInfo, FiatListItem, StoredDeploymentWithMeta, HistoryStateMsg, OnlineJobRegistration, ProcessorsStateMsg, DiagnosisStateMsg } from './types';
+import type { Route, InMsg, WalletActionMsg, DeployState, DeployStage, DeployStageId, StageStatus, DeployJobId, ProcessorPubKey, ProcessorInfo, ChainEvent, PricingFiatInfo, FiatListItem, StoredDeploymentWithMeta, HistoryStateMsg, OnlineJobRegistration, LocalJobStatus, ProcessorsStateMsg, DiagnosisStateMsg } from './types';
 
 const BALANCE_POLL_MS = 30_000;
 const FIAT_PRICE_TTL_MS = 60_000;
@@ -36,6 +36,10 @@ export class StudioPanel implements vscode.WebviewViewProvider {
   public static readonly viewId = 'acurastStudio';
   private _view: vscode.WebviewView | undefined;
   private _route: Route = 'home';
+  // Monotonic token for in-flight local-status enrichment. Bumped on every
+  // pushHistory; a stale token (or leaving the history route) makes a still-
+  // running chain query drop its result instead of posting it.
+  private _historyGen = 0;
   private _balanceTimer: NodeJS.Timeout | undefined;
   private _deploy: DeployState | null = null;
   private _chainEventUnsub: UnsubEvent | undefined;
@@ -645,6 +649,111 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       hasMore: offset + HISTORY_PAGE_SIZE < all.length,
       total: all.length,
     } satisfies HistoryStateMsg);
+    // Resolve each record's on-chain lifecycle status in the background so the
+    // local list renders instantly; the webview shows a spinner until this lands.
+    void this.enrichLocalStatuses(records, ++this._historyGen);
+  }
+
+  /** True while the given enrichment token is still the latest and the user is
+   * still viewing history. Clicking Home (route change) effectively cancels the
+   * pending result — we can't abort the RPC, but we won't act on it. */
+  private historyEnrichmentCurrent(gen: number): boolean {
+    return gen === this._historyGen && this._route === 'history';
+  }
+
+  /** Query the chain for the lifecycle status of each local record's job and
+   * post them back keyed by record id. Best-effort: a network/decoding failure
+   * resolves the affected records to `none` rather than spinning forever. */
+  private async enrichLocalStatuses(records: StoredDeploymentWithMeta[], gen: number): Promise<void> {
+    const withJobs = records.filter((r) => r.jobIds[0]);
+    if (!withJobs.length) return;
+
+    // Group by network so we connect to each chain at most once.
+    const byNetwork = new Map<string, StoredDeploymentWithMeta[]>();
+    for (const r of withJobs) {
+      (byNetwork.get(r.network) ?? byNetwork.set(r.network, []).get(r.network)!).push(r);
+    }
+
+    const statuses: Record<string, LocalJobStatus> = {};
+    for (const [network, recs] of byNetwork) {
+      const regByKey = new Map<string, OnlineJobRegistration>();
+      const origins = [...new Set(recs.flatMap((r) => r.jobIds.map((j) => j.origin)))];
+      for (const origin of origins) {
+        // Abandon if a newer load started or the user left history mid-query.
+        if (!this.historyEnrichmentCurrent(gen)) return;
+        try {
+          const m = await this.registrationsByLocalId(network, origin);
+          for (const [localId, reg] of m) regByKey.set(`${origin}:${localId}`, reg);
+        } catch { /* origin/network unreachable — its records resolve to `none` below */ }
+      }
+      for (const r of recs) {
+        const j = r.jobIds[0];
+        const reg = regByKey.get(`${j.origin}:${j.localId}`);
+        statuses[r.id] = reg ? this.jobLifecycle(reg) : 'none';
+      }
+    }
+    // Don't post a stale result onto a list the user already navigated away from.
+    if (!this.historyEnrichmentCurrent(gen)) return;
+    this.post({ type: 'history.state', status: 'ok', statuses } satisfies HistoryStateMsg);
+  }
+
+  private jobLifecycle(reg: OnlineJobRegistration): LocalJobStatus {
+    const now = Date.now();
+    if (reg.startTime > now) return 'scheduled';
+    if (reg.endTime < now) return 'expired';
+    return 'active';
+  }
+
+  /** Partial-key query of a single address's on-chain job registrations,
+   * decoded and keyed by localId. Shared by online history + local enrichment. */
+  private async registrationsByLocalId(network: string, address: string): Promise<Map<number, OnlineJobRegistration>> {
+    const svc = await acurastClient.service(network as AcurastNetwork);
+    const api = await svc.connect();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const multiOrigin = (api as any).createType('AcurastCommonMultiOrigin', { acurast: address });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const jobEntries: [any, any][] = await (api.query['acurast']['storedJobRegistration'] as any).entries(multiOrigin);
+    const map = new Map<number, OnlineJobRegistration>();
+    for (const [key, value] of jobEntries) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const localId: number = (api as any).createType('u128', key.args.at(1)).toNumber();
+      const reg = this.decodeRegistration(api, value);
+      if (reg) map.set(localId, reg);
+    }
+    return map;
+  }
+
+  /** Decode a `storedJobRegistration` value into our flat shape, or undefined
+   * if the value is None / codec-mismatched. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private decodeRegistration(api: any, value: any): OnlineJobRegistration | undefined {
+    try {
+      const job = api.createType('Option<AcurastCommonJobRegistration>', value).unwrap();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const j = job.toJSON() as any;
+      const sched = j.schedule ?? {};
+      const req = j.extra?.requirements ?? {};
+      const strat = req.assignmentStrategy ?? {};
+
+      let scriptUrl: string | undefined;
+      try {
+        const decoded = Buffer.from(String(j.script ?? '').replace(/^0x/, ''), 'hex').toString('utf8');
+        if (/^(https?|ipfs):\/\//i.test(decoded)) scriptUrl = decoded.trim();
+      } catch { /* not a URL — skip */ }
+
+      return {
+        startTime: Number(sched.startTime ?? 0),
+        endTime: Number(sched.endTime ?? 0),
+        intervalMs: String(sched.interval ?? 0),
+        durationMs: Number(sched.duration ?? 0),
+        slots: Number(req.slots ?? 1),
+        rewardPlanck: String(req.reward ?? 0),
+        strategy: strat.competing !== undefined ? 'Competing' : 'Single',
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        modules: (j.requiredModules ?? []).map((m: any) => String(m)),
+        scriptUrl,
+      };
+    } catch { return undefined; }
   }
 
   private localHistoryWithMeta(): StoredDeploymentWithMeta[] {
@@ -676,36 +785,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
         .map(([key, value]) => {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const localId: number = (api as any).createType('u128', key.args.at(1)).toNumber();
-
-          let registration: OnlineJobRegistration | undefined;
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const job = (api as any).createType('Option<AcurastCommonJobRegistration>', value).unwrap();
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const j = job.toJSON() as any;
-            const sched = j.schedule ?? {};
-            const req = j.extra?.requirements ?? {};
-            const strat = req.assignmentStrategy ?? {};
-
-            let scriptUrl: string | undefined;
-            try {
-              const decoded = Buffer.from(String(j.script ?? '').replace(/^0x/, ''), 'hex').toString('utf8');
-              if (/^(https?|ipfs):\/\//i.test(decoded)) scriptUrl = decoded.trim();
-            } catch { /* not a URL — skip */ }
-
-            registration = {
-              startTime: Number(sched.startTime ?? 0),
-              endTime: Number(sched.endTime ?? 0),
-              intervalMs: String(sched.interval ?? 0),
-              durationMs: Number(sched.duration ?? 0),
-              slots: Number(req.slots ?? 1),
-              rewardPlanck: String(req.reward ?? 0),
-              strategy: strat.competing !== undefined ? 'Competing' : 'Single',
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              modules: (j.requiredModules ?? []).map((m: any) => String(m)),
-              scriptUrl,
-            };
-          } catch { /* value was None or codec mismatch — registration stays undefined */ }
+          const registration = this.decodeRegistration(api, value);
 
           return {
             id: `online:${address}:${localId}`,

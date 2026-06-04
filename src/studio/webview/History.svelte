@@ -3,8 +3,10 @@
     HistoryStateMsg,
     StoredDeploymentWithMeta,
     OnlineJobRegistration,
+    LocalJobStatus,
     DiagnosisStateMsg,
   } from "../types";
+  import { untrack } from "svelte";
   import { send } from "./lib/vscode";
   import { ICONS } from "./lib/icons";
   import { planckToAcu, fmtTimestamp, fmtMs, truncate } from "./lib/format";
@@ -39,6 +41,9 @@
   let nextOffset = $state(0);
   let initialLoading = $state(true);
   let loadingMore = $state(false);
+  // Per-record on-chain status: 'loading' until the host's background chain
+  // query resolves it. 'none' = no on-chain registration → no badge shown.
+  let localStatus = $state<Record<string, LocalJobStatus | "loading">>({});
 
   // ── Online section ───────────────────────────────────────────────────────────
   const ONLINE_PAGE = 15;
@@ -59,10 +64,16 @@
     ),
   );
 
+  // React only to a new historyState message; all accumulator reads/writes are
+  // untracked so mutating them here can never re-trigger this effect (which
+  // would otherwise loop forever — effect_update_depth_exceeded).
   $effect(() => {
     const state = historyState;
     if (!state) return;
+    untrack(() => applyHistoryState(state));
+  });
 
+  function applyHistoryState(state: HistoryStateMsg) {
     if (state.records !== undefined) {
       const offset = state.offset ?? 0;
       accumulated =
@@ -72,6 +83,17 @@
       nextOffset = offset + state.records.length;
       initialLoading = false;
       loadingMore = false;
+      // Mark these records' statuses as loading until enrichment lands.
+      const pending: Record<string, LocalJobStatus | "loading"> =
+        offset === 0 ? {} : { ...localStatus };
+      for (const r of state.records) {
+        if (r.jobIds.length) pending[r.id] = "loading";
+      }
+      localStatus = pending;
+    }
+
+    if (state.statuses !== undefined) {
+      localStatus = { ...localStatus, ...state.statuses };
     }
 
     if (state.onlineRecords !== undefined) {
@@ -86,7 +108,7 @@
       onlineError = state.error ?? "Unknown error";
       fetchingOnline = false;
     }
-  });
+  }
 
   function loadMore() {
     loadingMore = true;
@@ -140,7 +162,19 @@
           <div class="h-card">
             <div class="h-card-header">
               <span class="h-project">{rec.project}</span>
-              <span class="badge">{rec.network}</span>
+              <span class="badge net-{rec.network.toLowerCase()}"
+                >{rec.network}</span
+              >
+              {#if rec.jobIds.length}
+                {@const st = localStatus[rec.id]}
+                {#if st === "loading"}
+                  <span class="badge status-loading" title="Checking chain…">
+                    <span class="spinner"></span>
+                  </span>
+                {:else if st && st !== "none"}
+                  <span class="badge status-{st}">{st}</span>
+                {/if}
+              {/if}
               <button
                 class="icon-btn danger"
                 title="Remove"
@@ -155,16 +189,48 @@
                 ? ""
                 : "s"}
             </div>
+            {#if rec.jobIds.length}
+              <div class="h-card-row">
+                <span class="h-label">Job{rec.jobIds.length === 1 ? "" : "s"}</span>
+                <span class="copy-vals">
+                  {#each rec.jobIds as j}
+                    <button
+                      class="copy-chip mono"
+                      title="Copy job id {j.localId}"
+                      onclick={() =>
+                        send("deploy.copy", { text: String(j.localId) })}
+                    >
+                      #{j.localId}
+                      {@html ICONS.copy}
+                    </button>
+                  {/each}
+                </span>
+              </div>
+            {/if}
             {#if rec.txHash}
               <div class="h-card-row">
                 <span class="h-label">Tx</span>
                 <span class="mono">{truncate(rec.txHash)}</span>
+                <button
+                  class="copy-btn"
+                  title="Copy transaction hash"
+                  onclick={() => send("deploy.copy", { text: rec.txHash! })}
+                >
+                  {@html ICONS.copy}
+                </button>
               </div>
             {/if}
             {#if rec.ipfsHash}
               <div class="h-card-row">
                 <span class="h-label">IPFS</span>
                 <span class="mono">{truncate(rec.ipfsHash)}</span>
+                <button
+                  class="copy-btn"
+                  title="Copy IPFS hash"
+                  onclick={() => send("deploy.copy", { text: rec.ipfsHash! })}
+                >
+                  {@html ICONS.copy}
+                </button>
               </div>
             {/if}
             {#if rec.projectPath}
@@ -287,7 +353,9 @@
               <div class="h-card online">
                 <div class="h-card-header">
                   <span class="h-project">Job #{rec.jobIds[0]?.localId}</span>
-                  <span class="badge">{rec.network}</span>
+                  <span class="badge net-{rec.network.toLowerCase()}"
+                    >{rec.network}</span
+                  >
                   {#if rec.registration?.strategy}
                     <span class="badge strategy"
                       >{rec.registration.strategy}</span
@@ -423,6 +491,11 @@
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--vscode-descriptionForeground);
+    /* reset global.css .section-title border/spacing so the count badge
+       stays inline-centered inside the flex header */
+    border-bottom: none;
+    padding-bottom: 0;
+    margin-bottom: 0;
   }
   .section-count {
     font-size: 10px;
@@ -555,6 +628,56 @@
     white-space: nowrap;
   }
 
+  .copy-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px;
+    display: inline-flex;
+    align-items: center;
+    color: var(--vscode-descriptionForeground);
+    opacity: 0.55;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .copy-btn:hover {
+    opacity: 1;
+    background: var(--vscode-toolbar-hoverBackground);
+    color: var(--vscode-foreground);
+  }
+  .copy-btn :global(svg) {
+    width: 12px;
+    height: 12px;
+  }
+
+  .copy-vals {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-width: 0;
+  }
+  .copy-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    padding: 1px 6px;
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .copy-chip:hover {
+    background: var(--vscode-toolbar-hoverBackground);
+    color: var(--vscode-foreground);
+  }
+  .copy-chip :global(svg) {
+    width: 11px;
+    height: 11px;
+    opacity: 0.7;
+  }
+
   .source {
     flex-wrap: wrap;
   }
@@ -626,9 +749,18 @@
     background: var(--vscode-charts-blue, #0078d4);
     color: #fff;
   }
+  /* Network identity: Acurast green for mainnet, yellow for canary */
+  .badge.net-mainnet {
+    background: #65ff8f;
+    color: #062b13;
+  }
+  .badge.net-canary {
+    background: #f5c518;
+    color: #2b2400;
+  }
   .badge.status-active {
-    background: var(--vscode-charts-green, #388a34);
-    color: #fff;
+    background: #2e7d46;
+    color: #eafaef;
   }
   .badge.status-scheduled {
     background: var(--vscode-charts-blue, #0078d4);
@@ -641,6 +773,26 @@
   .badge.status-unknown {
     background: var(--vscode-disabledForeground, #6e7681);
     color: #fff;
+  }
+  .badge.status-loading {
+    background: transparent;
+    padding: 1px 3px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .spinner {
+    width: 9px;
+    height: 9px;
+    border: 1.5px solid var(--vscode-descriptionForeground);
+    border-top-color: transparent;
+    border-radius: 50%;
+    display: inline-block;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
   .modules {
     font-size: 11px;
