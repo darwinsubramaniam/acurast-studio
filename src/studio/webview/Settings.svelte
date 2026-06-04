@@ -2,7 +2,7 @@
   import type { Route, PricingStateMsg, SerializedAdvice, FiatListStateMsg, FiatSelectionStateMsg, CoinGeckoPlan, WalletInfo, ProcessorsStateMsg, ManagedProcessor } from '../types';
   import { send } from './lib/vscode';
   import { Accordion } from 'bits-ui';
-  import { planckToAcu, planckToFiat, acuToFiat, fmtFiat, fmtRelative, truncate } from './lib/format';
+  import { planckToAcu, planckToFiat, acuToFiat, fmtFiat, fmtRelative, truncate, fmtMs } from './lib/format';
 
   // Section ids match the Accordion.Item `value=` below. Open-by-default = listed here.
   let openSections = $state<string[]>(['identity', 'runtime', 'execution', 'scaling']);
@@ -99,6 +99,12 @@
 
   function patchField(key: string, value: unknown) {
     draft[key] = value;
+  }
+
+  // Display-only human-readable echo of a millisecond field (stored value stays ms).
+  function msHuman(v: unknown): string {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? fmtMs(n) : '';
   }
 
   function getNested(p: Record<string, unknown>, ...keys: string[]): unknown {
@@ -369,6 +375,11 @@
     {@const modules = (rd('requiredModules', p.requiredModules) ?? []) as string[]}
     {@const imProcessor = rd('assignmentStrategy.instantMatch.processor', getNested(p, 'assignmentStrategy', 'instantMatch', 'processor')) as string | null | undefined}
 
+    {#snippet durEcho(v: unknown)}
+      {@const h = msHuman(v)}
+      {#if h}<div class="hint dur-echo">≈ {h}</div>{/if}
+    {/snippet}
+
     <div class="active-config" title={ctx.configPath ?? ''}>
       <span class="active-config-label">FILE</span>
       <code class="active-config-path">{ctx.configRel || 'acurast.json'}</code>
@@ -600,6 +611,7 @@
             <input id="f_imDelay" type="number"
               value={rd('assignmentStrategy.instantMatch.maxAllowedStartDelayInMs', getNested(p, 'assignmentStrategy', 'instantMatch', 'maxAllowedStartDelayInMs')) ?? 10000}
               oninput={(e) => { const n = Number((e.target as HTMLInputElement).value); patchField('assignmentStrategy.instantMatch.maxAllowedStartDelayInMs', isNaN(n) ? null : n); }} />
+            {@render durEcho(rd('assignmentStrategy.instantMatch.maxAllowedStartDelayInMs', getNested(p, 'assignmentStrategy', 'instantMatch', 'maxAllowedStartDelayInMs')) ?? 10000)}
           </div>
         {/if}
       {/if}
@@ -623,6 +635,7 @@
           {:else}
             <div class="hint">Time between each execution start</div>
           {/if}
+          {@render durEcho(rd('execution.intervalInMs', getExec(p, 'intervalInMs')))}
         </div>
         <div class="field">
           <label for="f_numExec">Number of Executions</label>
@@ -643,12 +656,14 @@
         {#if execType === 'interval'}
           <div class="hint">Recommend at least 10 000 ms less than interval</div>
         {/if}
+        {@render durEcho(rd('execution.maxExecutionTimeInMs', getExec(p, 'maxExecutionTimeInMs')) ?? 10000)}
       </div>
       <div class="field">
         <label for="f_startDelay">Max start delay (ms)</label>
         <input id="f_startDelay" type="number"
           value={rd('maxAllowedStartDelayInMs', p.maxAllowedStartDelayInMs) ?? 10000}
           oninput={(e) => { const n = Number((e.target as HTMLInputElement).value); patchField('maxAllowedStartDelayInMs', isNaN(n) ? null : n); }} />
+        {@render durEcho(rd('maxAllowedStartDelayInMs', p.maxAllowedStartDelayInMs) ?? 10000)}
       </div>
       </Accordion.Content>
     </Accordion.Item>
@@ -985,6 +1000,11 @@
 {/if}
 
 <style>
+  /* Human-readable echo of a millisecond field — display only, value stays ms. */
+  .dur-echo {
+    color: var(--vscode-textLink-foreground);
+    font-variant-numeric: tabular-nums;
+  }
   .wl-chips {
     display: flex;
     flex-wrap: wrap;

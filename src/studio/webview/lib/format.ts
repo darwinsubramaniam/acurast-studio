@@ -1,4 +1,4 @@
-import { DateTime } from 'luxon';
+import { DateTime, Duration } from 'luxon';
 
 /** Planck (÷ 1e12) → ACU string, trailing zeros stripped. */
 export function planckToAcu(planck: string | null | undefined): string {
@@ -55,11 +55,23 @@ export function fmtRelative(ts: number): string {
   return DateTime.fromMillis(ts).toRelative() ?? '—';
 }
 
-/** Millisecond duration → human-readable '30s', '5m', '2h'. */
+/**
+ * Millisecond duration → compact human-readable string, largest unit first.
+ * Sub-second shows as `500ms`; otherwise the two most-significant non-zero
+ * units are kept: `30s`, `1m 30s`, `2h 5m`, `1d 3h`. '—' for empty/invalid.
+ * The stored value stays in ms — this is display-only.
+ */
 export function fmtMs(ms: string | number): string {
   const n = Number(ms);
-  if (!n) return '—';
-  if (n < 60_000) return `${Math.round(n / 1000)}s`;
-  if (n < 3_600_000) return `${Math.round(n / 60_000)}m`;
-  return `${Math.round(n / 3_600_000)}h`;
+  if (!Number.isFinite(n) || n <= 0) return '—';
+  if (n < 1000) return `${Math.round(n)}ms`;
+  // Round to whole seconds so 59 999 ms reads as '1m', not '60s'.
+  const dur = Duration.fromMillis(Math.round(n / 1000) * 1000)
+    .shiftTo('days', 'hours', 'minutes', 'seconds');
+  const parts: string[] = [];
+  if (dur.days) parts.push(`${dur.days}d`);
+  if (dur.hours) parts.push(`${dur.hours}h`);
+  if (dur.minutes) parts.push(`${dur.minutes}m`);
+  if (dur.seconds) parts.push(`${dur.seconds}s`);
+  return parts.slice(0, 2).join(' ') || '0s';
 }
