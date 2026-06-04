@@ -23,6 +23,12 @@
       : "Create or import to begin",
   );
 
+  let processorSub = $derived(
+    wallets.list.length
+      ? "Devices paired to your wallets"
+      : "Add a wallet to check",
+  );
+
   let isProjectSettingsDisabled = $derived.by(() => {
     if (!ctx.isAcurastProject) return true;
     if (!ctx.configExists && !ctx.anyConfigExists) return true;
@@ -103,6 +109,15 @@
     <div class="body">
       <div class="title">Deployments</div>
       <div class="sub">{deploySub}</div>
+    </div>
+    <span class="chev">{@html ICONS.chev}</span>
+  </button>
+
+  <button class="nav-card" onclick={() => navigate("processors")}>
+    <span class="icon">{@html ICONS.processor}</span>
+    <div class="body">
+      <div class="title">Processors</div>
+      <div class="sub">{processorSub}</div>
     </div>
     <span class="chev">{@html ICONS.chev}</span>
   </button>

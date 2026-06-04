@@ -13,7 +13,7 @@ import { SYMBOL, MATCHER_ENDPOINTS, type AcurastNetwork } from '../sdk/constants
 import { Exchanger } from '../sdk/exchanger/exchanger';
 import { CoinGecko, type CoinGeckoPlan } from '../sdk/exchanger/coingecko';
 import { DeploymentStore } from '../deployments/deploymentStore';
-import type { Route, InMsg, WalletActionMsg, DeployState, DeployStage, DeployStageId, StageStatus, DeployJobId, ProcessorPubKey, ProcessorInfo, ChainEvent, PricingFiatInfo, FiatListItem, StoredDeploymentWithMeta, HistoryStateMsg, OnlineJobRegistration } from './types';
+import type { Route, InMsg, WalletActionMsg, DeployState, DeployStage, DeployStageId, StageStatus, DeployJobId, ProcessorPubKey, ProcessorInfo, ChainEvent, PricingFiatInfo, FiatListItem, StoredDeploymentWithMeta, HistoryStateMsg, OnlineJobRegistration, ProcessorsStateMsg } from './types';
 
 const BALANCE_POLL_MS = 30_000;
 const FIAT_PRICE_TTL_MS = 60_000;
@@ -198,6 +198,9 @@ export class StudioPanel implements vscode.WebviewViewProvider {
         break;
       case 'devtools.openUrl':
         if (msg.url) await vscode.env.openExternal(vscode.Uri.parse(msg.url));
+        break;
+      case 'processors.query':
+        await this.fetchProcessors(msg.address, msg.network);
         break;
       case 'history.load':
         await this.pushHistory(msg.offset ?? 0);
@@ -775,6 +778,16 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       d.processors = { status: 'error', message: (err as Error).message, fetchedAt: Date.now() };
     }
     this.pushDeploy();
+  }
+
+  private async fetchProcessors(address: string, network: string) {
+    this.post({ type: 'processors.state', status: 'loading', address, network } satisfies ProcessorsStateMsg);
+    try {
+      const result = await acurastClient.getManagedProcessors(network as AcurastNetwork, address);
+      this.post({ type: 'processors.state', status: 'ok', address, network, result } satisfies ProcessorsStateMsg);
+    } catch (err) {
+      this.post({ type: 'processors.state', status: 'error', address, network, error: (err as Error).message } satisfies ProcessorsStateMsg);
+    }
   }
 
   private async startChainWatch() {
