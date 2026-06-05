@@ -6,7 +6,7 @@
 
 **Deploy serverless jobs to the Acurast decentralized compute network — without leaving VS Code.**
 
-Manage encrypted wallets, edit `acurast.json`, estimate cost, and deploy to Mainnet or Canary from a single panel. No `acurast` CLI install, no hand-editing `.env`.
+Manage encrypted wallets, edit `acurast.json`, estimate cost, and deploy to Mainnet or Canary from a single panel. The bundled `@acurast/sdk` handles signing, IPFS upload, and submission — no hand-editing `.env`.
 
 [![Version](https://img.shields.io/visual-studio-marketplace/v/dw3labs.acurast-studio?label=Marketplace&color=blue)](https://marketplace.visualstudio.com/items?itemName=dw3labs.acurast-studio)
 [![Installs](https://img.shields.io/visual-studio-marketplace/i/dw3labs.acurast-studio?color=blue)](https://marketplace.visualstudio.com/items?itemName=dw3labs.acurast-studio)
@@ -15,13 +15,11 @@ Manage encrypted wallets, edit `acurast.json`, estimate cost, and deploy to Main
 
 </div>
 
-<!--
-  📸 ADD A SCREENSHOT HERE. This is the single biggest driver of installs.
-  Recommended: a wide PNG/GIF of the Acurast Studio panel showing a wallet +
-  the deploy flow. Save it to media/ and reference it, e.g.:
+<div align="center">
 
-  ![Acurast Studio panel](media/screenshot-overview.png)
--->
+<img src="media/demo.gif" alt="Acurast Studio — wallets, project config, deployment, and history in one VS Code panel" width="280" />
+
+</div>
 
 ---
 
@@ -49,7 +47,7 @@ Manage encrypted wallets, edit `acurast.json`, estimate cost, and deploy to Main
 ## Getting started
 
 1. **Install** Acurast Studio from the Marketplace.
-2. **Open a workspace** that contains an `acurast.json` — or run **`Acurast: Init Project`** from the Command Palette to scaffold one.
+2. **Open a workspace** that contains an `acurast.json` — or run **`Acurast: Init Project`** to scaffold one (this step uses the [`acurast` CLI](https://github.com/Acurast/acurast-cli)).
 3. Click the **Acurast logo** in the activity bar to open the Studio panel.
 4. **Create or import a wallet**, fund it, then hit **Deploy**.
 
@@ -60,7 +58,7 @@ Manage encrypted wallets, edit `acurast.json`, estimate cost, and deploy to Main
 | Setting | Default | Description |
 |---|---|---|
 | `acurast.network` | `mainnet` | Studio target network (`mainnet` or `canary`) for balance, on-chain history, and the status bar |
-| `acurast.cliPath` | `acurast` | Path to the `acurast` CLI binary (advanced; the extension uses the bundled SDK by default) |
+| `acurast.cliPath` | `acurast` | Path to the `acurast` CLI binary, used by **Init Project** to scaffold a config. Deploy, cost estimate, and wallets use the bundled SDK and don't need it. |
 | `acurast.rpcOverrides` | `{}` | Custom RPC endpoints per network |
 | `acurast.matcherUrls` | `{}` | Custom matcher API endpoints per network |
 | `acurast.useKeychainForMnemonic` | `true` | Store the encrypted mnemonic in the OS keychain |
@@ -76,7 +74,7 @@ All commands live under the **`Acurast`** category in the Command Palette (`Cmd/
 
 | Command | Description |
 |---|---|
-| Acurast: Init Project | Scaffold an `acurast.json` in the workspace |
+| Acurast: Init Project | Scaffold an `acurast.json` in the workspace (runs the `acurast` CLI) |
 | Acurast: Deploy | Deploy the active job to the network |
 | Acurast: Estimate Cost | Preview ACU cost before deploying |
 | Acurast: Choose acurast.json… | Switch the active config in a multi-config workspace |
