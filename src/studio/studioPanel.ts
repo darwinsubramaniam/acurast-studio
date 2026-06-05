@@ -10,6 +10,8 @@ import { loadAcurastConfig } from '@acurast/sdk/deploy';
 import { toCacu } from '@acurast/sdk/matcher';
 import { loadPricing } from '../sdk/pricing';
 import { SYMBOL, MATCHER_ENDPOINTS, type AcurastNetwork } from '../sdk/constants';
+import { networkLabel } from '../lib/network';
+import { setTargetNetwork, getProjectNetwork } from '../wallet/networkSetting';
 import { Exchanger } from '../sdk/exchanger/exchanger';
 import { CoinGecko, type CoinGeckoPlan } from '../sdk/exchanger/coingecko';
 import { DeploymentStore } from '../deployments/deploymentStore';
@@ -71,12 +73,11 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('acurast.network')) {
         this.updateViewTitle();
+        // pushWallets re-pushes balance itself when on the wallets route, so the
+        // processors/history views re-query webview-side off the new
+        // `wallets.network` and the balance refreshes in one pass.
         void this.pushWallets();
         void this.pushNetworkMismatch();
-        // Refresh whatever the active view shows for the old network. The
-        // processors/history views re-query webview-side off the new
-        // `wallets.network`; balance is host-driven, so refresh it here.
-        if (this._route === 'wallets') void this.pushBalance();
       }
     });
   }
@@ -112,8 +113,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
 
   /** Network shown to the user, e.g. "Mainnet" / "Canary". */
   private get networkLabel(): string {
-    const n = this.network;
-    return n.charAt(0).toUpperCase() + n.slice(1);
+    return networkLabel(this.network);
   }
 
   /**
@@ -268,8 +268,8 @@ export class StudioPanel implements vscode.WebviewViewProvider {
         if (msg.path) await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(msg.path));
         break;
       case 'network.setTarget':
-        await this.setTargetNetwork(msg.network);
-        vscode.window.setStatusBarMessage(`Acurast network: ${msg.network}`, 2000);
+        await setTargetNetwork(msg.network);
+        vscode.window.setStatusBarMessage(`Acurast network: ${networkLabel(msg.network)}`, 2000);
         break;
     }
   }
@@ -314,25 +314,8 @@ export class StudioPanel implements vscode.WebviewViewProvider {
    * and posts both so the webview can warn when they diverge.
    */
   private async pushNetworkMismatch() {
-    let projectNetwork: string | null = null;
-    if (this.ctx.configPath) {
-      try {
-        projectNetwork = (loadAcurastConfig({ filePath: this.ctx.configPath })?.network ?? 'mainnet') as string;
-      } catch {
-        projectNetwork = null;
-      }
-    }
+    const projectNetwork = getProjectNetwork(this.ctx.configPath) ?? null;
     this.post({ type: 'network.mismatch', projectNetwork, targetNetwork: this.network });
-  }
-
-  /** Align the Studio target network (the `acurast.network` setting) to `network`. */
-  private async setTargetNetwork(network: string) {
-    const cfg = vscode.workspace.getConfiguration('acurast');
-    const target =
-      cfg.inspect<string>('network')?.workspaceValue !== undefined
-        ? vscode.ConfigurationTarget.Workspace
-        : vscode.ConfigurationTarget.Global;
-    await cfg.update('network', network, target);
   }
 
   private async pushWallets() {

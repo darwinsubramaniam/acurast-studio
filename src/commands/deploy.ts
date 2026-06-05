@@ -9,6 +9,7 @@ import { AcurastContext } from '../context';
 import { WalletService } from '../wallet/walletService';
 import { StudioPanel } from '../studio/studioPanel';
 import { IPFS_DEFAULTS, RPC_ENDPOINTS, SYMBOL, type AcurastNetwork } from '../sdk/constants';
+import { getTargetNetwork } from '../wallet/networkSetting';
 
 interface DeployOptions {
   ctx: AcurastContext;
@@ -57,7 +58,7 @@ export async function deploy({ ctx, wallet, output, studioPanel }: DeployOptions
   // The deploy targets acurast.json's network — call out when that differs from
   // the network Acurast Studio (balance/processors/status bar) is pointed at, so
   // a stale status-bar reading doesn't mislead about where this job lands.
-  const studioNetwork = vscode.workspace.getConfiguration('acurast').get<string>('network', 'mainnet');
+  const studioNetwork = getTargetNetwork();
   const mismatchNote =
     studioNetwork !== network
       ? `\n\n⚠️ Acurast Studio is targeting ${studioNetwork}, but this deploys to ${network} (from acurast.json).`

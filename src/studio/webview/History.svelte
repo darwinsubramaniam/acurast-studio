@@ -135,7 +135,15 @@
   $effect(() => {
     const net = activeNetwork;
     if (onlineOpen && onlineFetched && fetchedNetwork !== null && net !== fetchedNetwork) {
-      fetchOnline();
+      if (activeWalletAddress) {
+        fetchOnline();
+      } else {
+        // No wallet to query under the new network — fetchOnline would bail
+        // before clearing, so drop the stale results here.
+        onlineRecords = [];
+        onlineFetched = false;
+        fetchedNetwork = net;
+      }
     }
   });
 

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Route } from "../types";
   import { send } from "./lib/vscode";
+  import { networkLabel as cap, isNetworkMismatch } from "../../lib/network";
 
   interface Props {
     projectNetwork: string | null;
@@ -12,11 +13,7 @@
   }
   let { projectNetwork, targetNetwork, context, navigate }: Props = $props();
 
-  const cap = (n: string) => n.charAt(0).toUpperCase() + n.slice(1);
-
-  let mismatch = $derived(
-    !!projectNetwork && projectNetwork !== targetNetwork,
-  );
+  let mismatch = $derived(isNetworkMismatch(projectNetwork, targetNetwork));
 </script>
 
 {#if mismatch && projectNetwork}

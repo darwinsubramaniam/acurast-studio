@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
-import { loadAcurastConfig } from '@acurast/sdk/deploy';
 import { WalletService } from './walletService';
 import { AcurastContext } from '../context';
+import { networkLabel as label, isNetworkMismatch } from '../lib/network';
+import { setTargetNetwork, getProjectNetwork } from './networkSetting';
 
 const COMMAND_ID = 'acurast.studio.showWallets';
 /** Clicking the status bar opens this quick-pick menu. */
@@ -9,8 +10,6 @@ const MENU_COMMAND_ID = 'acurast.studio.statusBarMenu';
 
 const NETWORKS = ['mainnet', 'canary'] as const;
 type Network = (typeof NETWORKS)[number];
-
-const label = (n: string) => n.charAt(0).toUpperCase() + n.slice(1);
 
 export class AcurastStatusBar implements vscode.Disposable {
   private readonly item: vscode.StatusBarItem;
@@ -51,12 +50,7 @@ export class AcurastStatusBar implements vscode.Disposable {
 
   /** Network the active acurast.json deploys to, or undefined when no project is active. */
   private projectNetwork(): string | undefined {
-    if (!this.ctx.configPath) return undefined;
-    try {
-      return loadAcurastConfig({ filePath: this.ctx.configPath })?.network ?? 'mainnet';
-    } catch {
-      return undefined;
-    }
+    return getProjectNetwork(this.ctx.configPath);
   }
 
   private async refresh() {
@@ -67,7 +61,7 @@ export class AcurastStatusBar implements vscode.Disposable {
     }
     const target = this.network;
     const project = this.projectNetwork();
-    const mismatch = project !== undefined && project !== target;
+    const mismatch = isNetworkMismatch(project, target);
 
     // Network first, then wallet name — the address lives in the hover tooltip.
     this.item.text = `$(acurast-logo) ${mismatch ? '$(warning) ' : ''}${label(target)} · ${active.name}`;
@@ -96,7 +90,7 @@ export class AcurastStatusBar implements vscode.Disposable {
     const active = await this.wallet.getActive();
     const current = this.network;
     const project = this.projectNetwork();
-    const mismatch = project !== undefined && project !== current;
+    const mismatch = isNetworkMismatch(project, current);
 
     type Item = vscode.QuickPickItem & { action?: 'network' | 'copy' | 'wallets'; value?: Network };
     const items: Item[] = [{ label: 'Network', kind: vscode.QuickPickItemKind.Separator }];
@@ -158,13 +152,7 @@ export class AcurastStatusBar implements vscode.Disposable {
     );
     if (confirm !== 'Switch') return;
 
-    const cfg = vscode.workspace.getConfiguration('acurast');
-    // Respect an existing workspace override; otherwise persist as a user setting.
-    const target =
-      cfg.inspect<string>('network')?.workspaceValue !== undefined
-        ? vscode.ConfigurationTarget.Workspace
-        : vscode.ConfigurationTarget.Global;
-    await cfg.update('network', value, target);
+    await setTargetNetwork(value);
     vscode.window.setStatusBarMessage(`Acurast network: ${label(value)}`, 2000);
   }
 

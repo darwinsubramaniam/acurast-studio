@@ -62,8 +62,10 @@
   let historyState = $state<HistoryStateMsg | null>(null);
   let processorsState = $state<ProcessorsStateMsg | null>(null);
   // Project (acurast.json) vs Studio target network — set from the host so the
-  // Deploy/Settings views can warn when they diverge.
-  let networkMismatch = $state<{ projectNetwork: string | null; targetNetwork: string } | null>(null);
+  // Deploy/Settings views can warn when they diverge. The banner self-suppresses
+  // when they match, so these are passed to it unconditionally.
+  let projectNetwork = $state<string | null>(null);
+  let targetNetwork = $state("");
   // Per-job diagnosis results, keyed by `${origin}:${localId}`.
   let diagnoses = $state<Record<string, DiagnosisStateMsg>>({});
   let activeWalletAddress = $derived(
@@ -125,10 +127,8 @@
           processorsState = msg as unknown as ProcessorsStateMsg;
           break;
         case "network.mismatch":
-          networkMismatch = {
-            projectNetwork: msg.projectNetwork as string | null,
-            targetNetwork: msg.targetNetwork as string,
-          };
+          projectNetwork = msg.projectNetwork as string | null;
+          targetNetwork = msg.targetNetwork as string;
           break;
         case "diagnosis.state": {
           const d = msg as unknown as DiagnosisStateMsg;
@@ -170,14 +170,12 @@
 {:else if route === "wallets"}
   <Wallets {wallets} {balance} />
 {:else if route === "settings"}
-  {#if networkMismatch}
-    <NetworkMismatchBanner
-      projectNetwork={networkMismatch.projectNetwork}
-      targetNetwork={networkMismatch.targetNetwork}
-      context="settings"
-      {navigate}
-    />
-  {/if}
+  <NetworkMismatchBanner
+    {projectNetwork}
+    {targetNetwork}
+    context="settings"
+    {navigate}
+  />
   <Settings
     {ctx}
     {config}
@@ -189,14 +187,12 @@
     {processorsState}
   />
 {:else if route === "deploy"}
-  {#if networkMismatch}
-    <NetworkMismatchBanner
-      projectNetwork={networkMismatch.projectNetwork}
-      targetNetwork={networkMismatch.targetNetwork}
-      context="deploy"
-      {navigate}
-    />
-  {/if}
+  <NetworkMismatchBanner
+    {projectNetwork}
+    {targetNetwork}
+    context="deploy"
+    {navigate}
+  />
   <Deploy {ctx} {deploy} {navigate} {pricing} {diagnoses} />
 {:else if route === "history"}
   <History
