@@ -34,9 +34,16 @@ export async function newProject(ctx: AcurastContext) {
     `Follow prompts in the terminal. When done, open ${name}/ in VS Code.`,
     'Open folder when ready'
   ).then(async (action) => {
-    if (action === 'Open folder when ready') {
-      const projectUri = vscode.Uri.joinPath(folder[0], name);
+    if (action !== 'Open folder when ready') return;
+    const projectUri = vscode.Uri.joinPath(folder[0], name);
+    try {
       await vscode.commands.executeCommand('vscode.openFolder', projectUri, { forceNewWindow: false });
+    } catch (err: unknown) {
+      // Most likely the folder doesn't exist yet because `init` is still running
+      // in the terminal — tell the user rather than swallowing the rejection.
+      vscode.window.showErrorMessage(
+        `Could not open ${name}/: ${(err as Error).message}. Open it manually once "${ctx.cliPath} init" finishes.`
+      );
     }
   });
 }

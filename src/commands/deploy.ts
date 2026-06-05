@@ -31,7 +31,7 @@ export async function deploy({ ctx, wallet, output, studioPanel }: DeployOptions
   }
 
   const projectRoot = ctx.projectRoot;
-  let config;
+  let config: ReturnType<typeof loadAcurastConfig>;
   try {
     config = loadAcurastConfig({ filePath: ctx.configPath });
   } catch (err: unknown) {
@@ -42,13 +42,17 @@ export async function deploy({ ctx, wallet, output, studioPanel }: DeployOptions
     vscode.window.showErrorMessage('No project found in acurast.json.');
     return;
   }
+  if (!config.fileUrl) {
+    vscode.window.showErrorMessage('acurast.json has no "fileUrl" — set the path to your script (or an ipfs:// URL / CID) to deploy.');
+    return;
+  }
 
   // Resolve relative paths against the project root (the directory holding acurast.json),
   // because the SDK reads fileUrl via fs.statSync against process.cwd().
   const resolvedConfig = normalizeMinProcessorVersions({
     ...config,
     fileUrl: resolveAgainst(projectRoot, config.fileUrl),
-  } as typeof config);
+  } as NonNullable<typeof config>);
 
   const bundleFolder = path.join(projectRoot, '.acurast', 'bundles');
 
@@ -104,7 +108,7 @@ export async function deploy({ ctx, wallet, output, studioPanel }: DeployOptions
       // SDK writes a transient `temp_script.js` to process.cwd() during IPFS upload
       // with no override; force cwd to a writable temp dir for the call.
       const originalCwd = process.cwd();
-      const scratchCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'acurast-deploy-'));
+      const scratchCwd = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'acurast-deploy-'));
       try {
         process.chdir(scratchCwd);
 
@@ -145,7 +149,7 @@ export async function deploy({ ctx, wallet, output, studioPanel }: DeployOptions
         return undefined;
       } finally {
         try { process.chdir(originalCwd); } catch { /* ignore */ }
-        try { fs.rmSync(scratchCwd, { recursive: true, force: true }); } catch { /* ignore */ }
+        try { await fs.promises.rm(scratchCwd, { recursive: true, force: true }); } catch { /* ignore */ }
       }
     }
   );

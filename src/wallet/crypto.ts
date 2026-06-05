@@ -15,14 +15,14 @@ export interface EncryptedBlob {
   iter: number;
 }
 
-function deriveKey(password: string, salt: Buffer): Buffer {
-  return pbkdf2Sync(password.normalize('NFKC'), salt, ITERATIONS, KEY_LEN, 'sha256');
+function deriveKey(password: string, salt: Buffer, iterations: number): Buffer {
+  return pbkdf2Sync(password.normalize('NFKC'), salt, iterations, KEY_LEN, 'sha256');
 }
 
 export function encrypt(plaintext: string, password: string): EncryptedBlob {
   const salt = randomBytes(SALT_LEN);
   const iv = randomBytes(IV_LEN);
-  const key = deriveKey(password, salt);
+  const key = deriveKey(password, salt, ITERATIONS);
   const cipher = createCipheriv(ALGO, key, iv);
   const ct = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
   const tag = cipher.getAuthTag();
@@ -42,7 +42,9 @@ export function decrypt(blob: EncryptedBlob, password: string): string {
   const iv = Buffer.from(blob.iv, 'base64');
   const ct = Buffer.from(blob.ct, 'base64');
   const tag = Buffer.from(blob.tag, 'base64');
-  const key = deriveKey(password, salt);
+  // Honor the iteration count stored in the blob, not the current constant, so
+  // wallets stay decryptable even after ITERATIONS is bumped.
+  const key = deriveKey(password, salt, blob.iter);
   const decipher = createDecipheriv(ALGO, key, iv);
   decipher.setAuthTag(tag);
   try {

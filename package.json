@@ -14,9 +14,7 @@
     "vscode": "^1.120.0"
   },
   "categories": [
-    "Other",
-    "Snippets",
-    "Debuggers"
+    "Other"
   ],
   "keywords": [
     "acurast",

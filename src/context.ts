@@ -109,17 +109,21 @@ export class AcurastContext {
     const stored = this.extensionContext.workspaceState.get<string>(STATE_KEY);
 
     if (stored) {
-      this._configPath = stored;
       try {
         await vscode.workspace.fs.stat(vscode.Uri.file(stored));
+        this._configPath = stored;
         await this.loadConfig();
         this.setIsAcurastProject(true);
+        this._onDidChangeActiveConfig.fire(this._configPath);
+        return;
       } catch {
+        // The stored config was deleted/moved — drop the stale pointer and fall
+        // through to fresh detection instead of pinning a dead path and claiming
+        // the workspace is an Acurast project.
+        await this.extensionContext.workspaceState.update(STATE_KEY, undefined);
+        this._configPath = undefined;
         this._config = undefined;
-        this.setIsAcurastProject(true);
       }
-      this._onDidChangeActiveConfig.fire(this._configPath);
-      return;
     }
 
     const folders = vscode.workspace.workspaceFolders ?? [];

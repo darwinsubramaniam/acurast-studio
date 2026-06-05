@@ -56,7 +56,6 @@
 
   {#each ordered as w (w.id)}
     {@const isActive = w.id === wallets.activeId}
-    {@const bal = balanceText(balance)}
     <div class="wallet-card {isActive ? 'active' : ''}">
       <div class="wallet-card-head">
         <div class="name">{w.name}</div>
@@ -70,6 +69,7 @@
       <div class="address" title={w.address}>{shortAddr(w.address)}</div>
 
       {#if isActive}
+        {@const bal = balanceText(balance)}
         <div class="balance-row">
           <div class="balance-value {bal.cls}">{bal.text}</div>
           <div class="balance-network">{wallets.network}</div>

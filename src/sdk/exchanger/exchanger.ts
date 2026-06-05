@@ -1,9 +1,11 @@
 import { CoinGecko } from "./coingecko";
 import { CoinMarketCap } from "./coinmarketcap";
 
+// Must match each exchanger's exchangerDetails().id and the `acurast.fiat.exchangerId`
+// setting (default 2 = CoinGecko). byId() resolves on these numeric ids.
 export enum ExchangeId {
-  CoinGecko = 1,
-  CoinMarketCap = 2,
+  CoinMarketCap = 1,
+  CoinGecko = 2,
 }
 
 export interface FiatCurrency {
