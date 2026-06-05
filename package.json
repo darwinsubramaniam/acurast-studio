@@ -2,7 +2,7 @@
   "name": "acurast-studio",
   "displayName": "Acurast Studio",
   "description": "VS Code extension for Acurast serverless development — encrypted wallets, one-click deploy, cost estimation, and deployment history.",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "publisher": "dw3labs",
   "license": "MIT",
   "repository": {
