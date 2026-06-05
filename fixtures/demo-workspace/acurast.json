@@ -1,0 +1,29 @@
+{
+  "projects": {
+    "demo": {
+      "projectName": "demo",
+      "fileUrl": "index.js",
+      "network": "mainnet",
+      "onlyAttestedDevices": true,
+      "assignmentStrategy": {
+        "type": "Single"
+      },
+      "execution": {
+        "type": "onetime",
+        "maxExecutionTimeInMs": 300000
+      },
+      "maxAllowedStartDelayInMs": 10000,
+      "usageLimit": {
+        "maxMemory": 0,
+        "maxNetworkRequests": 0,
+        "maxStorage": 0
+      },
+      "numberOfReplicas": 1,
+      "requiredModules": [],
+      "minProcessorReputation": 0,
+      "maxCostPerExecution": 100000000000,
+      "includeEnvironmentVariables": [],
+      "processorWhitelist": []
+    }
+  }
+}

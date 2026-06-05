@@ -10,6 +10,10 @@ import { acurastClient } from './sdk/acurastClient';
 import type { AcurastNetwork } from './sdk/constants';
 import { registerAcurastLanguageService } from './acurastLanguageService';
 
+// Replaced at build time by esbuild's --define. false in published/dev builds
+// (the dev-seed branch is stripped); true only in the `build:record` build.
+declare const __ACURAST_DEV_SEED__: boolean;
+
 async function ensureJsonSchema(extensionContext: vscode.ExtensionContext): Promise<void> {
   const schemaUri = vscode.Uri.joinPath(extensionContext.extensionUri, 'schemas', 'acurast.schema.json').toString();
   const config = vscode.workspace.getConfiguration('json');
@@ -39,6 +43,16 @@ export async function activate(extensionContext: vscode.ExtensionContext) {
 
   const wallet = new WalletService(extensionContext.secrets);
   const deploymentStore = new DeploymentStore(extensionContext.globalState);
+
+  // Compile-time flag, defined by esbuild. It is `false` in every published/dev
+  // build, so this whole branch — and the `./dev/demoSeed` module (mnemonic
+  // included) — is dead-code-eliminated from the shipped bundle. Only the
+  // `build:record` build (used by `npm run record:demo`) sets it true.
+  if (__ACURAST_DEV_SEED__) {
+    const { seedDemoData } = await import('./dev/demoSeed');
+    await seedDemoData(wallet, deploymentStore);
+  }
+
   const studioPanel = new StudioPanel(extensionContext.extensionUri, ctx, wallet, extensionContext.secrets, deploymentStore);
   const statusBar = new AcurastStatusBar(wallet, ctx);
   const output = vscode.window.createOutputChannel('Acurast');

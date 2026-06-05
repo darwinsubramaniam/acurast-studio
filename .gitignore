@@ -5,4 +5,4 @@ dist/
 .acurast/
 out/
 .vscode-test/
-
+media/.demo-frames/
