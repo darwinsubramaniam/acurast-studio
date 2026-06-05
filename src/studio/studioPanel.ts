@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import { execFile } from 'child_process';
+import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { WalletService } from '../wallet/walletService';
 import { AcurastContext } from '../context';
@@ -674,7 +675,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
 
   private async saveDeploymentRecord(d: DeployState): Promise<void> {
     await this.deploymentStore.save({
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       project: d.project ?? 'unknown',
       network: d.network ?? 'mainnet',
       startedAt: d.startedAt,

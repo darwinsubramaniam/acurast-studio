@@ -16,7 +16,16 @@ function toNum(v: any): number | undefined {
 export class AcurastClient {
   private getOverrides: () => RpcOverrides = () => ({});
   private services = new Map<AcurastNetwork, AcurastService>();
-  private deviceVersionsLoaded = false;
+  private deviceVersionsPromise: Promise<void> | undefined;
+
+  /**
+   * Populate the SDK's module-level device-version table exactly once.
+   * Concurrent callers share a single in-flight fetch; best-effort, so a failed
+   * fetch resolves quietly and falls back to the bundled version table.
+   */
+  private ensureDeviceVersions(): Promise<void> {
+    return (this.deviceVersionsPromise ??= fetchDeviceVersions().then(() => {}).catch(() => {}));
+  }
 
   configure(getOverrides: () => RpcOverrides): void {
     this.getOverrides = getOverrides;
@@ -54,12 +63,7 @@ export class AcurastClient {
     const api = svc.api;
     if (!api) throw new Error('SDK service has no api after connect');
 
-    if (!this.deviceVersionsLoaded) {
-      // Populates the SDK's module-level version table so build numbers map to
-      // version strings. Best-effort: falls back to the bundled table offline.
-      try { await fetchDeviceVersions(); } catch { /* use bundled versions */ }
-      this.deviceVersionsLoaded = true;
-    }
+    await this.ensureDeviceVersions();
 
     /* eslint-disable @typescript-eslint/no-explicit-any */
     const pm = (api.query as any).acurastProcessorManager;
@@ -231,10 +235,7 @@ export class AcurastClient {
     const svc = await this.service(network);
     const api = svc.api;
     if (!api) throw new Error('SDK service has no api after connect');
-    if (!this.deviceVersionsLoaded) {
-      try { await fetchDeviceVersions(); } catch { /* bundled versions */ }
-      this.deviceVersionsLoaded = true;
-    }
+    await this.ensureDeviceVersions();
 
     /* eslint-disable @typescript-eslint/no-explicit-any */
     const q = api.query as any;
@@ -291,19 +292,33 @@ export class AcurastClient {
     // ── Per-processor checks (whitelist) ── I/O here, the gating logic in the module.
     const mp = q.acurastMarketplace;
     const pm = q.acurastProcessorManager;
-    for (const p of reqsFlat.allowed) {
-      const restr = (await mp.storedAdvertisementRestriction(p))?.toJSON?.() as any;
-      const price = restr ? (await mp.storedAdvertisementPricing(p))?.toJSON?.() as any : null;
-      const ver = restr ? (await pm.processorVersion(p))?.toJSON?.() as any : null;
-      const rep = restr ? (await mp.storedReputation(p))?.toJSON?.() as any : null;
-      const hbRaw = restr ? (await pm.processorHeartbeat(p))?.toJSON?.() : null;
-      const hb = hbRaw != null ? Number(hbRaw) : null;
-      result.processors.push(buildProcessorChecks({
-        address: p, restr, price, ver, rep, hb, now,
-        reqModules: reqsFlat.reqModules, origin,
-        duration: reqsFlat.duration, storage: reqsFlat.storage, memory: reqsFlat.memory,
-        reward: reqsFlat.reward, minVer: reqsFlat.minVer, minRep: reqsFlat.minRep,
-      }));
+    const allowed = reqsFlat.allowed;
+    if (allowed.length) {
+      // Batch each per-processor read into one multi() call (mirrors
+      // getManagedProcessors) instead of 5 sequential RPCs per processor.
+      const [restrs, prices, vers, reps, hbsRaw] = await Promise.all([
+        mp.storedAdvertisementRestriction.multi(allowed),
+        mp.storedAdvertisementPricing.multi(allowed),
+        pm.processorVersion.multi(allowed),
+        mp.storedReputation.multi(allowed),
+        pm.processorHeartbeat.multi(allowed),
+      ]);
+      allowed.forEach((p: any, i: number) => {
+        const restr = restrs[i]?.toJSON?.() as any;
+        // Only surface price/version/reputation/heartbeat when an advertisement
+        // restriction exists for the processor (preserves prior semantics).
+        const price = restr ? (prices[i]?.toJSON?.() as any) : null;
+        const ver = restr ? (vers[i]?.toJSON?.() as any) : null;
+        const rep = restr ? (reps[i]?.toJSON?.() as any) : null;
+        const hbRaw = restr ? hbsRaw[i]?.toJSON?.() : null;
+        const hb = hbRaw != null ? Number(hbRaw) : null;
+        result.processors.push(buildProcessorChecks({
+          address: p, restr, price, ver, rep, hb, now,
+          reqModules: reqsFlat.reqModules, origin,
+          duration: reqsFlat.duration, storage: reqsFlat.storage, memory: reqsFlat.memory,
+          reward: reqsFlat.reward, minVer: reqsFlat.minVer, minRep: reqsFlat.minRep,
+        }));
+      });
     }
 
     // ── Overall verdict ──
