@@ -9,11 +9,14 @@ import {
 
 const LANGUAGE_ID = 'acurast-config';
 
+/** LSP range shape (line/character positions) returned by the JSON language service. */
+type LSRange = { start: { line: number; character: number }; end: { line: number; character: number } };
+
 function toLSDoc(doc: vscode.TextDocument): LSTextDocument {
   return LSTextDocument.create(doc.uri.toString(), 'json', doc.version, doc.getText());
 }
 
-function toVsRange(r: { start: { line: number; character: number }; end: { line: number; character: number } }): vscode.Range {
+function toVsRange(r: LSRange): vscode.Range {
   return new vscode.Range(r.start.line, r.start.character, r.end.line, r.end.character);
 }
 
@@ -82,7 +85,7 @@ export function registerAcurastLanguageService(
               ? item.documentation
               : new vscode.MarkdownString(item.documentation.value);
           }
-          const te = item.textEdit as { range: any; newText: string } | undefined;
+          const te = item.textEdit as { range: LSRange; newText: string } | undefined;
           if (te) {
             ci.range = toVsRange(te.range);
             ci.insertText = item.insertTextFormat === InsertTextFormat.Snippet
@@ -116,7 +119,7 @@ export function registerAcurastLanguageService(
           ? new vscode.MarkdownString(c)
           : Array.isArray(c)
             ? new vscode.MarkdownString(c.map(x => typeof x === 'string' ? x : x.value).join('\n\n'))
-            : new vscode.MarkdownString((c as any).value ?? String(c));
+            : new vscode.MarkdownString((c as { value?: string }).value ?? String(c));
         md.isTrusted = false;
         return new vscode.Hover(md, hover.range ? toVsRange(hover.range) : undefined);
       },

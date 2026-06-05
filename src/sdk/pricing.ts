@@ -40,10 +40,13 @@ export async function loadPricing({
   const config = normalizeMinProcessorVersions(rawConfig);
   const fees = getFeeAnalysis(config);
 
+  // Narrow the assignmentStrategy union on `type` so `instantMatch` is typed
+  // (it only exists on the Single variant) — no `any` cast needed.
+  const strategy = config.assignmentStrategy;
   const hasInstantMatch =
-    config.assignmentStrategy.type === AssignmentStrategyVariant.Single &&
-    Array.isArray((config.assignmentStrategy as any).instantMatch) &&
-    (config.assignmentStrategy as any).instantMatch.length > 0;
+    strategy.type === AssignmentStrategyVariant.Single &&
+    Array.isArray(strategy.instantMatch) &&
+    strategy.instantMatch.length > 0;
 
   if (hasInstantMatch) {
     return { config, fees, fallbackReason: 'instant-match' };
