@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { DiagnosisStateMsg, DiagnosisStatus } from "../types";
   import { truncate } from "./lib/format";
+  import Spinner from "./lib/Spinner.svelte";
 
   interface Props {
     state: DiagnosisStateMsg | undefined;
@@ -18,7 +19,7 @@
 {#if state}
   <div class="diag">
     {#if state.status === "loading"}
-      <div class="diag-line muted">Diagnosing on-chain…</div>
+      <div class="diag-line muted"><Spinner size={11} label="Diagnosing on-chain…" /></div>
     {:else if state.status === "error"}
       <div class="diag-line fail">Diagnosis failed: {state.error}</div>
     {:else if state.status === "ok" && state.result}

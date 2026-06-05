@@ -2,6 +2,7 @@
   import type { WalletInfo, BalanceMsg } from '../types';
   import { send } from './lib/vscode';
   import { ICONS } from './lib/icons';
+  import Spinner from './lib/Spinner.svelte';
 
   interface Props {
     wallets: { list: WalletInfo[]; activeId: string | null; network: string; symbol: string };
@@ -71,7 +72,13 @@
       {#if isActive}
         {@const bal = balanceText(balance)}
         <div class="balance-row">
-          <div class="balance-value {bal.cls}">{bal.text}</div>
+          <div class="balance-value {bal.cls}">
+            {#if balance.status === 'loading' || balance.status === 'idle'}
+              <Spinner size={12} />
+            {:else}
+              {bal.text}
+            {/if}
+          </div>
           <div class="balance-network">{wallets.network}</div>
           <button class="icon-btn" onclick={() => send('refreshBalance')} title="Refresh">
             {@html ICONS.refresh}

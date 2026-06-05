@@ -8,6 +8,7 @@
   import { send } from "./lib/vscode";
   import { ICONS } from "./lib/icons";
   import DiagnosisPanel from "./DiagnosisPanel.svelte";
+  import Spinner from "./lib/Spinner.svelte";
   import {
     planckToAcu,
     planckToFiat,
@@ -76,9 +77,9 @@
       </div>
 
       {#if !pricing || pricing.status === "idle"}
-        <div class="pricing-muted">Loading…</div>
+        <div class="pricing-muted"><Spinner size={11} label="Loading…" /></div>
       {:else if pricing.status === "loading"}
-        <div class="pricing-muted">Fetching market data…</div>
+        <div class="pricing-muted"><Spinner size={11} label="Fetching market data…" /></div>
       {:else if pricing.status === "error"}
         <div class="pricing-error-note">{pricing.error}</div>
       {:else if pricing.status === "ok" && pricing.fees}
@@ -291,7 +292,11 @@
                 localId: j.localId,
               })}
           >
-            {j.deregistering ? "Deregistering…" : "Deregister"}
+            {#if j.deregistering}
+              <Spinner size={10} label="Deregistering…" />
+            {:else}
+              Deregister
+            {/if}
           </button>
         {/if}
         {#if d.network}
@@ -348,11 +353,11 @@
           disabled={!!d.devtoolsLoading}
           onclick={() => send("devtools.refreshKey")}
         >
-          {d.devtoolsLoading
-            ? "Fetching…"
-            : d.devtoolsUrl
-              ? "⟳ Refresh key"
-              : "Get URL"}
+          {#if d.devtoolsLoading}
+            <Spinner size={10} label="Fetching…" />
+          {:else}
+            {d.devtoolsUrl ? "⟳ Refresh key" : "Get URL"}
+          {/if}
         </button>
       </div>
       {#if d.devtoolsUrl}
@@ -398,7 +403,7 @@
           Click "Refresh" to query assigned processors.
         </div>
       {:else if proc.status === "loading"}
-        <div class="proc-loading">Querying chain…</div>
+        <div class="proc-loading"><Spinner size={11} label="Querying chain…" /></div>
       {:else if proc.status === "error"}
         <div class="proc-error">{proc.message || "Query failed"}</div>
       {:else if proc.status === "ok"}

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Route, PricingStateMsg, SerializedAdvice, FiatListStateMsg, FiatSelectionStateMsg, CoinGeckoPlan, WalletInfo, ProcessorsStateMsg, ManagedProcessor } from '../types';
   import { send } from './lib/vscode';
+  import Spinner from './lib/Spinner.svelte';
   import { Accordion } from 'bits-ui';
   import { planckToAcu, planckToFiat, acuToFiat, fmtFiat, fmtRelative, truncate, fmtDuration } from './lib/format';
 
@@ -466,7 +467,11 @@
             {/if}
           </select>
           <button class="secondary" style="font-size:11px;" disabled={fiatList?.status === 'loading'} onclick={fiatRefreshList}>
-            {fiatList?.status === 'loading' && fiatList.exchangerId === fiatExchangerId ? 'Loading…' : 'Load list'}
+            {#if fiatList?.status === 'loading' && fiatList.exchangerId === fiatExchangerId}
+              <Spinner size={10} label="Loading…" />
+            {:else}
+              Load list
+            {/if}
           </button>
         </div>
         {#if fiatList?.status === 'error' && fiatList.exchangerId === fiatExchangerId}
@@ -757,7 +762,7 @@
         {/if}
 
         {#if pricing?.status === 'loading'}
-          <div class="pricing-muted">Fetching live market data…</div>
+          <div class="pricing-muted"><Spinner size={11} label="Fetching live market data…" /></div>
         {:else if pricing?.status === 'error'}
           <div class="pricing-error-note">{pricing.error}</div>
         {:else if pricing?.status === 'ok' && pricing.fees}
@@ -946,7 +951,11 @@
             <button type="button" class="secondary wl-load"
               disabled={!activeWallet || myProcStatus === 'loading'}
               onclick={loadMyProcessors}>
-              {myProcStatus === 'loading' ? 'Loading…' : myProcessors.length ? '⟳ Refresh' : 'Load'}
+              {#if myProcStatus === 'loading'}
+                <Spinner size={10} label="Loading…" />
+              {:else}
+                {myProcessors.length ? '⟳ Refresh' : 'Load'}
+              {/if}
             </button>
           </div>
 

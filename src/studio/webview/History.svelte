@@ -11,6 +11,7 @@
   import { ICONS } from "./lib/icons";
   import { planckToAcu, fmtTimestamp, fmtDuration, truncate } from "./lib/format";
   import DiagnosisPanel from "./DiagnosisPanel.svelte";
+  import Spinner from "./lib/Spinner.svelte";
 
   interface Props {
     historyState: HistoryStateMsg | null;
@@ -189,7 +190,7 @@
                 {@const st = localStatus[rec.id]}
                 {#if st === "loading"}
                   <span class="badge status-loading" title="Checking chain…">
-                    <span class="spinner"></span>
+                    <Spinner size={9} />
                   </span>
                 {:else if st && st !== "none"}
                   <span class="badge status-{st}">{st}</span>
@@ -308,9 +309,11 @@
             onclick={loadMore}
             disabled={loadingMore}
           >
-            {loadingMore
-              ? "Loading…"
-              : `Load more (${total - nextOffset} remaining)`}
+            {#if loadingMore}
+              <Spinner size={10} label="Loading…" />
+            {:else}
+              Load more ({total - nextOffset} remaining)
+            {/if}
           </button>
         </div>
       {/if}
@@ -353,7 +356,9 @@
         </div>
 
         {#if fetchingOnline}
-          <div class="section-empty"><p class="muted">Querying chain…</p></div>
+          <div class="section-empty">
+            <p class="muted"><Spinner size={11} label="Querying chain…" /></p>
+          </div>
         {:else if onlineError}
           <div class="section-empty"><p class="err-msg">{onlineError}</p></div>
         {:else if !onlineFetched}
@@ -799,20 +804,6 @@
     padding: 1px 3px;
     display: inline-flex;
     align-items: center;
-  }
-  .spinner {
-    width: 9px;
-    height: 9px;
-    border: 1.5px solid var(--vscode-descriptionForeground);
-    border-top-color: transparent;
-    border-radius: 50%;
-    display: inline-block;
-    animation: spin 0.7s linear infinite;
-  }
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
   .modules {
     font-size: 11px;

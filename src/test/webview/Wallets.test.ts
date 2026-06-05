@@ -96,6 +96,32 @@ describe('no-funds banner — hidden cases', () => {
 
 // ---------------------------------------------------------------------------
 
+describe('balance loading indicator', () => {
+  it('shows a spinner while the balance is loading', () => {
+    const { container } = render(Wallets, { props: { wallets: WALLETS_CANARY, balance: BAL_LOADING } });
+    expect(container.querySelector('.spinner')).toBeInTheDocument();
+  });
+
+  it('shows a spinner before the first balance fetch (idle)', () => {
+    const { container } = render(Wallets, { props: { wallets: WALLETS_CANARY, balance: BAL_IDLE } });
+    expect(container.querySelector('.spinner')).toBeInTheDocument();
+  });
+
+  it('shows the value and no spinner once the balance resolves', () => {
+    const { container } = render(Wallets, { props: { wallets: WALLETS_CANARY, balance: BAL_NONZERO } });
+    expect(container.querySelector('.spinner')).not.toBeInTheDocument();
+    expect(screen.getByText(/1\.5000 cACU/)).toBeInTheDocument();
+  });
+
+  it('shows the error message and no spinner when the fetch fails', () => {
+    const { container } = render(Wallets, { props: { wallets: WALLETS_CANARY, balance: BAL_ERROR } });
+    expect(container.querySelector('.spinner')).not.toBeInTheDocument();
+    expect(screen.getByText('Connection failed')).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+
 describe('empty wallet list', () => {
   it('shows create/import prompts when no wallets exist', () => {
     render(Wallets, { props: { wallets: { list: [], activeId: null, network: 'canary', symbol: 'cACU' }, balance: BAL_IDLE } });

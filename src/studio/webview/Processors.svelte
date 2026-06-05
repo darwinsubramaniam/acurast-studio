@@ -7,6 +7,7 @@
   import { send } from "./lib/vscode";
   import { ICONS } from "./lib/icons";
   import { planckToAcu, fmtRelative, fmtTimestamp, truncate } from "./lib/format";
+  import Spinner from "./lib/Spinner.svelte";
 
   interface Props {
     wallets: {
@@ -194,7 +195,9 @@
       </div>
 
       {#if status === "loading"}
-        <div class="note">Querying the chain for paired processors…</div>
+        <div class="note">
+          <Spinner size={12} label="Querying the chain for paired processors…" />
+        </div>
       {:else if status === "error"}
         <div class="note error">{live?.error ?? "Failed to load processors."}</div>
       {:else if processors.length === 0}
@@ -298,7 +301,11 @@
                           disabled={applying === p.address || !walletIdFor(selected)}
                           onclick={() => applyModules(p)}
                         >
-                          {applying === p.address ? "Advertising…" : "Apply on-chain"}
+                          {#if applying === p.address}
+                            <Spinner size={10} label="Advertising…" />
+                          {:else}
+                            Apply on-chain
+                          {/if}
                         </button>
                       </div>
                     {/if}
