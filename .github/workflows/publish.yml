@@ -30,10 +30,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
           cache: 'npm'
@@ -125,7 +125,7 @@ jobs:
       # RC: testable artifact only — draft GitHub pre-release, never the Marketplace.
       - name: Create Draft GitHub Release (RC)
         if: steps.tag.outputs.CHANNEL == 'rc'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
@@ -146,7 +146,7 @@ jobs:
       # carries no notes of its own).
       - name: Create GitHub Release (Pre-release)
         if: steps.tag.outputs.CHANNEL == 'pre'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
@@ -164,7 +164,7 @@ jobs:
 
       - name: Create GitHub Release (Stable)
         if: steps.tag.outputs.CHANNEL == 'stable'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
