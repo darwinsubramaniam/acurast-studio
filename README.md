@@ -1,68 +1,129 @@
+<div align="center">
+
+<img src="media/Acurast-symbol-light-bg.png" alt="Acurast Studio" width="96" height="96" />
+
 # Acurast Studio
 
-VS Code extension for [Acurast](https://acurast.com) serverless development — manage wallets, configure jobs, and deploy to the decentralized compute network without leaving your editor.
+**Deploy serverless jobs to the Acurast decentralized compute network — without leaving VS Code.**
+
+Manage encrypted wallets, edit `acurast.json`, estimate cost, and deploy to Mainnet or Canary from a single panel. No `acurast` CLI install, no hand-editing `.env`.
+
+[![Version](https://img.shields.io/visual-studio-marketplace/v/dw3labs.acurast-studio?label=Marketplace&color=blue)](https://marketplace.visualstudio.com/items?itemName=dw3labs.acurast-studio)
+[![Installs](https://img.shields.io/visual-studio-marketplace/i/dw3labs.acurast-studio?color=blue)](https://marketplace.visualstudio.com/items?itemName=dw3labs.acurast-studio)
+[![Rating](https://img.shields.io/visual-studio-marketplace/r/dw3labs.acurast-studio)](https://marketplace.visualstudio.com/items?itemName=dw3labs.acurast-studio)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
+
+</div>
+
+<!--
+  📸 ADD A SCREENSHOT HERE. This is the single biggest driver of installs.
+  Recommended: a wide PNG/GIF of the Acurast Studio panel showing a wallet +
+  the deploy flow. Save it to media/ and reference it, e.g.:
+
+  ![Acurast Studio panel](media/screenshot-overview.png)
+-->
+
+---
+
+## What is this?
+
+[Acurast](https://acurast.com) is a decentralized serverless compute network built on a Substrate chain. Acurast Studio wraps the [`@acurast/sdk`](https://www.npmjs.com/package/@acurast/sdk) inside VS Code so you can go from script to a live, on-chain job in a few clicks — wallet creation, IPFS upload, cost estimate, and submission all happen in the editor.
+
+**Who it's for:** developers building and shipping jobs to Acurast who want a guided UI instead of juggling the CLI, raw mnemonics, and `.env` files.
 
 ## Features
 
-- **Acurast Studio panel** — activity bar view with wallet management, project config, deployment, and history in one place
-- **Wallet vault** — create, import, rename, and delete sr25519 wallets; mnemonics encrypted with AES-256-GCM + PBKDF2 at rest inside VS Code's SecretStorage
-- **One-click deploy** — packages your script, uploads to IPFS, and submits the job to Mainnet or Canary
-- **Cost estimation** — preview ACU spend before deploying, with optional fiat conversion
-- **Deployment history** — persistent cross-workspace log of every deployment; records project path, tx hash, IPFS hash, and job IDs
-- **On-chain history** — fetch your live job registrations directly from the chain; shows schedule, slot count, reward, required modules, and derived status (active / scheduled / expired)
-- **`acurast.json` integration** — JSON schema validation, multi-config workspace support, right-click to set active config
-- **Live balance polling** — 30-second balance refresh on the Wallets route
+- 🧰 **All-in-one Studio panel** — a dedicated activity-bar view for wallets, project config, deployment, and history.
+- 🔐 **Encrypted wallet vault** — create, import, rename, and delete sr25519 wallets. Mnemonics are encrypted at rest with **AES-256-GCM + PBKDF2 (210k iterations)** *inside* VS Code's SecretStorage, so even a keychain dump still needs your password.
+- 🚀 **One-click deploy** — packages your script, uploads it to IPFS, and submits the job to Mainnet or Canary.
+- 💸 **Cost estimation** — preview ACU spend before you deploy, with optional fiat conversion (CoinGecko / CoinMarketCap).
+- 📜 **Deployment history** — a persistent, cross-workspace log of every deploy: project path, tx hash, IPFS hash, and job IDs.
+- 🔗 **On-chain history** — fetch your live job registrations straight from the chain, with schedule, slots, reward, required modules, and a derived status (active / scheduled / expired).
+- ✅ **`acurast.json` integration** — JSON schema validation, multi-config workspace support, and right-click "Set as active config".
+- 📊 **Live balance** — wallet balance refreshes every 30 seconds while you're on the Wallets view.
 
-## Requirements
+## Coming soon
 
-- VS Code 1.90+
-- A workspace containing an `acurast.json` file (extension auto-activates on detection)
+- 📡 **Live monitoring** — stream logs and runtime metrics from your running jobs directly in the editor.
 
 ## Getting started
 
-1. Install the extension.
-2. Open a workspace with an `acurast.json` (or run **Acurast: Init Project** to scaffold one).
-3. Click the Acurast logo in the activity bar to open Acurast Studio.
-4. Create or import a wallet, then hit **Deploy**.
+1. **Install** Acurast Studio from the Marketplace.
+2. **Open a workspace** that contains an `acurast.json` — or run **`Acurast: Init Project`** from the Command Palette to scaffold one.
+3. Click the **Acurast logo** in the activity bar to open the Studio panel.
+4. **Create or import a wallet**, fund it, then hit **Deploy**.
+
+> The extension auto-activates as soon as a workspace contains an `acurast.json`.
 
 ## Configuration
 
 | Setting | Default | Description |
 |---|---|---|
-| `acurast.network` | `mainnet` | Target network (`mainnet` or `canary`) |
+| `acurast.network` | `mainnet` | Studio target network (`mainnet` or `canary`) for balance, on-chain history, and the status bar |
+| `acurast.cliPath` | `acurast` | Path to the `acurast` CLI binary (advanced; the extension uses the bundled SDK by default) |
 | `acurast.rpcOverrides` | `{}` | Custom RPC endpoints per network |
-| `acurast.useKeychainForMnemonic` | `true` | Store mnemonic in OS keychain |
+| `acurast.matcherUrls` | `{}` | Custom matcher API endpoints per network |
+| `acurast.useKeychainForMnemonic` | `true` | Store the encrypted mnemonic in the OS keychain |
+| `acurast.fiat.exchangerId` | `2` | Pricing source for cost estimates — `1` CoinMarketCap, `2` CoinGecko |
+| `acurast.fiat.currencyId` | `""` | Fiat currency id (e.g. `usd`). Pick it from the Settings panel; blank disables fiat conversion |
+| `acurast.fiat.coingecko.plan` | `demo` | CoinGecko plan tier (`demo` or `pro`) matching your API key |
+
+> **Note:** `acurast.network` sets the network you *monitor* (balance, history, status bar). Deploys always use the `network` field in your `acurast.json`. If the two differ, Acurast Studio shows a one-click prompt to align them.
 
 ## Commands
 
-All commands are available under the `Acurast` category in the command palette.
+All commands live under the **`Acurast`** category in the Command Palette (`Cmd/Ctrl+Shift+P`).
 
 | Command | Description |
 |---|---|
-| Acurast: Init Project | Scaffold `acurast.json` in the workspace |
+| Acurast: Init Project | Scaffold an `acurast.json` in the workspace |
 | Acurast: Deploy | Deploy the active job to the network |
 | Acurast: Estimate Cost | Preview ACU cost before deploying |
-| Acurast: Choose acurast.json… | Switch active config in a multi-config workspace |
+| Acurast: Choose acurast.json… | Switch the active config in a multi-config workspace |
 | Acurast: Create Wallet | Generate a new sr25519 wallet |
-| Acurast: Import Wallet | Import by mnemonic |
-| Acurast: Reveal Mnemonic | Decrypt and show the mnemonic |
+| Acurast: Import Wallet | Import a wallet by mnemonic |
+| Acurast: Reveal Mnemonic | Decrypt and show a wallet's mnemonic |
+| Acurast: Rename Wallet | Rename a wallet |
 | Acurast: Open Dashboard | Open the Acurast web dashboard |
 
-## Development
+*(Additional wallet commands — copy address, set active, delete, edit description — are also available under the same category.)*
+
+## Requirements
+
+- **VS Code 1.120** or newer
+- A workspace containing an `acurast.json` file (use **`Acurast: Init Project`** if you don't have one yet)
+
+## Security
+
+Your seed phrase never leaves your machine in plaintext. Each mnemonic is encrypted with **AES-256-GCM**, keyed by **PBKDF2-SHA256 (210,000 iterations, OWASP 2023 guidance)**, and the ciphertext is what's stored in VS Code SecretStorage. Revealing a mnemonic always requires your password.
+
+## Links
+
+- 🌐 [Acurast website](https://acurast.com)
+- 📦 [`@acurast/sdk` on npm](https://www.npmjs.com/package/@acurast/sdk)
+- 🐙 [Source & issues on GitHub](https://github.com/darwinsubramaniam/acurast-studio)
+
+## Contributing
+
+Issues and pull requests are welcome — see the [repository](https://github.com/darwinsubramaniam/acurast-studio).
+
+<details>
+<summary>Local development</summary>
 
 ```bash
+npm install
 npm run build:dev   # build extension + webview with sourcemaps
 npm run watch       # watch both bundles in parallel
 npm run typecheck   # type-check without emitting
+npm test            # unit + integration tests
 ```
 
 Press **F5** in VS Code to launch the Extension Development Host. After code changes, **Cmd+R** reloads the host (webviews don't hot-reload).
 
-Two bundles are produced:
+Two bundles are produced: `dist/extension.js` (Node/CJS host) and `dist/studio/webview.js` (Svelte 5 webview).
 
-- `dist/extension.js` — Node/CJS host bundle
-- `dist/studio/webview.js` — Svelte 5 browser bundle
+</details>
 
 ## License
 
-MIT
+[MIT](./LICENSE)

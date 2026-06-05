@@ -132,9 +132,9 @@
   </button>
 
   <button class="nav-card" disabled>
-    <span class="icon">{@html ICONS.logs}</span>
+    <span class="icon">{@html ICONS.monitoring}</span>
     <div class="body">
-      <div class="title">Live Logs <span class="badge">Soon</span></div>
+      <div class="title">Live Monitoring <span class="badge">Soon</span></div>
       <div class="sub">Coming soon</div>
     </div>
     <span class="chev">{@html ICONS.chev}</span>
