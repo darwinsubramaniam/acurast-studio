@@ -25,23 +25,30 @@ export class AcurastStatusBar implements vscode.Disposable {
     this.subscriptions.push(
       vscode.commands.registerCommand(MENU_COMMAND_ID, () => this.openMenu())
     );
-    this.subscriptions.push(this.wallet.onDidChange(() => this.refresh()));
+    this.subscriptions.push(this.wallet.onDidChange(() => this.refreshSafe()));
     // The active network lives in settings; refresh so the cue stays in sync
     // the moment the user switches mainnet/canary.
     this.subscriptions.push(
       vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration('acurast.network')) void this.refresh();
+        if (e.affectsConfiguration('acurast.network')) this.refreshSafe();
       })
     );
     // The project's own network lives in acurast.json — re-evaluate the mismatch
     // cue when the active project changes or its file is saved.
-    this.subscriptions.push(this.ctx.onDidChangeActiveConfig(() => this.refresh()));
+    this.subscriptions.push(this.ctx.onDidChangeActiveConfig(() => this.refreshSafe()));
     this.subscriptions.push(
       vscode.workspace.onDidSaveTextDocument((doc) => {
-        if (this.ctx.configPath && doc.fileName === this.ctx.configPath) void this.refresh();
+        if (this.ctx.configPath && doc.fileName === this.ctx.configPath) this.refreshSafe();
       })
     );
-    void this.refresh();
+    this.refreshSafe();
+  }
+
+  /** Fire-and-forget refresh that logs instead of silently swallowing failures. */
+  private refreshSafe() {
+    this.refresh().catch((err) =>
+      console.error('Acurast status bar refresh failed:', err)
+    );
   }
 
   private get network(): string {

@@ -30,4 +30,10 @@ describe('isNetworkMismatch', () => {
     // Unified handling: a falsy project network is "no opinion", never a mismatch.
     expect(isNetworkMismatch('', 'mainnet')).toBe(false);
   });
+
+  it('compares case-insensitively (hand-written "Mainnet" is not a mismatch)', () => {
+    expect(isNetworkMismatch('Mainnet', 'mainnet')).toBe(false);
+    expect(isNetworkMismatch('CANARY', 'canary')).toBe(false);
+    expect(isNetworkMismatch('Mainnet', 'canary')).toBe(true);
+  });
 });

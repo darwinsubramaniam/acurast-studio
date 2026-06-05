@@ -193,7 +193,7 @@
     context="deploy"
     {navigate}
   />
-  <Deploy {ctx} {deploy} {navigate} {pricing} {diagnoses} />
+  <Deploy {ctx} {deploy} {navigate} {pricing} {diagnoses} symbol={wallets.symbol} />
 {:else if route === "history"}
   <History
     {historyState}

@@ -4,6 +4,7 @@ import {
   getLanguageService,
   TextDocument as LSTextDocument,
   InsertTextFormat,
+  type JSONSchema,
 } from 'vscode-json-languageservice';
 
 const LANGUAGE_ID = 'acurast-config';
@@ -20,7 +21,15 @@ export function registerAcurastLanguageService(
   extensionContext: vscode.ExtensionContext
 ): vscode.Disposable[] {
   const schemaPath = vscode.Uri.joinPath(extensionContext.extensionUri, 'schemas', 'acurast.schema.json').fsPath;
-  const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf-8'));
+  let schema: JSONSchema;
+  try {
+    schema = JSON.parse(fs.readFileSync(schemaPath, 'utf-8')) as JSONSchema;
+  } catch (err) {
+    // A missing/corrupt schema must not abort extension activation — degrade by
+    // skipping diagnostics/completions/hover entirely.
+    console.error('Acurast language service: failed to load schema, disabling:', err);
+    return [];
+  }
   const schemaUri = 'acurast://schemas/acurast.schema.json';
 
   const ls = getLanguageService({

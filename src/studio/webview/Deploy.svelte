@@ -23,8 +23,9 @@
     navigate: (r: Route) => void;
     pricing: PricingStateMsg | null;
     diagnoses: Record<string, DiagnosisStateMsg>;
+    symbol: string;
   }
-  let { ctx, deploy, pricing, diagnoses }: Props = $props();
+  let { ctx, deploy, pricing, diagnoses, symbol }: Props = $props();
 
   const satoshiToACU = planckToAcu;
   const satoshiToFiat = planckToFiat;
@@ -113,7 +114,7 @@
           <div class="pricing-rows">
             <span class="pricing-label">Your price</span>
             <span class="pricing-value">
-              {satoshiToACU(advice.currentPrice)} / exec
+              {satoshiToACU(advice.currentPrice)} {symbol} / exec
               {#if fiat}{@const f = satoshiToFiat(
                   advice.currentPrice,
                   fiat.acuPriceFiat,
@@ -128,7 +129,7 @@
             {#if advice.suggestedPrice && advice.status !== "sufficient"}
               <span class="pricing-label">Suggested</span>
               <span class="pricing-value">
-                {satoshiToACU(advice.suggestedPrice)} / exec
+                {satoshiToACU(advice.suggestedPrice)} {symbol} / exec
                 {#if fiat}{@const f = satoshiToFiat(
                     advice.suggestedPrice,
                     fiat.acuPriceFiat,
@@ -143,7 +144,7 @@
             {/if}
             <span class="pricing-label">Total max</span>
             <span class="pricing-value">
-              {fees.maxTotalCostCACU}
+              {fees.maxTotalCostCACU} {symbol}
               {#if fiat}{@const f = acuToFiat(
                   fees.maxTotalCostCACU,
                   fiat.acuPriceFiat,
@@ -179,7 +180,7 @@
           <div class="pricing-rows">
             <span class="pricing-label">Max / exec</span>
             <span class="pricing-value">
-              {fees.maxCostPerExecutionCACU}
+              {fees.maxCostPerExecutionCACU} {symbol}
               {#if fiat}{@const f = acuToFiat(
                   fees.maxCostPerExecutionCACU,
                   fiat.acuPriceFiat,
@@ -193,7 +194,7 @@
             </span>
             <span class="pricing-label">Total max</span>
             <span class="pricing-value">
-              {fees.maxTotalCostCACU}
+              {fees.maxTotalCostCACU} {symbol}
               {#if fiat}{@const f = acuToFiat(
                   fees.maxTotalCostCACU,
                   fiat.acuPriceFiat,

@@ -166,7 +166,11 @@ async function renameWallet(wallet: WalletService, id?: string) {
     },
   });
   if (name === undefined) return;
-  await wallet.updateMetadata(info.id, { name: name.trim() });
+  try {
+    await wallet.updateMetadata(info.id, { name: name.trim() });
+  } catch (err: unknown) {
+    vscode.window.showErrorMessage(`Rename failed: ${(err as Error).message}`);
+  }
 }
 
 async function editDescription(wallet: WalletService, id?: string) {
@@ -180,7 +184,11 @@ async function editDescription(wallet: WalletService, id?: string) {
       v.length > MAX_DESCRIPTION_LEN ? `Max ${MAX_DESCRIPTION_LEN} characters` : undefined,
   });
   if (description === undefined) return;
-  await wallet.updateMetadata(info.id, { description: description.trim() });
+  try {
+    await wallet.updateMetadata(info.id, { description: description.trim() });
+  } catch (err: unknown) {
+    vscode.window.showErrorMessage(`Edit description failed: ${(err as Error).message}`);
+  }
 }
 
 async function revealMnemonic(wallet: WalletService, id?: string) {
@@ -218,7 +226,12 @@ async function deleteWallet(wallet: WalletService, id?: string) {
     'Delete'
   );
   if (confirm !== 'Delete') return;
-  await wallet.delete(info.id);
+  try {
+    await wallet.delete(info.id);
+  } catch (err: unknown) {
+    vscode.window.showErrorMessage(`Delete failed: ${(err as Error).message}`);
+    return;
+  }
   vscode.window.showInformationMessage(`Wallet "${info.name}" deleted.`);
 }
 
@@ -232,6 +245,11 @@ async function copyAddress(wallet: WalletService, id?: string) {
 async function setActive(wallet: WalletService, id?: string) {
   const info = await resolveWallet(wallet, id, 'Select wallet to set as active');
   if (!info) return;
-  await wallet.setActive(info.id);
+  try {
+    await wallet.setActive(info.id);
+  } catch (err: unknown) {
+    vscode.window.showErrorMessage(`Set active failed: ${(err as Error).message}`);
+    return;
+  }
   vscode.window.showInformationMessage(`Active wallet: ${info.name}`);
 }

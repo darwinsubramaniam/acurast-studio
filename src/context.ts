@@ -35,12 +35,14 @@ export class AcurastContext {
   async initialize() {
     await this.detectProject();
 
-    vscode.workspace.onDidChangeWorkspaceFolders(() => this.detectProject());
-    vscode.workspace.onDidSaveTextDocument((doc) => {
-      if (this._configPath && doc.fileName === this._configPath) {
-        this.loadConfig();
-      }
-    });
+    this.extensionContext.subscriptions.push(
+      vscode.workspace.onDidChangeWorkspaceFolders(() => this.detectProject()),
+      vscode.workspace.onDidSaveTextDocument((doc) => {
+        if (this._configPath && doc.fileName === this._configPath) {
+          this.loadConfig();
+        }
+      })
+    );
 
     const watcher = vscode.workspace.createFileSystemWatcher('**/acurast.json');
     watcher.onDidCreate(() => this.detectProject());

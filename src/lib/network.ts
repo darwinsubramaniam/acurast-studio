@@ -17,5 +17,7 @@ export function isNetworkMismatch(
   projectNetwork: string | null | undefined,
   targetNetwork: string
 ): boolean {
-  return !!projectNetwork && projectNetwork !== targetNetwork;
+  // Compare case-insensitively so a hand-written "Mainnet" in acurast.json isn't
+  // a false mismatch against the lowercase `acurast.network` setting.
+  return !!projectNetwork && projectNetwork.toLowerCase() !== targetNetwork.toLowerCase();
 }
