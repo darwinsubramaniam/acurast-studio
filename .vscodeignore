@@ -1,7 +1,16 @@
 src/
+out/
 .vscode/
+.github/
 node_modules/
-*.map
+**/*.map
 tsconfig.json
+tsconfig.test.json
 .eslintrc*
 .gitignore
+
+# Dev-only — not needed at runtime (media/demo.gif IS shipped for the README)
+scripts/
+fixtures/
+media/.demo-frames/
+.vscode-test/

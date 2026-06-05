@@ -94,7 +94,8 @@ jobs:
         run: npm pkg set version="${{ steps.tag.outputs.VERSION }}"
 
       # Build & package the .vsix. `vsce package` triggers "vscode:prepublish"
-      # (npm run build). Pre-release builds get the --pre-release flag.
+      # (npm run build, which sets esbuild's __ACURAST_DEV_SEED__=false so the
+      # demo-seed code is stripped). Pre-release builds get the --pre-release flag.
       - name: Package Extension (.vsix)
         run: |
           if [ "${{ steps.tag.outputs.CHANNEL }}" = "pre" ]; then
@@ -102,6 +103,24 @@ jobs:
           else
             npx @vscode/vsce package -o acurast-studio.vsix
           fi
+
+      # Safety net for every channel (rc/pre/stable): inspect the ACTUAL packaged
+      # artifact and fail the release if the demo-seed / recording machinery
+      # leaked in. Runs before any publish or release-upload step.
+      - name: Verify demo-seed is stripped from the package
+        run: |
+          unzip -o -q acurast-studio.vsix -d vsix-check
+          BUNDLE=vsix-check/extension/dist/extension.js
+          if [ ! -f "$BUNDLE" ]; then
+            echo "::error::Could not find $BUNDLE in the packaged .vsix"
+            exit 1
+          fi
+          if grep -Eqs 'Recording demo|ACURAST_DEMO_PROJECT_PATH|seedDemoData' "$BUNDLE"; then
+            echo "::error::Demo-seed/recording code leaked into the packaged .vsix"
+            exit 1
+          fi
+          echo "OK: demo-seed not present in packaged bundle"
+          rm -rf vsix-check
 
       # RC: testable artifact only — draft GitHub pre-release, never the Marketplace.
       - name: Create Draft GitHub Release (RC)

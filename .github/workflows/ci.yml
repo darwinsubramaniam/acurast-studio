@@ -34,5 +34,16 @@ jobs:
       - name: Build Extension
         run: npm run build
 
+      # The demo-seed / recording machinery (src/dev/demoSeed.ts) must be
+      # dead-code-eliminated from production builds by esbuild's
+      # __ACURAST_DEV_SEED__=false define. Fail early if it ever leaks in.
+      - name: Verify demo-seed is stripped from the build
+        run: |
+          if grep -Eqs 'Recording demo|ACURAST_DEMO_PROJECT_PATH|seedDemoData' dist/extension.js; then
+            echo "::error::Demo-seed/recording code leaked into the production build (dist/extension.js)"
+            exit 1
+          fi
+          echo "OK: demo-seed not present in production build"
+
       - name: Run Tests
         run: xvfb-run -a npm test
