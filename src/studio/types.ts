@@ -2,7 +2,7 @@ import type { WalletInfo } from '../wallet/walletService';
 
 export type { WalletInfo };
 
-export type Route = 'home' | 'wallets' | 'settings' | 'deploy' | 'history' | 'processors';
+export type Route = 'home' | 'wallets' | 'settings' | 'deploy' | 'history' | 'processors' | 'monitoring';
 
 export interface NavigateMsg { type: 'navigate'; route: Route; }
 export interface ReadyMsg { type: 'ready'; }
@@ -59,6 +59,35 @@ export interface HistoryOpenFolderMsg  { type: 'history.openFolder'; path: strin
 /** Align the Studio target network (`acurast.network` setting) to `network`. */
 export interface NetworkSetTargetMsg   { type: 'network.setTarget'; network: string; }
 
+// ── Live Monitoring (Loki) ─────────────────────────────────────────────────────
+/** Open a Grafana-inspired log viewer in a new editor tab, scoped to a job.
+ * The host resolves the LogQL from the configured job label + line filter. */
+export interface MonitoringOpenMsg {
+  type: 'monitoring.open';
+  network: string;
+  origin?: string;
+  localId?: number;
+  /** Panel title, e.g. project name or `Job #42`. */
+  title: string;
+  /** Lookback window in ms relative to now. */
+  rangeMs: number;
+  limit: number;
+  /** Optional case-sensitive line filter (`|= "…"`). */
+  search?: string;
+}
+export interface MonitoringRefreshMsg   { type: 'monitoring.refresh'; }
+export interface MonitoringConfigureMsg { type: 'monitoring.configure'; }
+
+/** Snapshot of Loki readiness + the deployments the user can monitor. */
+export interface MonitoringStateMsg {
+  type: 'monitoring.state';
+  configured: boolean;
+  endpointUrl: string;
+  jobLabel: string;
+  targetNetwork: string;
+  deployments: StoredDeployment[];
+}
+
 export type InMsg =
   | NavigateMsg | ReadyMsg | WalletActionMsg | RefreshBalanceMsg
   | ConfigSaveMsg | ConfigOpenJsonMsg | ConfigChooseMsg | ConfigNewProjectMsg
@@ -68,7 +97,8 @@ export type InMsg =
   | DevtoolsRefreshKeyMsg | DevtoolsOpenUrlMsg
   | ProcessorsQueryMsg | ProcessorsAdvertiseMsg
   | HistoryLoadMsg | HistoryFetchOnlineMsg | JobDiagnoseMsg | HistoryRemovePathMsg | HistoryRemoveMsg | HistoryOpenFolderMsg
-  | NetworkSetTargetMsg;
+  | NetworkSetTargetMsg
+  | MonitoringOpenMsg | MonitoringRefreshMsg | MonitoringConfigureMsg;
 
 export interface SerializedFees {
   numberOfExecutions: string;

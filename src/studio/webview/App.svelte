@@ -10,6 +10,7 @@
     HistoryStateMsg,
     ProcessorsStateMsg,
     DiagnosisStateMsg,
+    MonitoringStateMsg,
   } from "../types";
   import { send } from "./lib/vscode";
   import { ICONS } from "./lib/icons";
@@ -19,6 +20,7 @@
   import Deploy from "./Deploy.svelte";
   import History from "./History.svelte";
   import Processors from "./Processors.svelte";
+  import Monitoring from "./Monitoring.svelte";
   import NetworkMismatchBanner from "./NetworkMismatchBanner.svelte";
 
   interface CtxState {
@@ -61,6 +63,7 @@
   let fiatSelection = $state<FiatSelectionStateMsg | null>(null);
   let historyState = $state<HistoryStateMsg | null>(null);
   let processorsState = $state<ProcessorsStateMsg | null>(null);
+  let monitoringState = $state<MonitoringStateMsg | null>(null);
   // Project (acurast.json) vs Studio target network — set from the host so the
   // Deploy/Settings views can warn when they diverge. The banner self-suppresses
   // when they match, so these are passed to it unconditionally.
@@ -126,6 +129,9 @@
         case "processors.state":
           processorsState = msg as unknown as ProcessorsStateMsg;
           break;
+        case "monitoring.state":
+          monitoringState = msg as unknown as MonitoringStateMsg;
+          break;
         case "network.mismatch":
           projectNetwork = msg.projectNetwork as string | null;
           targetNetwork = msg.targetNetwork as string;
@@ -148,6 +154,7 @@
     deploy: ICONS.deployments,
     history: ICONS.history,
     processors: ICONS.processor,
+    monitoring: ICONS.monitoring,
   };
   const routeTitles: Record<string, string> = {
     wallets: "Wallets",
@@ -155,6 +162,7 @@
     deploy: "Deployment",
     history: "Deployment History",
     processors: "Processors",
+    monitoring: "Live Monitoring",
   };
 </script>
 
@@ -203,4 +211,6 @@
   />
 {:else if route === "processors"}
   <Processors {wallets} {processorsState} />
+{:else if route === "monitoring"}
+  <Monitoring {monitoringState} />
 {/if}

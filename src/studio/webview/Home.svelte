@@ -131,11 +131,11 @@
     <span class="chev">{@html ICONS.chev}</span>
   </button>
 
-  <button class="nav-card" disabled>
+  <button class="nav-card" onclick={() => navigate("monitoring")}>
     <span class="icon">{@html ICONS.monitoring}</span>
     <div class="body">
-      <div class="title">Live Monitoring <span class="badge">Soon</span></div>
-      <div class="sub">Coming soon</div>
+      <div class="title">Live Monitoring</div>
+      <div class="sub">Stream job logs from Loki</div>
     </div>
     <span class="chev">{@html ICONS.chev}</span>
   </button>

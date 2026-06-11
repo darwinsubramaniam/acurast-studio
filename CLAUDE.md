@@ -18,9 +18,10 @@ npm run watch:webview    # watch Svelte webview bundle only
 npm run build:font       # regenerate woff/woff2 from media/icons/*.svg
 ```
 
-Two separate bundles are produced:
+Bundles produced:
 - `dist/extension.js` — Node/CJS host bundle (esbuild CLI)
-- `dist/studio/webview.js` — Browser/IIFE Svelte bundle (`scripts/build-webview.mjs` via esbuild JS API)
+- `dist/studio/webview.js` — Browser/IIFE Svelte bundle for the Studio side panel (`scripts/build-webview.mjs` via esbuild JS API)
+- `dist/studio/logviewer.js` — Browser/IIFE Svelte bundle for the standalone Loki log-viewer editor tab (same build script, second entry point)
 
 F5 in VS Code launches the Extension Development Host (config in `.vscode/launch.json`, preLaunchTask runs `build:dev`).
 
@@ -82,6 +83,12 @@ The extension is a single Node bundle (`dist/extension.js`) built by esbuild fro
 - **`src/studio/webview/History.svelte`** — Two-section layout: **Local** (paginated via `history.load` with offset, accumulated client-side) and **On-chain** (accordion, fetched on demand via `history.fetchOnline`, client-side paginated). On-chain cards decode `JobRegistration` fields (schedule, slots, reward, modules, script URL) and show a derived status badge (active/scheduled/expired) from `startTime`/`endTime`.
 
 - **`src/deployments/deploymentStore.ts`** — Wraps `vscode.Memento` (globalState, key `acurast.deployments.v1`) for cross-workspace deployment history persistence. Methods: `getAll()`, `save(record)`, `removePathInfo(id)`, `remove(id)`.
+
+- **`src/studio/webview/Monitoring.svelte`** — The **Live Monitoring** side-panel route (a Grafana-Loki-style filter). Picks a deployment/job, time range, line filter, and limit, shows a live LogQL preview, and posts `monitoring.open` to launch the viewer tab. Also shows Loki connection status with a "Configure" button (`monitoring.configure`).
+
+- **`src/loki/`** — The Loki log-viewer feature (Live Monitoring). `types.ts` holds the viewer's `postMessage` contract (`lv.*`) + the `LogRow`/`LokiQueryParams` shapes shared by host and viewer. `lokiConfig.ts` resolves the endpoint URL (`acurast.loki.urls[network]` → `LOKI_ENDPOINTS` default) + auth headers (X-Scope-OrgID, Bearer, Basic — bearer wins over basic; secrets in SecretStorage) + the `jobLabel`; also `jobSelector`/`escapeLabelValue`. `lokiClient.ts` is the host-side `fetch` wrapper over `/loki/api/v1/query_range` (parses JSON/logfmt fields, detects log level, sorts by ns timestamp). `logViewerPanel.ts` (`LogViewerManager`) owns the editor-tab webview panels — one per job — runs queries + a 3 s polling **live tail**, and posts results. `lokiCommands.ts` registers `acurast.loki.configure` (quick-pick credential setup) + `acurast.loki.testConnection`.
+
+- **`src/studio/logviewer/LogViewer.svelte`** — The Grafana-inspired log viewer rendered in a new editor tab (its own bundle + `media/studio/logviewer.html`). Editable LogQL + time range + limit toolbar, **Live** tail toggle, a stacked logs-volume histogram, level filter chips with counts, find-in-results highlighting, wrap/timestamp toggles, and expandable rows (labels as chips, parsed fields table, raw line). The webview never fetches — the host (`LogViewerManager`) does all Loki I/O and streams rows in.
 
 - **`src/studio/webview/lib/vscode.ts`** — Calls `acquireVsCodeApi()` once and exports a `send(type, extra)` helper. Import directly in any component — do not prop-drill the API.
 
