@@ -18,30 +18,41 @@ const guardedPreprocess = {
   style: (args) => (args.filename && args.filename.startsWith(srcRoot) ? ownPreprocess.style?.(args) : null),
 };
 
-const ctx = await esbuild.context({
-  entryPoints: ['src/studio/webview/main.ts'],
-  mainFields: ['svelte', 'browser', 'module', 'main'],
-  conditions: ['svelte', 'browser'],
-  bundle: true,
-  outfile: 'dist/studio/webview.js',
-  format: 'iife',
-  platform: 'browser',
-  target: 'es2022',
-  minify: !dev,
-  sourcemap: dev,
-  plugins: [
-    esbuildSvelte({
-      preprocess: guardedPreprocess,
-      compilerOptions: { css: 'injected', runes: true },
-    }),
-  ],
-  logLevel: 'info',
-});
+// Two separate IIFE bundles, one per webview entry point: the Studio side-panel
+// SPA and the standalone Loki log-viewer editor tab.
+const BUNDLES = [
+  { entry: 'src/studio/webview/main.ts', outfile: 'dist/studio/webview.js' },
+  { entry: 'src/studio/logviewer/main.ts', outfile: 'dist/studio/logviewer.js' },
+];
+
+function makeCtx({ entry, outfile }) {
+  return esbuild.context({
+    entryPoints: [entry],
+    mainFields: ['svelte', 'browser', 'module', 'main'],
+    conditions: ['svelte', 'browser'],
+    bundle: true,
+    outfile,
+    format: 'iife',
+    platform: 'browser',
+    target: 'es2022',
+    minify: !dev,
+    sourcemap: dev,
+    plugins: [
+      esbuildSvelte({
+        preprocess: guardedPreprocess,
+        compilerOptions: { css: 'injected', runes: true },
+      }),
+    ],
+    logLevel: 'info',
+  });
+}
+
+const contexts = await Promise.all(BUNDLES.map(makeCtx));
 
 if (watch) {
-  await ctx.watch();
+  await Promise.all(contexts.map((c) => c.watch()));
   console.log('Watching webview…');
 } else {
-  await ctx.rebuild();
-  await ctx.dispose();
+  await Promise.all(contexts.map((c) => c.rebuild()));
+  await Promise.all(contexts.map((c) => c.dispose()));
 }

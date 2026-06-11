@@ -112,6 +112,16 @@
         "command": "acurast.wallet.setActive",
         "title": "Set Active Wallet",
         "category": "Acurast"
+      },
+      {
+        "command": "acurast.loki.configure",
+        "title": "Configure Log Source (Loki)",
+        "category": "Acurast"
+      },
+      {
+        "command": "acurast.loki.testConnection",
+        "title": "Test Log Source Connection",
+        "category": "Acurast"
       }
     ],
     "viewsContainers": {
@@ -263,6 +273,34 @@
           ],
           "default": "demo",
           "description": "CoinGecko plan tier. Both key types start with CG- so it can't be auto-detected — pick the one matching your key."
+        },
+        "acurast.loki.urls": {
+          "type": "object",
+          "default": {},
+          "description": "Optional Grafana Loki base URL overrides per network for the Live Monitoring log viewer. Defaults to the Acurast-hosted log gateway. Example: { \"mainnet\": \"https://logs.example.com\" }",
+          "properties": {
+            "mainnet": {
+              "type": "string"
+            },
+            "canary": {
+              "type": "string"
+            }
+          }
+        },
+        "acurast.loki.orgId": {
+          "type": "string",
+          "default": "",
+          "description": "Optional Loki tenant id sent as the X-Scope-OrgID header (multi-tenant Loki)."
+        },
+        "acurast.loki.basicAuthUser": {
+          "type": "string",
+          "default": "",
+          "description": "Username for Loki HTTP basic auth (e.g. Grafana Cloud user/instance id). The password is stored securely via the \"Configure Log Source (Loki)\" command."
+        },
+        "acurast.loki.jobLabel": {
+          "type": "string",
+          "default": "job_id",
+          "description": "Loki stream label that carries the Acurast job's local id. The log viewer auto-scopes queries to {<label>=\"<jobId>\"}."
         }
       }
     },

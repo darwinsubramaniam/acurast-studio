@@ -16,7 +16,9 @@ import { setTargetNetwork, getProjectNetwork } from '../wallet/networkSetting';
 import { Exchanger } from '../sdk/exchanger/exchanger';
 import { CoinGecko, type CoinGeckoPlan } from '../sdk/exchanger/coingecko';
 import { DeploymentStore } from '../deployments/deploymentStore';
-import type { Route, InMsg, WalletActionMsg, DeployState, DeployStage, DeployStageId, StageStatus, DeployJobId, ProcessorPubKey, ProcessorInfo, ChainEvent, PricingFiatInfo, FiatListItem, StoredDeploymentWithMeta, HistoryStateMsg, OnlineJobRegistration, LocalJobStatus, ProcessorsStateMsg, DiagnosisStateMsg } from './types';
+import { LogViewerManager } from '../loki/logViewerPanel';
+import { resolveLokiConfig, jobSelector, escapeLabelValue } from '../loki/lokiConfig';
+import type { Route, InMsg, WalletActionMsg, DeployState, DeployStage, DeployStageId, StageStatus, DeployJobId, ProcessorPubKey, ProcessorInfo, ChainEvent, PricingFiatInfo, FiatListItem, StoredDeploymentWithMeta, HistoryStateMsg, OnlineJobRegistration, LocalJobStatus, ProcessorsStateMsg, DiagnosisStateMsg, MonitoringStateMsg, MonitoringOpenMsg } from './types';
 
 const BALANCE_POLL_MS = 30_000;
 const FIAT_PRICE_TTL_MS = 60_000;
@@ -55,7 +57,8 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     private readonly ctx: AcurastContext,
     private readonly wallet: WalletService,
     private readonly secrets: vscode.SecretStorage,
-    private readonly deploymentStore: DeploymentStore
+    private readonly deploymentStore: DeploymentStore,
+    private readonly logViewer: LogViewerManager
   ) {
     wallet.onDidChange(() => this.pushWallets());
     ctx.onDidChangeActiveConfig(() => {
@@ -140,6 +143,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       if (route === 'settings') await this.pushConfig();
       if (route === 'deploy') { this.pushDeploy(); if (!this._deploy) void this.pushPricing(); }
       if (route === 'history') await this.pushHistory();
+      if (route === 'monitoring') await this.pushMonitoring();
     }
     // Reveal the view (auto-generated focus command)
     await vscode.commands.executeCommand('acurastStudio.focus');
@@ -185,6 +189,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
         if (msg.route === 'settings') await this.pushConfig();
         if (msg.route === 'deploy') { this.pushDeploy(); if (!this._deploy) void this.pushPricing(); }
         if (msg.route === 'history') await this.pushHistory();
+        if (msg.route === 'monitoring') await this.pushMonitoring();
         break;
       case 'wallet':
         await this.runWalletAction(msg);
@@ -272,7 +277,66 @@ export class StudioPanel implements vscode.WebviewViewProvider {
         await setTargetNetwork(msg.network);
         vscode.window.setStatusBarMessage(`Acurast network: ${networkLabel(msg.network)}`, 2000);
         break;
+      case 'monitoring.open':
+        await this.openLogViewer(msg);
+        break;
+      case 'monitoring.refresh':
+        await this.pushMonitoring();
+        break;
+      case 'monitoring.configure':
+        await vscode.commands.executeCommand('acurast.loki.configure');
+        await this.pushMonitoring();
+        break;
     }
+  }
+
+  /** Push Loki readiness + the deployments the user can monitor to the
+   * Live Monitoring side panel. */
+  private async pushMonitoring(): Promise<void> {
+    const cfg = await resolveLokiConfig(this.network, this.secrets);
+    const deployments = this.deploymentStore.getAll()
+      .slice()
+      .sort((a, b) => b.startedAt - a.startedAt);
+    this.post({
+      type: 'monitoring.state',
+      configured: cfg.configured,
+      endpointUrl: cfg.baseUrl,
+      jobLabel: cfg.jobLabel,
+      targetNetwork: this.network,
+      deployments,
+    } satisfies MonitoringStateMsg);
+  }
+
+  /** Resolve the LogQL from the job scope + line filter and open the viewer tab. */
+  private async openLogViewer(msg: MonitoringOpenMsg): Promise<void> {
+    const cfg = await resolveLokiConfig(msg.network, this.secrets);
+    if (!cfg.configured) {
+      const choice = await vscode.window.showWarningMessage(
+        'No Loki endpoint is configured for this network.',
+        'Configure'
+      );
+      if (choice === 'Configure') {
+        await vscode.commands.executeCommand('acurast.loki.configure');
+        await this.pushMonitoring();
+      }
+      return;
+    }
+    let query = msg.localId !== undefined ? jobSelector(cfg.jobLabel, msg.localId) : '{}';
+    const filter = msg.search?.trim();
+    if (filter) query += ` |= "${escapeLabelValue(filter)}"`;
+    const endMs = Date.now();
+    const startMs = endMs - Math.max(1, msg.rangeMs);
+    await this.logViewer.open({
+      network: msg.network,
+      origin: msg.origin,
+      localId: msg.localId,
+      title: msg.title,
+      query,
+      startMs,
+      endMs,
+      limit: msg.limit,
+      direction: 'backward',
+    });
   }
 
   private async runWalletAction(msg: WalletActionMsg) {

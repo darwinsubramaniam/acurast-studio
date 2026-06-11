@@ -6,6 +6,8 @@ import { registerWalletCommands } from './wallet/walletCommands';
 import { AcurastStatusBar, SHOW_WALLETS_COMMAND_ID } from './wallet/acurastStatusBar';
 import { StudioPanel } from './studio/studioPanel';
 import { DeploymentStore } from './deployments/deploymentStore';
+import { LogViewerManager } from './loki/logViewerPanel';
+import { registerLokiCommands } from './loki/lokiCommands';
 import { acurastClient } from './sdk/acurastClient';
 import type { AcurastNetwork } from './sdk/constants';
 import { registerAcurastLanguageService } from './acurastLanguageService';
@@ -53,7 +55,8 @@ export async function activate(extensionContext: vscode.ExtensionContext) {
     await seedDemoData(wallet, deploymentStore);
   }
 
-  const studioPanel = new StudioPanel(extensionContext.extensionUri, ctx, wallet, extensionContext.secrets, deploymentStore);
+  const logViewer = new LogViewerManager(extensionContext.extensionUri, extensionContext.secrets);
+  const studioPanel = new StudioPanel(extensionContext.extensionUri, ctx, wallet, extensionContext.secrets, deploymentStore, logViewer);
   const statusBar = new AcurastStatusBar(wallet, ctx);
   const output = vscode.window.createOutputChannel('Acurast');
 
@@ -67,8 +70,10 @@ export async function activate(extensionContext: vscode.ExtensionContext) {
     vscode.commands.registerCommand('acurast.studio.home', () => studioPanel.navigate('home')),
     ...registerWalletCommands(wallet),
     ...registerCommands({ ctx, wallet, output, studioPanel }),
+    ...registerLokiCommands(extensionContext.secrets),
     ...registerAcurastLanguageService(extensionContext),
     { dispose: () => studioPanel.dispose() },
+    { dispose: () => logViewer.dispose() },
     { dispose: () => acurastClient.dispose() }
   );
 }
