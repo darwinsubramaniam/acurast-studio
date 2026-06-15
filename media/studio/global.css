@@ -388,6 +388,12 @@ input.field-error, textarea.field-error { border-color: var(--vscode-inputValida
 }
 .proc-meta { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 4px; font-size: 10.5px; color: var(--vscode-descriptionForeground); }
 .proc-meta span b { color: var(--vscode-foreground); font-weight: 500; }
+.proc-window {
+  margin: 0 0 4px; font-size: 10px; color: var(--vscode-descriptionForeground);
+}
+.proc-start { margin-top: 4px; font-size: 10.5px; color: var(--vscode-descriptionForeground); }
+.proc-start b { color: var(--vscode-foreground); font-weight: 500; }
+.proc-start-rel { color: var(--vscode-charts-blue, var(--vscode-textLink-foreground)); }
 .proc-ack    { color: var(--vscode-testing-iconPassed, var(--vscode-charts-green)); }
 .proc-noack  { color: var(--vscode-descriptionForeground); }
 .proc-empty  { padding: 8px 10px; color: var(--vscode-descriptionForeground); font-size: 11px; }

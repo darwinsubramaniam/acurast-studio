@@ -1,5 +1,5 @@
-import { fmtAgo } from '../../../lib/duration';
-export { fmtDuration } from '../../../lib/duration';
+import { fmtAgo, fmtDuration } from '../../../lib/duration';
+export { fmtDuration };
 
 // Date/time helpers use the native Intl APIs (no luxon/dayjs dependency).
 const DATETIME_SHORT = new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' });
@@ -58,5 +58,12 @@ export function truncate(s: string | undefined, n = 10): string {
 export function fmtRelative(ts: number): string {
   if (!ts) return '—';
   return fmtAgo(Date.now() - ts);
+}
+
+/** Remaining ms → 'in 4m 31s' while in the future, else 'running'. Callers that
+ * know the job has ended should render their own 'ended' label instead. */
+export function fmtCountdown(remainingMs: number): string {
+  if (remainingMs > 0) return `in ${fmtDuration(remainingMs)}`;
+  return 'running';
 }
 

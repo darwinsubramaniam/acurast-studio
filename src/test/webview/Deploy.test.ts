@@ -77,3 +77,29 @@ describe('Deploy — per-stage logs', () => {
     expect(details?.querySelector('summary')?.textContent).toContain('1 log line');
   });
 });
+
+describe('Deploy — processor start times', () => {
+  it('shows each processor’s actual start (startTime + startDelay) and the job window', () => {
+    const startTime = 1_700_000_000_000;
+    const deploy = {
+      active: true,
+      startedAt: startTime,
+      project: 'demo',
+      network: 'mainnet',
+      jobIds: [{ origin: '5Origin', localId: 7 }],
+      processors: {
+        status: 'ok',
+        fetchedAt: startTime,
+        list: [{ address: '5Proc', slot: 0, startDelay: 60_000, acknowledged: true }],
+      },
+      schedule: { startTime, endTime: startTime + 3_600_000, maxStartDelay: 300_000 },
+      stages: [],
+      chainEvents: [],
+      watching: false,
+    };
+    const { container } = render(Deploy, { props: propsFor({ deploy }) });
+    expect(screen.getByText('5Proc')).toBeInTheDocument();
+    expect(container.querySelector('.proc-start')?.textContent).toMatch(/starts/);
+    expect(container.querySelector('.proc-window')?.textContent).toMatch(/Window/);
+  });
+});

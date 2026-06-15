@@ -58,6 +58,8 @@ export interface HistoryFetchOnlineMsg { type: 'history.fetchOnline'; address: s
 export interface JobDiagnoseMsg        { type: 'history.diagnose'; origin: string; localId: number; network: string; }
 /** Deregister (cancel on-chain) a job shown in the History view. */
 export interface HistoryDeregisterMsg  { type: 'history.deregister'; origin: string; localId: number; network: string; }
+/** Fetch the per-processor assignments (slot + startDelay) for one History job, on demand. */
+export interface HistoryAssignmentsMsg { type: 'history.fetchAssignments'; origin: string; localId: number; network: string; }
 export interface HistoryRemovePathMsg  { type: 'history.removePathInfo'; id: string; }
 export interface HistoryRemoveMsg      { type: 'history.remove'; id: string; }
 export interface HistoryOpenFolderMsg  { type: 'history.openFolder'; path: string; }
@@ -76,7 +78,7 @@ export type InMsg =
   | FiatFetchListMsg | FiatSaveMsg
   | DevtoolsRefreshKeyMsg | DevtoolsOpenUrlMsg
   | ProcessorsQueryMsg | ProcessorsAdvertiseMsg
-  | HistoryLoadMsg | HistoryFetchOnlineMsg | JobDiagnoseMsg | HistoryDeregisterMsg | HistoryRemovePathMsg | HistoryRemoveMsg | HistoryOpenFolderMsg
+  | HistoryLoadMsg | HistoryFetchOnlineMsg | JobDiagnoseMsg | HistoryDeregisterMsg | HistoryAssignmentsMsg | HistoryRemovePathMsg | HistoryRemoveMsg | HistoryOpenFolderMsg
   | NetworkSetTargetMsg
   | TunnelComputeMsg | TunnelVerifyMsg;
 
@@ -282,6 +284,9 @@ export interface DeployState {
   stages: DeployStage[];
   chainEvents: ChainEvent[];
   watching: boolean;
+  /** On-chain schedule of the deployed job (epoch ms). Combined with each
+   * processor's `startDelay` to show the actual first-execution time. */
+  schedule?: { startTime: number; endTime: number; maxStartDelay?: number };
   devtoolsEnabled?: boolean;
   devtoolsUrl?: string;
   devtoolsLoading?: boolean;
@@ -304,6 +309,8 @@ export interface OnlineJobRegistration {
   endTime: number;
   intervalMs: string;
   durationMs: number;
+  /** Max per-processor stagger (ms) the matcher may add to `startTime`. */
+  maxStartDelay: number;
   slots: number;
   rewardPlanck: string;
   strategy: 'Single' | 'Competing';
@@ -391,6 +398,17 @@ export interface DeregisterStateMsg {
   status: 'loading' | 'ok' | 'error';
   /** Submitted extrinsic hash, set once the deregister is in a block. */
   txHash?: string;
+  error?: string;
+}
+
+/** Per-processor assignments for one History job, posted host→webview on demand. */
+export interface AssignmentsStateMsg {
+  type: 'assignments.state';
+  /** `${origin}:${localId}` — keys the result per job in the webview. */
+  key: string;
+  status: 'loading' | 'ok' | 'error';
+  /** Acknowledged/matched processors with slot + startDelay (ms). */
+  processors?: ProcessorInfo[];
   error?: string;
 }
 

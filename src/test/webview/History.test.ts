@@ -14,6 +14,7 @@ import type {
   StoredDeploymentWithMeta,
   LocalJobStatus,
   DeregisterStateMsg,
+  AssignmentsStateMsg,
   OnlineJobRegistration,
 } from '../../studio/types';
 
@@ -43,6 +44,7 @@ function onlineRegistration(over: Partial<OnlineJobRegistration> = {}): OnlineJo
     endTime: now + 3_600_000, // … and not yet expired → 'active'
     intervalMs: '60000',
     durationMs: 1000,
+    maxStartDelay: 300_000,
     slots: 1,
     rewardPlanck: '1000000000000',
     strategy: 'Single',
@@ -83,12 +85,17 @@ function dereg(status: DeregisterStateMsg['status'], extra: Partial<DeregisterSt
   return { [key]: { type: 'deregister.state', key, status, ...extra } };
 }
 
+function assign(status: AssignmentsStateMsg['status'], extra: Partial<AssignmentsStateMsg> = {}, key = `${ORIGIN}:7`): Record<string, AssignmentsStateMsg> {
+  return { [key]: { type: 'assignments.state', key, status, ...extra } };
+}
+
 interface HistoryProps {
   historyState: HistoryStateMsg | null;
   activeWalletAddress: string | null;
   activeNetwork: string;
   diagnoses: Record<string, never>;
   deregisters: Record<string, DeregisterStateMsg>;
+  assignments: Record<string, AssignmentsStateMsg>;
 }
 
 function baseProps(over: Partial<HistoryProps> = {}): HistoryProps {
@@ -98,6 +105,7 @@ function baseProps(over: Partial<HistoryProps> = {}): HistoryProps {
     activeNetwork: 'mainnet',
     diagnoses: {},
     deregisters: {},
+    assignments: {},
     ...over,
   };
 }
@@ -177,7 +185,10 @@ describe('History — local deregister flow', () => {
 
 // ── On-chain section: action + prune ─────────────────────────────────────────
 describe('History — on-chain deregister', () => {
-  function onlineProps(deregisters: Record<string, DeregisterStateMsg> = {}) {
+  function onlineProps(
+    deregisters: Record<string, DeregisterStateMsg> = {},
+    assignments: Record<string, AssignmentsStateMsg> = {},
+  ) {
     return {
       historyState: {
         type: 'history.state',
@@ -192,6 +203,7 @@ describe('History — on-chain deregister', () => {
       activeNetwork: 'mainnet',
       diagnoses: {},
       deregisters,
+      assignments,
     };
   }
 
@@ -216,5 +228,54 @@ describe('History — on-chain deregister', () => {
     await fireEvent.click(screen.getByRole('button', { name: /On-chain/ }));
     expect(screen.queryByText('Job #7')).not.toBeInTheDocument();
     expect(screen.getByText(/No additional on-chain deployments found/i)).toBeInTheDocument();
+  });
+});
+
+// ── On-chain section: per-processor start times ──────────────────────────────
+describe('History — on-chain processor start times', () => {
+  function onlineProps(
+    deregisters: Record<string, DeregisterStateMsg> = {},
+    assignments: Record<string, AssignmentsStateMsg> = {},
+  ) {
+    return {
+      historyState: {
+        type: 'history.state',
+        status: 'ok',
+        records: [],
+        offset: 0,
+        hasMore: false,
+        total: 0,
+        onlineRecords: [onlineRecord()],
+      } as HistoryStateMsg,
+      activeWalletAddress: ORIGIN,
+      activeNetwork: 'mainnet',
+      diagnoses: {},
+      deregisters,
+      assignments,
+    };
+  }
+
+  it('sends history.fetchAssignments when "Start times" is clicked', async () => {
+    render(History, { props: onlineProps() });
+    await fireEvent.click(screen.getByRole('button', { name: /On-chain/ }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Start times' }));
+    expect(send).toHaveBeenCalledWith('history.fetchAssignments', {
+      origin: ORIGIN,
+      localId: 7,
+      network: 'mainnet',
+    });
+  });
+
+  it('renders each processor with its actual start (startTime + startDelay)', async () => {
+    const assignments = assign('ok', {
+      processors: [{ address: '5Proc', slot: 0, startDelay: 90_000, acknowledged: true }],
+    });
+    render(History, { props: onlineProps({}, assignments) });
+    await fireEvent.click(screen.getByRole('button', { name: /On-chain/ }));
+    // The processor address and its assigned stagger delay are shown.
+    expect(screen.getByText('5Proc')).toBeInTheDocument();
+    expect(screen.getByText(/starts/)).toBeInTheDocument();
+    // The button flips to a refresh affordance once a result is present.
+    expect(screen.getByRole('button', { name: 'Refresh start times' })).toBeInTheDocument();
   });
 });

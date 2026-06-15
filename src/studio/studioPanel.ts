@@ -19,7 +19,7 @@ import { verifyTunnelDns } from '../tunnel/dnsVerify';
 import { Exchanger } from '../sdk/exchanger/exchanger';
 import { CoinGecko, type CoinGeckoPlan } from '../sdk/exchanger/coingecko';
 import { DeploymentStore } from '../deployments/deploymentStore';
-import type { Route, InMsg, WalletActionMsg, DeployState, DeployStage, DeployStageId, StageStatus, LogLevel, DeployJobId, ProcessorPubKey, ProcessorInfo, ChainEvent, PricingFiatInfo, FiatListItem, StoredDeploymentWithMeta, HistoryStateMsg, OnlineJobRegistration, LocalJobStatus, ProcessorsStateMsg, DiagnosisStateMsg, DeregisterStateMsg, TunnelStateMsg, TunnelTxtRecord, TunnelVerifyState, WalletInfo } from './types';
+import type { Route, InMsg, WalletActionMsg, DeployState, DeployStage, DeployStageId, StageStatus, LogLevel, DeployJobId, ProcessorPubKey, ProcessorInfo, ChainEvent, PricingFiatInfo, FiatListItem, StoredDeploymentWithMeta, HistoryStateMsg, OnlineJobRegistration, LocalJobStatus, ProcessorsStateMsg, DiagnosisStateMsg, DeregisterStateMsg, AssignmentsStateMsg, TunnelStateMsg, TunnelTxtRecord, TunnelVerifyState, WalletInfo } from './types';
 
 const BALANCE_POLL_MS = 30_000;
 const FIAT_PRICE_TTL_MS = 60_000;
@@ -283,6 +283,9 @@ export class StudioPanel implements vscode.WebviewViewProvider {
         break;
       case 'history.deregister':
         await this.deregisterHistoryJob(msg.origin, msg.localId, msg.network);
+        break;
+      case 'history.fetchAssignments':
+        await this.fetchJobAssignments(msg.origin, msg.localId, msg.network);
         break;
       case 'history.removePathInfo':
         await this.deploymentStore.removePathInfo(msg.id);
@@ -992,6 +995,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
         endTime: Number(sched.endTime ?? 0),
         intervalMs: String(sched.interval ?? 0),
         durationMs: Number(sched.duration ?? 0),
+        maxStartDelay: Number(sched.maxStartDelay ?? 0),
         slots: Number(req.slots ?? 1),
         rewardPlanck: String(req.reward ?? 0),
         strategy: strat.competing !== undefined ? 'Competing' : 'Single',
@@ -1120,24 +1124,51 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       for (const j of d.jobIds) {
         const chainJobId: [{ acurast: string }, number] = [{ acurast: j.origin }, j.localId];
         const infos = await getAcknowledgedProcessors(svc.api, chainJobId);
-        for (const info of infos) {
-          all.push({
-            address: info.processor,
-            slot: info.assignment.slot,
-            startDelay: info.assignment.startDelay,
-            feePerExecution: info.assignment.feePerExecution?.toString(),
-            acknowledged: info.assignment.acknowledged,
-            slaTotal: info.assignment.sla?.total?.toString(),
-            slaMet: info.assignment.sla?.met?.toString(),
-            pubKeys: flattenPubKeys(info.assignment.pubKeys),
-          });
-        }
+        for (const info of infos) all.push(this.toProcessorInfo(info));
       }
       d.processors = { status: 'ok', list: all, fetchedAt: Date.now() };
+      // Pull the job's on-chain schedule so the webview can render each
+      // processor's real first-run time (startTime + per-processor startDelay).
+      const j0 = d.jobIds[0];
+      try {
+        const reg = (await this.registrationsByLocalId(network, j0.origin)).get(j0.localId);
+        if (reg) d.schedule = { startTime: reg.startTime, endTime: reg.endTime, maxStartDelay: reg.maxStartDelay };
+      } catch { /* schedule is best-effort; processors still render without it */ }
     } catch (err: unknown) {
       d.processors = { status: 'error', message: (err as Error).message, fetchedAt: Date.now() };
     }
     this.pushDeploy();
+  }
+
+  /** Map one `getAcknowledgedProcessors` entry to the webview `ProcessorInfo` shape. */
+  private toProcessorInfo(info: Awaited<ReturnType<typeof getAcknowledgedProcessors>>[number]): ProcessorInfo {
+    return {
+      address: info.processor,
+      slot: info.assignment.slot,
+      startDelay: info.assignment.startDelay,
+      feePerExecution: info.assignment.feePerExecution?.toString(),
+      acknowledged: info.assignment.acknowledged,
+      slaTotal: info.assignment.sla?.total?.toString(),
+      slaMet: info.assignment.sla?.met?.toString(),
+      pubKeys: flattenPubKeys(info.assignment.pubKeys),
+    };
+  }
+
+  /** On-demand fetch of one job's per-processor assignments for the History view,
+   * posted keyed by `${origin}:${localId}` (mirrors diagnosis/deregister). */
+  private async fetchJobAssignments(origin: string, localId: number, network: string): Promise<void> {
+    const key = `${origin}:${localId}`;
+    this.post({ type: 'assignments.state', key, status: 'loading' } satisfies AssignmentsStateMsg);
+    try {
+      const svc = await acurastClient.service(network as AcurastNetwork);
+      if (!svc.api) throw new Error('SDK service has no api after connect');
+      const chainJobId: [{ acurast: string }, number] = [{ acurast: origin }, localId];
+      const infos = await getAcknowledgedProcessors(svc.api, chainJobId);
+      const processors = infos.map((info) => this.toProcessorInfo(info));
+      this.post({ type: 'assignments.state', key, status: 'ok', processors } satisfies AssignmentsStateMsg);
+    } catch (err: unknown) {
+      this.post({ type: 'assignments.state', key, status: 'error', error: (err as Error).message } satisfies AssignmentsStateMsg);
+    }
   }
 
   /** Public entrypoint used by commands (e.g. advertiseModules) to refresh the Processors view. */

@@ -6,11 +6,12 @@
     LocalJobStatus,
     DiagnosisStateMsg,
     DeregisterStateMsg,
+    AssignmentsStateMsg,
   } from "../types";
   import { untrack } from "svelte";
   import { send } from "./lib/vscode";
   import { ICONS } from "./lib/icons";
-  import { planckToAcu, fmtTimestamp, fmtDuration, truncate } from "./lib/format";
+  import { planckToAcu, fmtTimestamp, fmtClock, fmtDuration, fmtCountdown, truncate } from "./lib/format";
   import DiagnosisPanel from "./DiagnosisPanel.svelte";
   import Spinner from "./lib/Spinner.svelte";
 
@@ -20,6 +21,7 @@
     activeNetwork: string;
     diagnoses: Record<string, DiagnosisStateMsg>;
     deregisters: Record<string, DeregisterStateMsg>;
+    assignments: Record<string, AssignmentsStateMsg>;
   }
   let {
     historyState,
@@ -27,6 +29,7 @@
     activeNetwork,
     diagnoses,
     deregisters,
+    assignments,
   }: Props = $props();
 
   // Trigger an on-chain diagnosis for a record's first job id.
@@ -58,6 +61,28 @@
   // expired/missing registrations have nothing left to deregister.
   const canDeregister = (status: string | undefined): boolean =>
     status === "active" || status === "scheduled";
+
+  // Fetch the per-processor assignments (slot + startDelay) for a record's first
+  // job; the host replies via the `assignments` map keyed like diagnoses.
+  function fetchAssignments(rec: StoredDeploymentWithMeta) {
+    const job = rec.jobIds[0];
+    if (!job) return;
+    send("history.fetchAssignments", {
+      origin: job.origin,
+      localId: job.localId,
+      network: rec.network,
+    });
+  }
+
+  // Live clock for the per-processor start countdowns. Ticks once a second only
+  // while at least one job's assignments have been fetched.
+  let now = $state(Date.now());
+  $effect(() => {
+    const live = Object.values(assignments).some((a) => a?.status === "ok");
+    if (!live) return;
+    const id = setInterval(() => (now = Date.now()), 1000);
+    return () => clearInterval(id);
+  });
 
   // ── Local section ────────────────────────────────────────────────────────────
   let accumulated = $state<StoredDeploymentWithMeta[]>([]);
@@ -497,6 +522,7 @@
                 {#if rec.jobIds[0]}
                   {@const dstate = diagnoses[diagKey(rec)]}
                   {@const dreg = deregisters[diagKey(rec)]}
+                  {@const astate = assignments[diagKey(rec)]}
                   <div class="h-card-actions">
                     <button
                       class="diag-btn"
@@ -509,6 +535,19 @@
                           ? "Re-run diagnosis"
                           : "Diagnose"}
                     </button>
+                    {#if rec.registration}
+                      <button
+                        class="diag-btn"
+                        onclick={() => fetchAssignments(rec)}
+                        disabled={astate?.status === "loading"}
+                      >
+                        {astate?.status === "loading"
+                          ? "Loading…"
+                          : astate
+                            ? "Refresh start times"
+                            : "Start times"}
+                      </button>
+                    {/if}
                     {#if canDeregister(status)}
                       <button
                         class="dereg-btn"
@@ -525,6 +564,44 @@
                   </div>
                   {#if dreg?.status === "error"}
                     <div class="dereg-error">{dreg.error}</div>
+                  {/if}
+                  {#if astate}
+                    <div class="h-assignments">
+                      {#if astate.status === "loading"}
+                        <Spinner size={10} label="Fetching processors…" />
+                      {:else if astate.status === "error"}
+                        <div class="dereg-error">{astate.error}</div>
+                      {:else if astate.status === "ok"}
+                        {#if !astate.processors?.length}
+                          <div class="proc-empty">No processors assigned yet.</div>
+                        {:else if rec.registration}
+                          {@const start = rec.registration.startTime}
+                          {@const end = rec.registration.endTime}
+                          {#each astate.processors as p (p.address)}
+                            {@const actualStart = start + (p.startDelay ?? 0)}
+                            <div class="proc-card">
+                              <div class="proc-addr" title={p.address}>{p.address}</div>
+                              <div class="proc-meta">
+                                {#if p.slot != null}<span>slot <b>{p.slot}</b></span>{/if}
+                                {#if p.startDelay != null}<span
+                                    >delay <b title={`${p.startDelay}ms`}
+                                      >{fmtDuration(p.startDelay)}</b
+                                    ></span
+                                  >{/if}
+                              </div>
+                              <div class="proc-start">
+                                starts <b title={fmt(actualStart)}>{fmtClock(actualStart)}</b>
+                                · <span class="proc-start-rel"
+                                  >{now >= end
+                                    ? "ended"
+                                    : fmtCountdown(actualStart - now)}</span
+                                >
+                              </div>
+                            </div>
+                          {/each}
+                        {/if}
+                      {/if}
+                    </div>
                   {/if}
                   <DiagnosisPanel state={dstate} />
                 {/if}
@@ -757,6 +834,9 @@
     font-size: 10.5px;
     color: var(--vscode-errorForeground);
     word-break: break-word;
+  }
+  .h-assignments {
+    margin-top: 6px;
   }
   .dereg-tx {
     margin-top: 6px;
