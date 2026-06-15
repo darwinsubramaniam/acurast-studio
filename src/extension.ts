@@ -53,7 +53,7 @@ export async function activate(extensionContext: vscode.ExtensionContext) {
     await seedDemoData(wallet, deploymentStore);
   }
 
-  const studioPanel = new StudioPanel(extensionContext.extensionUri, ctx, wallet, extensionContext.secrets, deploymentStore);
+  const studioPanel = new StudioPanel(extensionContext.extensionUri, ctx, wallet, extensionContext.secrets, deploymentStore, extensionContext.workspaceState);
   const statusBar = new AcurastStatusBar(wallet, ctx);
   const output = vscode.window.createOutputChannel('Acurast');
 
@@ -65,6 +65,7 @@ export async function activate(extensionContext: vscode.ExtensionContext) {
     vscode.window.registerWebviewViewProvider(StudioPanel.viewId, studioPanel),
     vscode.commands.registerCommand(SHOW_WALLETS_COMMAND_ID, () => studioPanel.navigate('wallets')),
     vscode.commands.registerCommand('acurast.studio.home', () => studioPanel.navigate('home')),
+    vscode.commands.registerCommand('acurast.studio.showTunnel', () => studioPanel.navigate('tunnel')),
     ...registerWalletCommands(wallet),
     ...registerCommands({ ctx, wallet, output, studioPanel }),
     ...registerAcurastLanguageService(extensionContext),

@@ -122,6 +122,15 @@
     <span class="chev">{@html ICONS.chev}</span>
   </button>
 
+  <button class="nav-card" onclick={() => navigate("tunnel")}>
+    <span class="icon">{@html ICONS.globe}</span>
+    <div class="body">
+      <div class="title">Tunnel DNS</div>
+      <div class="sub">Configure deployment DNS records</div>
+    </div>
+    <span class="chev">{@html ICONS.chev}</span>
+  </button>
+
   <button class="nav-card" onclick={() => navigate("history")}>
     <span class="icon">{@html ICONS.history}</span>
     <div class="body">

@@ -1,8 +1,9 @@
 import type { WalletInfo } from '../wallet/walletService';
+import type { AcurastNetwork, TunnelRelay } from '../sdk/constants';
 
-export type { WalletInfo };
+export type { WalletInfo, AcurastNetwork, TunnelRelay };
 
-export type Route = 'home' | 'wallets' | 'settings' | 'deploy' | 'history' | 'processors';
+export type Route = 'home' | 'wallets' | 'settings' | 'deploy' | 'history' | 'processors' | 'tunnel';
 
 export interface NavigateMsg { type: 'navigate'; route: Route; }
 export interface ReadyMsg { type: 'ready'; }
@@ -58,6 +59,10 @@ export interface HistoryRemoveMsg      { type: 'history.remove'; id: string; }
 export interface HistoryOpenFolderMsg  { type: 'history.openFolder'; path: string; }
 /** Align the Studio target network (`acurast.network` setting) to `network`. */
 export interface NetworkSetTargetMsg   { type: 'network.setTarget'; network: string; }
+/** Recompute the tunnel DNS records for `suffix` on `network`, for `walletId` (defaults to active). */
+export interface TunnelComputeMsg      { type: 'tunnel.compute'; suffix: string; network: AcurastNetwork; walletId?: string; }
+/** Resolve and verify the published tunnel DNS records for `suffix` on `network`, for `walletId` (defaults to active). */
+export interface TunnelVerifyMsg       { type: 'tunnel.verify'; suffix: string; network: AcurastNetwork; walletId?: string; }
 
 export type InMsg =
   | NavigateMsg | ReadyMsg | WalletActionMsg | RefreshBalanceMsg
@@ -68,7 +73,8 @@ export type InMsg =
   | DevtoolsRefreshKeyMsg | DevtoolsOpenUrlMsg
   | ProcessorsQueryMsg | ProcessorsAdvertiseMsg
   | HistoryLoadMsg | HistoryFetchOnlineMsg | JobDiagnoseMsg | HistoryRemovePathMsg | HistoryRemoveMsg | HistoryOpenFolderMsg
-  | NetworkSetTargetMsg;
+  | NetworkSetTargetMsg
+  | TunnelComputeMsg | TunnelVerifyMsg;
 
 export interface SerializedFees {
   numberOfExecutions: string;
@@ -369,4 +375,46 @@ export interface BalanceMsg {
   symbol?: string;
   network?: string;
   message?: string;
+}
+
+// ── Tunnel DNS wizard ─────────────────────────────────────────────────────────
+/** The `_acu.<suffix>` TXT record for one deployer wallet. */
+export interface TunnelTxtRecord {
+  walletId: string;
+  /** Wallet display name. */
+  name: string;
+  /** SS58 address of the wallet. */
+  address: string;
+  /** base64(sha256(pubkey || suffix)). */
+  txtValue: string;
+  /** null = not checked yet; true/false after a DNS verify. */
+  verified?: boolean | null;
+}
+
+export interface TunnelVerifyState {
+  status: 'idle' | 'checking' | 'done' | 'error';
+  error?: string;
+  wildcard?: { name: string; expectedIps: string[]; resolvedIps: string[]; ok: boolean };
+  /** Raw TXT records found at `_acu.<suffix>` during the last check. */
+  txtFound?: string[];
+}
+
+export interface TunnelStateMsg {
+  type: 'tunnel.state';
+  network: AcurastNetwork;
+  /** Normalized domain suffix the records are computed for ('' when unset). */
+  suffix: string;
+  relays: TunnelRelay[];
+  /** `*.<suffix>` ('' when no suffix). */
+  wildcardName: string;
+  /** `_acu.<suffix>` ('' when no suffix). */
+  txtName: string;
+  /** `https://<clientId>.<suffix>:8443` ('' when no suffix). */
+  publicUrlExample: string;
+  port: number;
+  /** Wallet the TXT record is currently shown for (resolved to the active wallet by default). */
+  selectedWalletId: string | null;
+  /** TXT record for the selected deployer wallet (null until a suffix is set). */
+  record: TunnelTxtRecord | null;
+  verify: TunnelVerifyState;
 }

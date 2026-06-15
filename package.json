@@ -59,6 +59,12 @@
         "icon": "$(home)"
       },
       {
+        "command": "acurast.studio.showTunnel",
+        "title": "Configure Tunnel DNS",
+        "category": "Acurast",
+        "icon": "$(globe)"
+      },
+      {
         "command": "acurast.setActiveConfig",
         "title": "Set as Active acurast.json",
         "category": "Acurast"
@@ -228,6 +234,25 @@
             }
           }
         },
+        "acurast.tunnelRelays": {
+          "type": "object",
+          "default": {},
+          "description": "Optional tunnel relay node IP overrides per network for the Tunnel DNS wizard. When set for a network, replaces the built-in defaults (Canary ships with defaults; Mainnet has none yet). Example: { \"canary\": [\"57.129.64.128\", \"176.9.45.137\"] }",
+          "properties": {
+            "mainnet": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "canary": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
         "acurast.useKeychainForMnemonic": {
           "type": "boolean",
           "default": true,
@@ -338,20 +363,20 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/svelte": "^5.3.1",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.3",
     "@types/vscode": "^1.120.0",
-    "@typescript-eslint/eslint-plugin": "^8.60.1",
-    "@typescript-eslint/parser": "^8.60.1",
+    "@typescript-eslint/eslint-plugin": "^8.61.0",
+    "@typescript-eslint/parser": "^8.61.0",
     "@vscode/test-cli": "^0.0.12",
-    "@vscode/test-electron": "^2.5.2",
+    "@vscode/test-electron": "^3.0.0",
     "@vscode/vsce": "^3.9.2",
-    "esbuild": "^0.28.0",
+    "esbuild": "^0.28.1",
     "esbuild-svelte": "^0.9.5",
-    "eslint": "^10.4.1",
+    "eslint": "^10.5.0",
     "fantasticon": "^4.1.0",
     "jsdom": "^29.1.1",
     "playwright-core": "^1.60.0",
-    "svelte": "^5.56.1",
+    "svelte": "^5.56.3",
     "svelte-preprocess": "^6.0.5",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8"

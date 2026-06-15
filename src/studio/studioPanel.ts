@@ -10,17 +10,20 @@ import type { UnsubEvent } from '@acurast/sdk/chain';
 import { loadAcurastConfig } from '@acurast/sdk/deploy';
 import { toCacu } from '@acurast/sdk/matcher';
 import { loadPricing } from '../sdk/pricing';
-import { SYMBOL, MATCHER_ENDPOINTS, type AcurastNetwork } from '../sdk/constants';
+import { SYMBOL, MATCHER_ENDPOINTS, TUNNEL_PORT, type AcurastNetwork } from '../sdk/constants';
 import { networkLabel } from '../lib/network';
 import { setTargetNetwork, getProjectNetwork } from '../wallet/networkSetting';
+import { computeTxtValue, relaysFor, wildcardName, txtName, publicUrlExample, normalizeSuffix } from '../tunnel/tunnel';
+import { verifyTunnelDns } from '../tunnel/dnsVerify';
 import { Exchanger } from '../sdk/exchanger/exchanger';
 import { CoinGecko, type CoinGeckoPlan } from '../sdk/exchanger/coingecko';
 import { DeploymentStore } from '../deployments/deploymentStore';
-import type { Route, InMsg, WalletActionMsg, DeployState, DeployStage, DeployStageId, StageStatus, DeployJobId, ProcessorPubKey, ProcessorInfo, ChainEvent, PricingFiatInfo, FiatListItem, StoredDeploymentWithMeta, HistoryStateMsg, OnlineJobRegistration, LocalJobStatus, ProcessorsStateMsg, DiagnosisStateMsg } from './types';
+import type { Route, InMsg, WalletActionMsg, DeployState, DeployStage, DeployStageId, StageStatus, DeployJobId, ProcessorPubKey, ProcessorInfo, ChainEvent, PricingFiatInfo, FiatListItem, StoredDeploymentWithMeta, HistoryStateMsg, OnlineJobRegistration, LocalJobStatus, ProcessorsStateMsg, DiagnosisStateMsg, TunnelStateMsg, TunnelTxtRecord, TunnelVerifyState, WalletInfo } from './types';
 
 const BALANCE_POLL_MS = 30_000;
 const FIAT_PRICE_TTL_MS = 60_000;
 const HISTORY_PAGE_SIZE = 15;
+const TUNNEL_SUFFIX_KEY = 'acurast.tunnel.suffix';
 const FIAT_API_KEY_SECRET = (exchangerId: number) => `acurast.fiat.apiKey.${exchangerId}`;
 
 function defaultStages(): DeployStage[] {
@@ -49,13 +52,22 @@ export class StudioPanel implements vscode.WebviewViewProvider {
   private _chainWatchToken = 0;
   private _exchanger = new Exchanger();
   private _fiatPriceCache: { key: string; value: number; fetchedAt: number } | undefined;
+  // Tunnel DNS wizard state. `_tunnelSuffix === undefined` means "not loaded
+  // from workspaceState yet". The last verify result is kept so a re-push (e.g.
+  // navigating back, or switching the deployer wallet) doesn't discard the
+  // ✓/✗ marks — the published TXT set is cached in `_tunnelVerify.txtFound`.
+  private _tunnelSuffix: string | undefined;
+  private _tunnelNetwork: AcurastNetwork | undefined;
+  private _tunnelWalletId: string | undefined;
+  private _tunnelVerify: TunnelVerifyState = { status: 'idle' };
 
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly ctx: AcurastContext,
     private readonly wallet: WalletService,
     private readonly secrets: vscode.SecretStorage,
-    private readonly deploymentStore: DeploymentStore
+    private readonly deploymentStore: DeploymentStore,
+    private readonly workspaceState: vscode.Memento
   ) {
     wallet.onDidChange(() => this.pushWallets());
     ctx.onDidChangeActiveConfig(() => {
@@ -140,6 +152,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       if (route === 'settings') await this.pushConfig();
       if (route === 'deploy') { this.pushDeploy(); if (!this._deploy) void this.pushPricing(); }
       if (route === 'history') await this.pushHistory();
+      if (route === 'tunnel') await this.pushTunnel();
     }
     // Reveal the view (auto-generated focus command)
     await vscode.commands.executeCommand('acurastStudio.focus');
@@ -185,6 +198,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
         if (msg.route === 'settings') await this.pushConfig();
         if (msg.route === 'deploy') { this.pushDeploy(); if (!this._deploy) void this.pushPricing(); }
         if (msg.route === 'history') await this.pushHistory();
+        if (msg.route === 'tunnel') await this.pushTunnel();
         break;
       case 'wallet':
         await this.runWalletAction(msg);
@@ -272,6 +286,12 @@ export class StudioPanel implements vscode.WebviewViewProvider {
         await setTargetNetwork(msg.network);
         vscode.window.setStatusBarMessage(`Acurast network: ${networkLabel(msg.network)}`, 2000);
         break;
+      case 'tunnel.compute':
+        await this.pushTunnel(msg.suffix, msg.network, msg.walletId);
+        break;
+      case 'tunnel.verify':
+        await this.verifyTunnel(msg.suffix, msg.network, msg.walletId);
+        break;
     }
   }
 
@@ -307,6 +327,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     await this.pushFiatSelection();
     if (this._route === 'deploy') { this.pushDeploy(); if (!this._deploy) void this.pushPricing(); }
     if (this._route === 'history') await this.pushHistory();
+    if (this._route === 'tunnel') await this.pushTunnel();
   }
 
   /**
@@ -317,6 +338,126 @@ export class StudioPanel implements vscode.WebviewViewProvider {
   private async pushNetworkMismatch() {
     const projectNetwork = getProjectNetwork(this.ctx.configPath) ?? null;
     this.post({ type: 'network.mismatch', projectNetwork, targetNetwork: this.network });
+  }
+
+  // ── Tunnel DNS wizard ───────────────────────────────────────────────────────
+  /**
+   * Default network for the tunnel records. Relays/wildcard records belong to
+   * the *deploy* target, so prefer the project's acurast.json network, falling
+   * back to the Studio target setting.
+   */
+  private get tunnelNetwork(): AcurastNetwork {
+    const proj = getProjectNetwork(this.ctx.configPath);
+    return proj === 'mainnet' || proj === 'canary' ? proj : this.network;
+  }
+
+  private tunnelRelayOverride(): Partial<Record<AcurastNetwork, string[]>> | undefined {
+    return vscode.workspace
+      .getConfiguration('acurast')
+      .get<Partial<Record<AcurastNetwork, string[]>>>('tunnelRelays');
+  }
+
+  /** The deployer wallet the TXT record is shown/verified for: the explicit
+   * selection if it still exists, else the active wallet, else the first. */
+  private async resolveTunnelWallet(): Promise<WalletInfo | undefined> {
+    const wallets = await this.wallet.list();
+    const activeId = await this.wallet.getActiveId();
+    return (
+      wallets.find((w) => w.id === this._tunnelWalletId) ??
+      wallets.find((w) => w.id === activeId) ??
+      wallets[0]
+    );
+  }
+
+  private async buildTunnelState(suffix: string, network: AcurastNetwork): Promise<TunnelStateMsg> {
+    const relays = relaysFor(network, this.tunnelRelayOverride());
+    const selected = await this.resolveTunnelWallet();
+    const done = this._tunnelVerify.status === 'done';
+    const txtFound = this._tunnelVerify.txtFound ?? [];
+
+    let record: TunnelTxtRecord | null = null;
+    if (suffix && selected) {
+      const txtValue = computeTxtValue(selected.publicKey, suffix);
+      record = {
+        walletId: selected.id,
+        name: selected.name,
+        address: selected.address,
+        txtValue,
+        // The relay accepts any matching record, so membership in the published
+        // TXT set is enough to verify whichever wallet is currently selected.
+        verified: done ? txtFound.includes(txtValue) : null,
+      };
+    }
+
+    return {
+      type: 'tunnel.state',
+      network,
+      suffix,
+      relays,
+      wildcardName: suffix ? wildcardName(suffix) : '',
+      txtName: suffix ? txtName(suffix) : '',
+      publicUrlExample: suffix ? publicUrlExample(suffix) : '',
+      port: TUNNEL_PORT,
+      selectedWalletId: selected?.id ?? null,
+      record,
+      verify: this._tunnelVerify,
+    };
+  }
+
+  private async pushTunnel(suffix?: string, network?: AcurastNetwork, walletId?: string) {
+    if (this._tunnelSuffix === undefined) {
+      this._tunnelSuffix = normalizeSuffix(this.workspaceState.get<string>(TUNNEL_SUFFIX_KEY, ''));
+    }
+    const nextSuffix = suffix !== undefined ? normalizeSuffix(suffix) : this._tunnelSuffix;
+    const nextNetwork = network ?? this._tunnelNetwork ?? this.tunnelNetwork;
+
+    // Suffix/network change invalidates the cached DNS check; switching the
+    // deployer wallet does not — only which TXT value we look for changes.
+    if (nextSuffix !== this._tunnelSuffix || nextNetwork !== this._tunnelNetwork) {
+      this._tunnelVerify = { status: 'idle' };
+    }
+    this._tunnelSuffix = nextSuffix;
+    this._tunnelNetwork = nextNetwork;
+    if (walletId !== undefined) this._tunnelWalletId = walletId;
+    if (suffix !== undefined) await this.workspaceState.update(TUNNEL_SUFFIX_KEY, nextSuffix);
+
+    this.post(await this.buildTunnelState(nextSuffix, nextNetwork));
+  }
+
+  private async verifyTunnel(suffix: string, network: AcurastNetwork, walletId?: string) {
+    const norm = normalizeSuffix(suffix);
+    this._tunnelSuffix = norm;
+    this._tunnelNetwork = network;
+    if (walletId !== undefined) this._tunnelWalletId = walletId;
+    await this.workspaceState.update(TUNNEL_SUFFIX_KEY, norm);
+
+    const selected = await this.resolveTunnelWallet();
+    if (!norm) {
+      this._tunnelVerify = { status: 'error', error: 'Enter a domain suffix first.' };
+      this.post(await this.buildTunnelState(norm, network));
+      return;
+    }
+    if (!selected) {
+      this._tunnelVerify = { status: 'error', error: 'No wallet selected.' };
+      this.post(await this.buildTunnelState(norm, network));
+      return;
+    }
+
+    this._tunnelVerify = { status: 'checking' };
+    this.post(await this.buildTunnelState(norm, network));
+
+    const relays = relaysFor(network, this.tunnelRelayOverride());
+    const expectedIps = relays.map((r) => r.ip);
+    const expectedTxt = [{ walletId: selected.id, value: computeTxtValue(selected.publicKey, norm) }];
+
+    const result = await verifyTunnelDns(norm, expectedIps, expectedTxt);
+    this._tunnelVerify = {
+      status: result.error ? 'error' : 'done',
+      error: result.error,
+      wildcard: result.wildcard,
+      txtFound: result.txtFound,
+    };
+    this.post(await this.buildTunnelState(norm, network));
   }
 
   private async pushWallets() {
