@@ -11,6 +11,7 @@
     ProcessorsStateMsg,
     DiagnosisStateMsg,
     DeregisterStateMsg,
+    AssignmentsStateMsg,
     TunnelStateMsg,
   } from "../types";
   import { send } from "./lib/vscode";
@@ -74,6 +75,8 @@
   let diagnoses = $state<Record<string, DiagnosisStateMsg>>({});
   // Per-job deregister progress, keyed by `${origin}:${localId}`.
   let deregisters = $state<Record<string, DeregisterStateMsg>>({});
+  // Per-job processor assignments (slot + startDelay), keyed by `${origin}:${localId}`.
+  let assignments = $state<Record<string, AssignmentsStateMsg>>({});
   let activeWalletAddress = $derived(
     wallets.list.find((w) => w.id === wallets.activeId)?.address ?? null,
   );
@@ -149,6 +152,11 @@
           deregisters = { ...deregisters, [d.key]: d };
           break;
         }
+        case "assignments.state": {
+          const d = msg as unknown as AssignmentsStateMsg;
+          assignments = { ...assignments, [d.key]: d };
+          break;
+        }
       }
     }
     window.addEventListener("message", onMessage);
@@ -217,6 +225,7 @@
     activeNetwork={wallets.network}
     {diagnoses}
     {deregisters}
+    {assignments}
   />
 {:else if route === "processors"}
   <Processors {wallets} {processorsState} />

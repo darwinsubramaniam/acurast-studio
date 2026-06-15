@@ -16,6 +16,8 @@
     fmtFiat,
     fmtClock,
     fmtDuration,
+    fmtTimestamp,
+    fmtCountdown,
   } from "./lib/format";
 
   interface Props {
@@ -31,6 +33,19 @@
   const satoshiToACU = planckToAcu;
   const satoshiToFiat = planckToFiat;
   const fmtTime = fmtClock;
+
+  // Live clock driving the per-processor start countdowns. Ticks once a second
+  // while the deployed job has a schedule, and self-stops past its end.
+  let now = $state(Date.now());
+  $effect(() => {
+    const sched = deploy?.schedule;
+    if (!sched) return;
+    const id = setInterval(() => {
+      now = Date.now();
+      if (now >= sched.endTime) clearInterval(id);
+    }, 1000);
+    return () => clearInterval(id);
+  });
 
   function statusClass(d: DeployState): string {
     if (d.active) return "running";
@@ -440,6 +455,12 @@
           onclick={() => send("deploy.queryProcessors")}>Refresh</button
         >
       </div>
+      {#if d.schedule?.startTime}
+        <div class="proc-window" title="Job schedule window (from acurast.storedJobRegistration)">
+          Window {fmtTime(d.schedule.startTime)} → {fmtTime(d.schedule.endTime)}{#if d.schedule.maxStartDelay}
+            · max delay {fmtDuration(d.schedule.maxStartDelay)}{/if}
+        </div>
+      {/if}
       {#if proc.status === "idle"}
         <div class="proc-empty">
           Click "Refresh" to query assigned processors.
@@ -472,6 +493,15 @@
                     >delay <b title={`${p.startDelay}ms`}>{fmtDuration(p.startDelay)}</b></span
                   >{/if}
               </div>
+              {#if d.schedule?.startTime}
+                {@const actualStart = d.schedule.startTime + (p.startDelay ?? 0)}
+                <div class="proc-start">
+                  starts <b title={fmtTimestamp(actualStart)}>{fmtTime(actualStart)}</b>
+                  · <span class="proc-start-rel"
+                    >{now >= d.schedule.endTime ? "ended" : fmtCountdown(actualStart - now)}</span
+                  >
+                </div>
+              {/if}
               {#if p.pubKeys?.length}
                 <div class="proc-keys">
                   <div class="proc-keys-label">Public keys (for topup)</div>
