@@ -30,6 +30,27 @@
           "description": "Path to the bundled file (e.g. dist/bundle.js), an IPFS hash, or an HTTPS URL.",
           "minLength": 1
         },
+        "build": {
+          "type": "object",
+          "description": "Optional build step run before deploy. Lets non-JS toolchains (cargo, make, a TS bundler, …) produce the deployable artifact. Runs in a trusted workspace only.",
+          "required": ["command"],
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "description": "Shell command that produces the deployable artifact (e.g. \"cargo build --release\", \"npm run build\").",
+              "minLength": 1
+            },
+            "cwd": {
+              "type": "string",
+              "description": "Working directory for the command, relative to the project root. Defaults to the project root."
+            },
+            "output": {
+              "type": "string",
+              "description": "Path to the built artifact, relative to the project root. Deployed in place of fileUrl when set; verified to exist after the build."
+            }
+          }
+        },
         "network": {
           "type": "string",
           "description": "Network to deploy on.",

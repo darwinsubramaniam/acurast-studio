@@ -75,3 +75,45 @@ describe('Settings — includeEnvironmentVariables field', () => {
     });
   });
 });
+
+// The build fields live in the (collapsed) "Build" accordion section.
+async function openBuild() {
+  await fireEvent.click(screen.getByText('Build'));
+  return (await screen.findByLabelText(/Build command/i)) as HTMLInputElement;
+}
+
+describe('Settings — build section', () => {
+  it('renders the stored build fields', async () => {
+    render(Settings, { props: propsFor({ ...VALID, build: { command: 'npm run build', cwd: 'app', output: 'dist/index.js' } }) });
+    const cmd = await openBuild();
+    expect(cmd.value).toBe('npm run build');
+    expect((screen.getByLabelText(/Working directory/i) as HTMLInputElement).value).toBe('app');
+    expect((screen.getByLabelText(/Output artifact/i) as HTMLInputElement).value).toBe('dist/index.js');
+  });
+
+  it('saves a build.command edit as a nested build object', async () => {
+    render(Settings, { props: propsFor(VALID) });
+    const cmd = await openBuild();
+
+    await fireEvent.input(cmd, { target: { value: 'cargo build --release' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    expect(send).toHaveBeenCalledWith('config.save', {
+      projectKey: 'demo',
+      patch: expect.objectContaining({ build: expect.objectContaining({ command: 'cargo build --release' }) }),
+    });
+  });
+
+  it('preserves sibling build fields when editing only the command', async () => {
+    render(Settings, { props: propsFor({ ...VALID, build: { command: 'old', cwd: 'app', output: 'dist/index.js' } }) });
+    const cmd = await openBuild();
+
+    await fireEvent.input(cmd, { target: { value: 'new' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    expect(send).toHaveBeenCalledWith('config.save', {
+      projectKey: 'demo',
+      patch: expect.objectContaining({ build: { command: 'new', cwd: 'app', output: 'dist/index.js' } }),
+    });
+  });
+});

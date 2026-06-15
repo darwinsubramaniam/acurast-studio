@@ -2,7 +2,7 @@
   "name": "acurast-studio",
   "displayName": "Acurast Studio",
   "description": "VS Code extension for Acurast serverless development — encrypted wallets, one-click deploy, cost estimation, and deployment history.",
-  "version": "0.4.1",
+  "version": "0.5.1",
   "publisher": "dw3labs",
   "license": "MIT",
   "repository": {
@@ -27,6 +27,12 @@
     "workspaceContains:acurast.json"
   ],
   "main": "./dist/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Wallets, balance, and history work in untrusted workspaces. The build step (acurast.json `build.command`) runs a shell command and only executes in a trusted workspace."
+    }
+  },
   "contributes": {
     "commands": [
       {
@@ -39,6 +45,12 @@
         "title": "Deploy",
         "category": "Acurast",
         "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "acurast.build",
+        "title": "Build",
+        "category": "Acurast",
+        "icon": "$(tools)"
       },
       {
         "command": "acurast.estimateCost",
@@ -146,9 +158,14 @@
           "group": "navigation@1"
         },
         {
-          "command": "acurast.deploy",
+          "command": "acurast.build",
           "when": "view == acurastStudio && acurast.isAcurastProject",
           "group": "navigation@2"
+        },
+        {
+          "command": "acurast.deploy",
+          "when": "view == acurastStudio && acurast.isAcurastProject",
+          "group": "navigation@3"
         }
       ],
       "editor/title": [
@@ -175,6 +192,10 @@
       "commandPalette": [
         {
           "command": "acurast.deploy",
+          "when": "acurast.isAcurastProject"
+        },
+        {
+          "command": "acurast.build",
           "when": "acurast.isAcurastProject"
         },
         {

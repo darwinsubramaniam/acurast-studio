@@ -290,6 +290,30 @@ input.field-error, textarea.field-error { border-color: var(--vscode-inputValida
   font-size: 10px; color: var(--vscode-descriptionForeground);
   margin-top: 2px; word-break: break-all;
 }
+
+/* Per-stage captured output, color-coded by log level. */
+.stage .logdetails { margin-top: 4px; }
+.stage .logdetails > summary {
+  cursor: pointer; user-select: none;
+  font-size: 10px; color: var(--vscode-textLink-foreground);
+}
+.stage .logbox {
+  margin-top: 4px;
+  max-height: 220px; overflow: auto;
+  background: var(--vscode-editor-background, var(--vscode-textCodeBlock-background));
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  padding: 4px 6px;
+}
+.stage .logline {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 11px; line-height: 1.4;
+  white-space: pre-wrap; word-break: break-word;
+}
+.stage .log-info  { color: var(--vscode-foreground); }
+.stage .log-debug { color: var(--vscode-descriptionForeground); }
+.stage .log-warn  { color: var(--vscode-editorWarning-foreground, #cca700); }
+.stage .log-error { color: var(--vscode-errorForeground, #f48771); }
 @keyframes pulse {
   0%, 100% { box-shadow: 0 0 0 0 var(--vscode-progressBar-background, var(--vscode-focusBorder)); opacity: 1; }
   50%      { box-shadow: 0 0 0 4px transparent; opacity: 0.6; }

@@ -4,6 +4,7 @@ import { WalletService } from '../wallet/walletService';
 import { StudioPanel } from '../studio/studioPanel';
 import { newProject } from './newProject';
 import { deploy } from './deploy';
+import { acurastBuild } from './build';
 import { estimateCost } from './estimateCost';
 import { advertiseModules } from './advertiseModules';
 import { setActiveConfig, chooseConfig, clearActiveConfig } from './projectConfig';
@@ -20,6 +21,7 @@ export function registerCommands(deps: CommandDeps): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('acurast.newProject', () => newProject(ctx)),
     vscode.commands.registerCommand('acurast.deploy', () => deploy({ ctx, wallet, output, studioPanel })),
+    vscode.commands.registerCommand('acurast.build', (projectKey?: string) => acurastBuild({ ctx, output }, projectKey)),
     vscode.commands.registerCommand('acurast.estimateCost', () => estimateCost({ ctx, wallet, output })),
     vscode.commands.registerCommand('acurast.processor.advertiseModules', (args) =>
       advertiseModules({ wallet, output, studioPanel }, args)

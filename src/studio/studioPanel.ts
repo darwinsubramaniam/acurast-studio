@@ -12,13 +12,14 @@ import { toCacu } from '@acurast/sdk/matcher';
 import { loadPricing } from '../sdk/pricing';
 import { SYMBOL, MATCHER_ENDPOINTS, TUNNEL_PORT, type AcurastNetwork } from '../sdk/constants';
 import { networkLabel } from '../lib/network';
+import { stripAnsi } from '../lib/log';
 import { setTargetNetwork, getProjectNetwork } from '../wallet/networkSetting';
 import { computeTxtValue, relaysFor, wildcardName, txtName, publicUrlExample, normalizeSuffix } from '../tunnel/tunnel';
 import { verifyTunnelDns } from '../tunnel/dnsVerify';
 import { Exchanger } from '../sdk/exchanger/exchanger';
 import { CoinGecko, type CoinGeckoPlan } from '../sdk/exchanger/coingecko';
 import { DeploymentStore } from '../deployments/deploymentStore';
-import type { Route, InMsg, WalletActionMsg, DeployState, DeployStage, DeployStageId, StageStatus, DeployJobId, ProcessorPubKey, ProcessorInfo, ChainEvent, PricingFiatInfo, FiatListItem, StoredDeploymentWithMeta, HistoryStateMsg, OnlineJobRegistration, LocalJobStatus, ProcessorsStateMsg, DiagnosisStateMsg, DeregisterStateMsg, TunnelStateMsg, TunnelTxtRecord, TunnelVerifyState, WalletInfo } from './types';
+import type { Route, InMsg, WalletActionMsg, DeployState, DeployStage, DeployStageId, StageStatus, LogLevel, DeployJobId, ProcessorPubKey, ProcessorInfo, ChainEvent, PricingFiatInfo, FiatListItem, StoredDeploymentWithMeta, HistoryStateMsg, OnlineJobRegistration, LocalJobStatus, ProcessorsStateMsg, DiagnosisStateMsg, DeregisterStateMsg, TunnelStateMsg, TunnelTxtRecord, TunnelVerifyState, WalletInfo } from './types';
 
 const BALANCE_POLL_MS = 30_000;
 const FIAT_PRICE_TTL_MS = 60_000;
@@ -26,16 +27,20 @@ const HISTORY_PAGE_SIZE = 15;
 const TUNNEL_SUFFIX_KEY = 'acurast.tunnel.suffix';
 const FIAT_API_KEY_SECRET = (exchangerId: number) => `acurast.fiat.apiKey.${exchangerId}`;
 
-function defaultStages(): DeployStage[] {
-  return [
-    { id: 'bundle', label: 'Package bundle', status: 'pending' },
-    { id: 'upload', label: 'Upload to IPFS', status: 'pending' },
-    { id: 'prepare', label: 'Prepare job', status: 'pending' },
-    { id: 'submit', label: 'Submit transaction', status: 'pending' },
-    { id: 'match', label: 'Match processor', status: 'pending' },
-    { id: 'acknowledge', label: 'Acknowledge', status: 'pending' },
-    { id: 'envvars', label: 'Set env vars', status: 'pending' },
+function defaultStages(hasBuild = false): DeployStage[] {
+  const stages: DeployStage[] = [
+    { id: 'bundle', label: 'Package bundle', status: 'pending', logs: [] },
+    { id: 'upload', label: 'Upload to IPFS', status: 'pending', logs: [] },
+    { id: 'prepare', label: 'Prepare job', status: 'pending', logs: [] },
+    { id: 'submit', label: 'Submit transaction', status: 'pending', logs: [] },
+    { id: 'match', label: 'Match processor', status: 'pending', logs: [] },
+    { id: 'acknowledge', label: 'Acknowledge', status: 'pending', logs: [] },
+    { id: 'envvars', label: 'Set env vars', status: 'pending', logs: [] },
   ];
+  // Only show the build stage when the project declares a build command, so
+  // projects that point fileUrl at a ready artifact don't see a noise stage.
+  if (hasBuild) stages.unshift({ id: 'build', label: 'Build artifact', status: 'pending', logs: [] });
+  return stages;
 }
 
 export class StudioPanel implements vscode.WebviewViewProvider {
@@ -48,6 +53,8 @@ export class StudioPanel implements vscode.WebviewViewProvider {
   private _historyGen = 0;
   private _balanceTimer: NodeJS.Timeout | undefined;
   private _deploy: DeployState | null = null;
+  // Coalesces frequent log-driven state pushes (see scheduleDeployPush).
+  private _deployPushTimer: NodeJS.Timeout | undefined;
   private _chainEventUnsub: UnsubEvent | undefined;
   private _chainWatchToken = 0;
   private _exchanger = new Exchanger();
@@ -220,6 +227,9 @@ export class StudioPanel implements vscode.WebviewViewProvider {
         break;
       case 'deploy.start':
         await vscode.commands.executeCommand('acurast.deploy');
+        break;
+      case 'build.start':
+        await vscode.commands.executeCommand('acurast.build', msg.projectKey);
         break;
       case 'deploy.openOutput':
         await vscode.commands.executeCommand('workbench.action.output.toggleOutput');
@@ -707,8 +717,8 @@ export class StudioPanel implements vscode.WebviewViewProvider {
 
   /* ---------------- Deploy state ---------------- */
 
-  beginDeploy(opts: { project: string; network: string; enableDevtools?: boolean }) {
-    const stages = defaultStages();
+  beginDeploy(opts: { project: string; network: string; enableDevtools?: boolean; hasBuild?: boolean }) {
+    const stages = defaultStages(opts.hasBuild);
     stages[0].status = 'active';
     this._deploy = {
       active: true,
@@ -723,6 +733,38 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     };
     void this.stopChainWatch();
     void this.navigate('deploy');
+  }
+
+  /**
+   * Append captured output to the currently active deploy stage, so the webview
+   * can show per-stage, color-coded logs. Lines are ANSI-stripped (the channel
+   * keeps the raw text). No-ops when no deploy is in progress.
+   */
+  appendDeployLog(level: LogLevel, text: string) {
+    if (!this._deploy || text == null) return;
+    const d = this._deploy;
+
+    // Attribute to the active stage; fall back to the latest non-pending stage.
+    let stage = d.stages.find((s) => s.status === 'active');
+    if (!stage) {
+      for (let i = d.stages.length - 1; i >= 0; i--) {
+        if (d.stages[i].status !== 'pending') { stage = d.stages[i]; break; }
+      }
+    }
+    if (!stage) stage = d.stages[0];
+    if (!stage.logs) stage.logs = [];
+
+    const ts = Date.now();
+    const lines = stripAnsi(String(text)).split('\n');
+    // Drop one trailing empty line (from a trailing newline) so logs don't gap.
+    if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
+    for (const line of lines) stage.logs.push({ level, text: line, ts });
+
+    // Bound per-stage history; the full log always remains in the output channel.
+    const CAP = 1000;
+    if (stage.logs.length > CAP) stage.logs.splice(0, stage.logs.length - CAP);
+
+    this.scheduleDeployPush();
   }
 
   recordDeployStatus(status: string, data: unknown) {
@@ -754,6 +796,17 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     if (incomingJobIds.length) d.jobIds = mergeJobIds(d.jobIds, incomingJobIds);
 
     switch (status) {
+      // Build is driven by the extension (deploy.ts), not the SDK. setStatus/advanceTo
+      // no-op when the build stage is absent, so emitting these is harmless then.
+      case 'Building': {
+        setStatus('build', 'active');
+        break;
+      }
+      case 'Built': {
+        setStatus('build', 'done');
+        advanceTo('bundle');
+        break;
+      }
       case 'Uploaded': {
         const hash = typeof obj.ipfsHash === 'string' ? obj.ipfsHash : undefined;
         if (hash) d.ipfsHash = hash;
@@ -1010,7 +1063,19 @@ export class StudioPanel implements vscode.WebviewViewProvider {
   }
 
   private pushDeploy() {
+    if (this._deployPushTimer) { clearTimeout(this._deployPushTimer); this._deployPushTimer = undefined; }
     this.post({ type: 'deploy.state', state: this._deploy });
+  }
+
+  // Coalesce rapid log appends into ~one post per frame so a verbose build doesn't
+  // flood the webview with full-state messages. A status change / endDeploy flushes
+  // immediately via pushDeploy (which clears this timer).
+  private scheduleDeployPush() {
+    if (this._deployPushTimer) return;
+    this._deployPushTimer = setTimeout(() => {
+      this._deployPushTimer = undefined;
+      this.post({ type: 'deploy.state', state: this._deploy });
+    }, 80);
   }
 
   async fetchDevtoolsUrl(): Promise<void> {
