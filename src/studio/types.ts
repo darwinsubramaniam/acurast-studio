@@ -26,6 +26,8 @@ export interface DeployCopyMsg { type: 'deploy.copy'; text: string; }
 export interface DeployDeregisterMsg { type: 'deploy.deregister'; origin: string; localId: number; }
 export interface DevtoolsRefreshKeyMsg { type: 'devtools.refreshKey'; }
 export interface DevtoolsOpenUrlMsg { type: 'devtools.openUrl'; url: string; }
+/** Open an arbitrary URL in the user's external browser (e.g. the donation page). */
+export interface OpenExternalMsg { type: 'openExternal'; url: string; }
 export type CoinGeckoPlan = 'demo' | 'pro';
 
 export interface PricingFetchMsg { type: 'pricing.fetch'; }
@@ -76,7 +78,7 @@ export type InMsg =
   | DeployStartMsg | BuildStartMsg | DeployOpenOutputMsg | DeployQueryProcessorsMsg | DeployCopyMsg
   | DeployDeregisterMsg | PricingFetchMsg
   | FiatFetchListMsg | FiatSaveMsg
-  | DevtoolsRefreshKeyMsg | DevtoolsOpenUrlMsg
+  | DevtoolsRefreshKeyMsg | DevtoolsOpenUrlMsg | OpenExternalMsg
   | ProcessorsQueryMsg | ProcessorsAdvertiseMsg
   | HistoryLoadMsg | HistoryFetchOnlineMsg | JobDiagnoseMsg | HistoryDeregisterMsg | HistoryAssignmentsMsg | HistoryRemovePathMsg | HistoryRemoveMsg | HistoryOpenFolderMsg
   | NetworkSetTargetMsg

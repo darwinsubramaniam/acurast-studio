@@ -8,6 +8,7 @@ vi.mock('../../studio/webview/lib/vscode', () => ({
 }));
 
 import Home from '../../studio/webview/Home.svelte';
+import { send } from '../../studio/webview/lib/vscode';
 import { afterEach } from 'vitest';
 
 afterEach(() => cleanup());
@@ -143,5 +144,20 @@ describe('navigation', () => {
     render(Home, { props: { ctx: BASE_CTX, wallets: BASE_WALLETS, deploy: null, navigate } });
     await fireEvent.click(screen.getByRole('button', { name: /^Deployments/i }));
     expect(navigate).toHaveBeenCalledWith('deploy');
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe('donation footer', () => {
+  it('renders the Support development footer', () => {
+    render(Home, { props: { ctx: BASE_CTX, wallets: BASE_WALLETS, deploy: null, navigate: vi.fn() } });
+    expect(screen.getByText('Support development')).toBeInTheDocument();
+  });
+
+  it('opens the hosted donation page via send("openExternal")', async () => {
+    render(Home, { props: { ctx: BASE_CTX, wallets: BASE_WALLETS, deploy: null, navigate: vi.fn() } });
+    await fireEvent.click(screen.getByRole('button', { name: /Open donation page/i }));
+    expect(send).toHaveBeenCalledWith('openExternal', { url: 'https://darwinsubramaniam.github.io/acurast-studio-donate/' });
   });
 });

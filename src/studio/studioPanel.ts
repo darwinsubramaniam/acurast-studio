@@ -261,6 +261,21 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       case 'devtools.openUrl':
         if (msg.url) await vscode.env.openExternal(vscode.Uri.parse(msg.url));
         break;
+      case 'openExternal':
+        // Defense-in-depth: only ever hand https URLs to the OS. The webview is
+        // trusted (bundled, CSP-locked) and today sends only the donation page,
+        // but validating the scheme stops any future message from opening
+        // file:/command:/vscode: URIs via this channel.
+        if (msg.url) {
+          let target: vscode.Uri | undefined;
+          try {
+            target = vscode.Uri.parse(msg.url, true);
+          } catch {
+            target = undefined;
+          }
+          if (target?.scheme === 'https') await vscode.env.openExternal(target);
+        }
+        break;
       case 'processors.query':
         await this.fetchProcessors(msg.address, msg.network);
         break;
