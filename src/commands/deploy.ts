@@ -10,6 +10,7 @@ import { WalletService } from '../wallet/walletService';
 import { StudioPanel } from '../studio/studioPanel';
 import { IPFS_DEFAULTS, RPC_ENDPOINTS, SYMBOL, type AcurastNetwork } from '../sdk/constants';
 import { getTargetNetwork } from '../wallet/networkSetting';
+import { resolveDeployEnvVars } from '../lib/env';
 
 interface DeployOptions {
   ctx: AcurastContext;
@@ -68,6 +69,27 @@ export async function deploy({ ctx, wallet, output, studioPanel }: DeployOptions
       ? `\n\n⚠️ Acurast Studio is targeting ${studioNetwork}, but this deploys to ${network} (from acurast.json).`
       : '';
 
+  // Source the values for the `includeEnvironmentVariables` whitelist from the
+  // project's .env (then process.env). The SDK encrypts + submits these after
+  // ack, but only sends what we pass — values were previously never resolved,
+  // so nothing reached the processor.
+  const { envVars, missing } = resolveDeployEnvVars(projectRoot, config.includeEnvironmentVariables);
+  if (missing.length > 0) {
+    // Soft gate, not a hard block: a job's code may tolerate an absent value.
+    const proceed = await vscode.window.showWarningMessage(
+      `Missing environment variables for "${config.projectName}"`,
+      {
+        modal: true,
+        detail:
+          `These are listed in includeEnvironmentVariables but were not found in ` +
+          `.env or the environment:\n\n${missing.join('\n')}\n\n` +
+          `They will NOT be sent to the processor. Deploy anyway?`,
+      },
+      'Deploy anyway'
+    );
+    if (proceed !== 'Deploy anyway') return; // Cancel / Esc aborts
+  }
+
   const confirm = await vscode.window.showWarningMessage(
     `Deploy "${config.projectName}" to ${network}?`,
     {
@@ -96,6 +118,13 @@ export async function deploy({ ctx, wallet, output, studioPanel }: DeployOptions
   output.clear();
   output.show(true);
   output.appendLine(`[deploy] project=${config.projectName} network=${network}`);
+  // Log NAMES only — never the values (secrets).
+  output.appendLine(
+    `[deploy] env: ${envVars.length} var(s)${envVars.length ? ': ' + envVars.map((e) => e.key).join(', ') : ''}`
+  );
+  if (missing.length > 0) {
+    output.appendLine(`[warn] env: skipping ${missing.length} unresolved var(s): ${missing.join(', ')}`);
+  }
   studioPanel.beginDeploy({ project: config.projectName, network, enableDevtools: !!config.enableDevtools });
 
   await vscode.window.withProgress(
@@ -122,6 +151,7 @@ export async function deploy({ ctx, wallet, output, studioPanel }: DeployOptions
           rpcEndpoint,
           ipfs: IPFS_DEFAULTS,
           bundleFolder,
+          envVars,
           statusCallback: (status, data) => {
             const msg = `[${status}]${data ? ' ' + JSON.stringify(data) : ''}`;
             output.appendLine(msg);
