@@ -10,6 +10,7 @@
     HistoryStateMsg,
     ProcessorsStateMsg,
     DiagnosisStateMsg,
+    DeregisterStateMsg,
     TunnelStateMsg,
   } from "../types";
   import { send } from "./lib/vscode";
@@ -71,6 +72,8 @@
   let targetNetwork = $state("");
   // Per-job diagnosis results, keyed by `${origin}:${localId}`.
   let diagnoses = $state<Record<string, DiagnosisStateMsg>>({});
+  // Per-job deregister progress, keyed by `${origin}:${localId}`.
+  let deregisters = $state<Record<string, DeregisterStateMsg>>({});
   let activeWalletAddress = $derived(
     wallets.list.find((w) => w.id === wallets.activeId)?.address ?? null,
   );
@@ -141,6 +144,11 @@
           diagnoses = { ...diagnoses, [d.key]: d };
           break;
         }
+        case "deregister.state": {
+          const d = msg as unknown as DeregisterStateMsg;
+          deregisters = { ...deregisters, [d.key]: d };
+          break;
+        }
       }
     }
     window.addEventListener("message", onMessage);
@@ -208,6 +216,7 @@
     {activeWalletAddress}
     activeNetwork={wallets.network}
     {diagnoses}
+    {deregisters}
   />
 {:else if route === "processors"}
   <Processors {wallets} {processorsState} />
