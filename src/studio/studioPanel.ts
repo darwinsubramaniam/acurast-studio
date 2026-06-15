@@ -18,7 +18,7 @@ import { verifyTunnelDns } from '../tunnel/dnsVerify';
 import { Exchanger } from '../sdk/exchanger/exchanger';
 import { CoinGecko, type CoinGeckoPlan } from '../sdk/exchanger/coingecko';
 import { DeploymentStore } from '../deployments/deploymentStore';
-import type { Route, InMsg, WalletActionMsg, DeployState, DeployStage, DeployStageId, StageStatus, DeployJobId, ProcessorPubKey, ProcessorInfo, ChainEvent, PricingFiatInfo, FiatListItem, StoredDeploymentWithMeta, HistoryStateMsg, OnlineJobRegistration, LocalJobStatus, ProcessorsStateMsg, DiagnosisStateMsg, TunnelStateMsg, TunnelTxtRecord, TunnelVerifyState, WalletInfo } from './types';
+import type { Route, InMsg, WalletActionMsg, DeployState, DeployStage, DeployStageId, StageStatus, DeployJobId, ProcessorPubKey, ProcessorInfo, ChainEvent, PricingFiatInfo, FiatListItem, StoredDeploymentWithMeta, HistoryStateMsg, OnlineJobRegistration, LocalJobStatus, ProcessorsStateMsg, DiagnosisStateMsg, DeregisterStateMsg, TunnelStateMsg, TunnelTxtRecord, TunnelVerifyState, WalletInfo } from './types';
 
 const BALANCE_POLL_MS = 30_000;
 const FIAT_PRICE_TTL_MS = 60_000;
@@ -270,6 +270,9 @@ export class StudioPanel implements vscode.WebviewViewProvider {
         break;
       case 'history.diagnose':
         await this.diagnoseJob(msg.origin, msg.localId, msg.network);
+        break;
+      case 'history.deregister':
+        await this.deregisterHistoryJob(msg.origin, msg.localId, msg.network);
         break;
       case 'history.removePathInfo':
         await this.deploymentStore.removePathInfo(msg.id);
@@ -1164,24 +1167,31 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     }
   }
 
-  private async deregisterDeployment(origin: string, localId: number) {
-    const d = this._deploy;
-    if (!d) return;
-    const target = d.jobIds.find((j) => j.origin === origin && j.localId === localId);
-    if (!target) return;
-    if (target.deregistering || target.deregistered) return;
-
+  /**
+   * Shared deregister flow: confirm, resolve + unlock the active (signing)
+   * wallet, then sign and submit `acurast.deregister(localId)`. `onSubmitting`
+   * fires exactly once — right before the extrinsic is sent — so callers can
+   * flip into a "submitting" UI only when prompts are cleared and a tx is
+   * actually going out. Resolves with the tx hash, `null` if the user cancelled
+   * any prompt (no `onSubmitting` was fired), and rejects if the submit fails.
+   */
+  private async confirmAndDeregister(
+    origin: string,
+    localId: number,
+    network: AcurastNetwork,
+    onSubmitting?: () => void,
+  ): Promise<string | null> {
     const confirm = await vscode.window.showWarningMessage(
       `Deregister deployment ${localId}?`,
-      { modal: true, detail: `This cancels the job on-chain. It cannot be undone.\n\nOrigin: ${origin}\nNetwork: ${d.network ?? 'mainnet'}` },
+      { modal: true, detail: `This cancels the job on-chain. It cannot be undone.\n\nOrigin: ${origin}\nNetwork: ${network}` },
       'Deregister'
     );
-    if (confirm !== 'Deregister') return;
+    if (confirm !== 'Deregister') return null;
 
     const activeWallet = await this.wallet.getActive();
     if (!activeWallet) {
       vscode.window.showErrorMessage('No active wallet. Set one as active to sign the deregister tx.');
-      return;
+      return null;
     }
     if (activeWallet.address !== origin) {
       const proceed = await vscode.window.showWarningMessage(
@@ -1189,7 +1199,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
         { modal: true, detail: `Origin: ${origin}\nActive wallet: ${activeWallet.address}` },
         'Try anyway'
       );
-      if (proceed !== 'Try anyway') return;
+      if (proceed !== 'Try anyway') return null;
     }
 
     const password = await vscode.window.showInputBox({
@@ -1197,26 +1207,38 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       password: true,
       ignoreFocusOut: true,
     });
-    if (!password) return;
+    if (!password) return null;
 
     let mnemonic: string;
     try {
       mnemonic = await this.wallet.reveal(activeWallet.id, password);
     } catch (err: unknown) {
       vscode.window.showErrorMessage((err as Error).message);
-      return;
+      return null;
     }
 
-    target.deregistering = true;
-    target.deregisterError = undefined;
-    this.pushDeploy();
+    onSubmitting?.();
+    const svc = await acurastClient.service(network);
+    const keypair = await walletFromMnemonic(mnemonic);
+    const hash = await svc.deregisterJob(keypair, localId);
+    return hash.toHex();
+  }
 
+  private async deregisterDeployment(origin: string, localId: number) {
+    const d = this._deploy;
+    if (!d) return;
+    const target = d.jobIds.find((j) => j.origin === origin && j.localId === localId);
+    if (!target) return;
+    if (target.deregistering || target.deregistered) return;
+
+    const network = (d.network ?? 'mainnet') as AcurastNetwork;
     try {
-      const network = (d.network ?? 'mainnet') as AcurastNetwork;
-      const svc = await acurastClient.service(network);
-      const keypair = await walletFromMnemonic(mnemonic);
-      const hash = await svc.deregisterJob(keypair, localId);
-      const txHash = hash.toHex();
+      const txHash = await this.confirmAndDeregister(origin, localId, network, () => {
+        target.deregistering = true;
+        target.deregisterError = undefined;
+        this.pushDeploy();
+      });
+      if (txHash === null) return; // cancelled before submit — nothing was changed
       target.deregistering = false;
       target.deregistered = true;
       target.deregisterTxHash = txHash;
@@ -1233,6 +1255,30 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       target.deregisterError = msg;
       vscode.window.showErrorMessage(`Deregister failed: ${msg}`);
       this.pushDeploy();
+    }
+  }
+
+  /**
+   * Deregister a job surfaced in the History view (local or on-chain section).
+   * Drives a per-job `deregister.state` message rather than the deploy state,
+   * then refreshes the local list so a now-cancelled job's status flips.
+   */
+  private async deregisterHistoryJob(origin: string, localId: number, network: string) {
+    const key = `${origin}:${localId}`;
+    const net = (network || 'mainnet') as AcurastNetwork;
+    try {
+      const txHash = await this.confirmAndDeregister(origin, localId, net, () => {
+        this.post({ type: 'deregister.state', key, status: 'loading' } satisfies DeregisterStateMsg);
+      });
+      if (txHash === null) return; // cancelled before submit — no state was posted
+      this.post({ type: 'deregister.state', key, status: 'ok', txHash } satisfies DeregisterStateMsg);
+      vscode.window.showInformationMessage(`Deregistered deployment ${localId}`);
+      // Re-query the local list so the deregistered job's lifecycle badge updates.
+      if (this._route === 'history') await this.pushHistory();
+    } catch (err: unknown) {
+      const msg = (err as Error).message;
+      this.post({ type: 'deregister.state', key, status: 'error', error: msg } satisfies DeregisterStateMsg);
+      vscode.window.showErrorMessage(`Deregister failed: ${msg}`);
     }
   }
 

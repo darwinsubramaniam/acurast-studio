@@ -5,6 +5,7 @@
     OnlineJobRegistration,
     LocalJobStatus,
     DiagnosisStateMsg,
+    DeregisterStateMsg,
   } from "../types";
   import { untrack } from "svelte";
   import { send } from "./lib/vscode";
@@ -18,9 +19,15 @@
     activeWalletAddress: string | null;
     activeNetwork: string;
     diagnoses: Record<string, DiagnosisStateMsg>;
+    deregisters: Record<string, DeregisterStateMsg>;
   }
-  let { historyState, activeWalletAddress, activeNetwork, diagnoses }: Props =
-    $props();
+  let {
+    historyState,
+    activeWalletAddress,
+    activeNetwork,
+    diagnoses,
+    deregisters,
+  }: Props = $props();
 
   // Trigger an on-chain diagnosis for a record's first job id.
   function diagnose(rec: StoredDeploymentWithMeta) {
@@ -34,6 +41,23 @@
   }
   const diagKey = (rec: StoredDeploymentWithMeta): string =>
     rec.jobIds[0] ? `${rec.jobIds[0].origin}:${rec.jobIds[0].localId}` : "";
+
+  // Deregister (cancel on-chain) a record's first job. The host confirms,
+  // unlocks the active wallet, signs `acurast.deregister`, and reports progress
+  // back via the `deregisters` map keyed the same as diagnoses.
+  function deregister(rec: StoredDeploymentWithMeta) {
+    const job = rec.jobIds[0];
+    if (!job) return;
+    send("history.deregister", {
+      origin: job.origin,
+      localId: job.localId,
+      network: rec.network,
+    });
+  }
+  // A job can be cancelled only while it's live on-chain (running or scheduled);
+  // expired/missing registrations have nothing left to deregister.
+  const canDeregister = (status: string | undefined): boolean =>
+    status === "active" || status === "scheduled";
 
   // ── Local section ────────────────────────────────────────────────────────────
   let accumulated = $state<StoredDeploymentWithMeta[]>([]);
@@ -146,6 +170,30 @@
         fetchedNetwork = net;
       }
     }
+  });
+
+  // Once an on-chain job is deregistered it no longer exists on-chain, so drop
+  // its card from the fetched list. The local list is refreshed by the host.
+  // untrack the onlineRecords read/write so this only re-runs on `deregisters`.
+  $effect(() => {
+    const map = deregisters;
+    untrack(() => {
+      const okKeys = new Set(
+        Object.values(map)
+          .filter((d) => d.status === "ok")
+          .map((d) => d.key),
+      );
+      if (okKeys.size === 0) return;
+      const next = onlineRecords.filter((r) => {
+        const j = r.jobIds[0];
+        return !(j && okKeys.has(`${j.origin}:${j.localId}`));
+      });
+      if (next.length !== onlineRecords.length) {
+        onlineRecords = next;
+        const pages = Math.max(1, Math.ceil(next.length / ONLINE_PAGE));
+        if (onlinePage >= pages) onlinePage = pages - 1;
+      }
+    });
   });
 
   const fmt = fmtTimestamp;
@@ -283,6 +331,7 @@
             {/if}
             {#if rec.jobIds[0]}
               {@const dstate = diagnoses[diagKey(rec)]}
+              {@const dreg = deregisters[diagKey(rec)]}
               <div class="h-card-actions">
                 <button
                   class="diag-btn"
@@ -295,7 +344,30 @@
                       ? "Re-run diagnosis"
                       : "Diagnose"}
                 </button>
+                {#if dreg?.status === "ok"}
+                  <span class="dereg-badge">Deregistered</span>
+                {:else if canDeregister(localStatus[rec.id])}
+                  <button
+                    class="dereg-btn"
+                    onclick={() => deregister(rec)}
+                    disabled={dreg?.status === "loading"}
+                  >
+                    {#if dreg?.status === "loading"}
+                      <Spinner size={10} label="Deregistering…" />
+                    {:else}
+                      Deregister
+                    {/if}
+                  </button>
+                {/if}
               </div>
+              {#if dreg?.status === "error"}
+                <div class="dereg-error">{dreg.error}</div>
+              {/if}
+              {#if dreg?.status === "ok" && dreg.txHash}
+                <div class="dereg-tx" title={dreg.txHash}>
+                  tx {truncate(dreg.txHash)}
+                </div>
+              {/if}
               <DiagnosisPanel state={dstate} />
             {/if}
           </div>
@@ -424,6 +496,7 @@
                 {/if}
                 {#if rec.jobIds[0]}
                   {@const dstate = diagnoses[diagKey(rec)]}
+                  {@const dreg = deregisters[diagKey(rec)]}
                   <div class="h-card-actions">
                     <button
                       class="diag-btn"
@@ -436,7 +509,23 @@
                           ? "Re-run diagnosis"
                           : "Diagnose"}
                     </button>
+                    {#if canDeregister(status)}
+                      <button
+                        class="dereg-btn"
+                        onclick={() => deregister(rec)}
+                        disabled={dreg?.status === "loading"}
+                      >
+                        {#if dreg?.status === "loading"}
+                          <Spinner size={10} label="Deregistering…" />
+                        {:else}
+                          Deregister
+                        {/if}
+                      </button>
+                    {/if}
                   </div>
+                  {#if dreg?.status === "error"}
+                    <div class="dereg-error">{dreg.error}</div>
+                  {/if}
                   <DiagnosisPanel state={dstate} />
                 {/if}
               </div>
@@ -614,6 +703,10 @@
 
   .h-card-actions {
     margin-top: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
   }
   .diag-btn {
     font-size: 11px;
@@ -630,6 +723,47 @@
   .diag-btn:disabled {
     opacity: 0.6;
     cursor: default;
+  }
+
+  .dereg-btn {
+    font-size: 11px;
+    padding: 2px 10px;
+    background: transparent;
+    color: var(--vscode-errorForeground);
+    border: 1px solid var(--vscode-errorForeground);
+    border-radius: 4px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+  }
+  .dereg-btn:hover:not(:disabled) {
+    background: var(--vscode-inputValidation-errorBackground);
+  }
+  .dereg-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+  .dereg-badge {
+    font-size: 9px;
+    padding: 1px 6px;
+    border-radius: 2px;
+    background: var(--vscode-errorForeground);
+    color: var(--vscode-editor-background);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .dereg-error {
+    margin-top: 6px;
+    font-size: 10.5px;
+    color: var(--vscode-errorForeground);
+    word-break: break-word;
+  }
+  .dereg-tx {
+    margin-top: 6px;
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 10px;
+    color: var(--vscode-descriptionForeground);
+    word-break: break-all;
   }
 
   .h-card-row {
