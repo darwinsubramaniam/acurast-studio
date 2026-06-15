@@ -101,6 +101,17 @@ Your seed phrase never leaves your machine in plaintext. Each mnemonic is encryp
 - 📦 [`@acurast/sdk` on npm](https://www.npmjs.com/package/@acurast/sdk)
 - 🐙 [Source & issues on GitHub](https://github.com/darwinsubramaniam/acurast-studio)
 
+## ❤️ Support development
+
+Acurast Studio is built and maintained independently. If it saves you time, a small donation directly funds new features and ongoing maintenance. 🙏
+
+| Network | Address |
+|---|---|
+| **ACU** (Acurast) | `5EqCVoSXfLwwEj7zxWvmCMvmiVXZSgeHTj5anpm4sAN6SgXp` |
+| **DOT** (Polkadot) | `13mVe8hbX8DQgG8Wv9ymLWkva7XD8zCRYDp4x7kRRFPcd4ei` |
+
+Prefer to connect a wallet? Use the **[donation page](https://darwinsubramaniam.github.io/acurast-studio-donate/)** — a non-custodial page to send ACU or DOT straight from Polkadot.js / Talisman / SubWallet. You can open it (or copy the addresses) from the **Home** panel in the extension too.
+
 ## Contributing
 
 Issues and pull requests are welcome — see the [repository](https://github.com/darwinsubramaniam/acurast-studio).

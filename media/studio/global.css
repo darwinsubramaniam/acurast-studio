@@ -78,6 +78,62 @@ body {
   vertical-align: middle;
 }
 
+/* Home view fills the panel so the donation footer sticks to the bottom. */
+.home-view {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 12px); /* 12px = body bottom padding */
+}
+.home-view .donate-card { margin-top: auto; }
+
+/* Donation footer (Home) */
+.donate-card {
+  margin: 16px 0 4px;
+  padding: 12px;
+  border: 1px solid var(--vscode-panel-border, transparent);
+  border-radius: 4px;
+  background: var(--vscode-editor-background);
+}
+.donate-head { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+.donate-icon {
+  flex-shrink: 0; display: inline-flex; margin-top: 1px;
+  color: var(--vscode-charts-red, var(--vscode-errorForeground));
+}
+.donate-icon svg { width: 16px; height: 16px; }
+.donate-title { font-size: 12px; font-weight: 600; }
+.donate-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.donate-net {
+  flex-shrink: 0; width: 34px; text-align: center;
+  font-size: 9px; font-weight: 600;
+  padding: 3px 0; border-radius: 2px;
+  background: var(--vscode-badge-background); color: var(--vscode-badge-foreground);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.donate-addr {
+  flex: 1; min-width: 0;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 10px; color: var(--vscode-descriptionForeground);
+  padding: 4px 6px; background: var(--vscode-input-background);
+  border-radius: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.donate-copy {
+  flex-shrink: 0;
+  padding: 3px 6px;
+  background: transparent; color: var(--vscode-foreground);
+  border: 1px solid var(--vscode-panel-border, transparent);
+  display: inline-flex; align-items: center;
+}
+.donate-copy:hover { background: var(--vscode-toolbar-hoverBackground); }
+.donate-copy svg { width: 12px; height: 12px; }
+.donate-link {
+  width: 100%; margin-top: 10px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 12px; font-weight: 600;
+}
+.donate-link-icon { display: inline-flex; }
+.donate-link-icon svg { width: 13px; height: 13px; }
+
 /* Inputs / buttons */
 button {
   padding: 4px 10px;

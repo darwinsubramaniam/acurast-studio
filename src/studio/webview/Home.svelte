@@ -17,6 +17,9 @@
   }
   let { ctx, wallets, deploy, navigate }: Props = $props();
 
+  // Hosted wallet-connect donation page (GitHub Pages, separate repo).
+  const DONATE_URL = "https://darwinsubramaniam.github.io/acurast-studio-donate/";
+
   let walletSub = $derived(
     wallets.list.length
       ? `${wallets.list.length} wallet${wallets.list.length === 1 ? "" : "s"}${wallets.activeId ? " • active set" : ""}`
@@ -68,6 +71,7 @@
   });
 </script>
 
+<div class="home-view">
 <div class="hero">
   <div>{@html ICONS.home}</div>
   <h1>Acurast Studio</h1>
@@ -168,3 +172,20 @@
     </button>
   </div>
 {/if}
+
+<div class="donate-card">
+  <div class="donate-head">
+    <span class="donate-icon">{@html ICONS.heart}</span>
+    <div>
+      <div class="donate-title">Support development</div>
+    </div>
+  </div>
+  <button
+    class="donate-link"
+    onclick={() => send("openExternal", { url: DONATE_URL })}
+  >
+    <span class="donate-link-icon">{@html ICONS.globe}</span>
+    Open donation page
+  </button>
+</div>
+</div>
