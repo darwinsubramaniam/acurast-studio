@@ -30,6 +30,7 @@ suite('Command registration', () => {
     'acurast.estimateCost',
     'acurast.openDashboard',
     'acurast.studio.home',
+    'acurast.studio.showTunnel',
     'acurast.setActiveConfig',
     'acurast.chooseConfig',
     'acurast.clearActiveConfig',
@@ -85,6 +86,10 @@ suite('Configuration defaults', () => {
 
   test('acurast.fiat.currencyId defaults to empty string', () => {
     assert.strictEqual(cfg.get('fiat.currencyId'), '');
+  });
+
+  test('acurast.tunnelRelays defaults to an empty object', () => {
+    assert.deepStrictEqual(cfg.get('tunnelRelays'), {});
   });
 });
 
