@@ -11,6 +11,7 @@ import { StudioPanel } from '../studio/studioPanel';
 import { IPFS_DEFAULTS, RPC_ENDPOINTS, SYMBOL, type AcurastNetwork } from '../sdk/constants';
 import { getTargetNetwork } from '../wallet/networkSetting';
 import { resolveDeployEnvVars } from '../lib/env';
+import { readBuildConfig, runProjectBuild } from './build';
 
 interface DeployOptions {
   ctx: AcurastContext;
@@ -43,8 +44,20 @@ export async function deploy({ ctx, wallet, output, studioPanel }: DeployOptions
     vscode.window.showErrorMessage('No project found in acurast.json.');
     return;
   }
-  if (!config.fileUrl) {
-    vscode.window.showErrorMessage('acurast.json has no "fileUrl" — set the path to your script (or an ipfs:// URL / CID) to deploy.');
+  // Optional build step (acurast.json `build.command`). When `build.output` is set
+  // it becomes the deployed artifact, overriding fileUrl. Read from raw JSON since
+  // the SDK's typed config drops the custom field.
+  const buildCfg = readBuildConfig(ctx.configPath)?.build;
+  const effectiveFileUrl = buildCfg?.output ?? config.fileUrl;
+
+  if (!effectiveFileUrl) {
+    vscode.window.showErrorMessage('acurast.json has no "fileUrl" — set the path to your script (or an ipfs:// URL / CID), or a build.output, to deploy.');
+    return;
+  }
+
+  // Running a shell command sourced from acurast.json requires a trusted workspace.
+  if (buildCfg?.command && !vscode.workspace.isTrusted) {
+    vscode.window.showErrorMessage('This deployment has a build step, which runs a shell command and requires a trusted workspace.');
     return;
   }
 
@@ -52,7 +65,7 @@ export async function deploy({ ctx, wallet, output, studioPanel }: DeployOptions
   // because the SDK reads fileUrl via fs.statSync against process.cwd().
   const resolvedConfig = normalizeMinProcessorVersions({
     ...config,
-    fileUrl: resolveAgainst(projectRoot, config.fileUrl),
+    fileUrl: resolveAgainst(projectRoot, effectiveFileUrl),
   } as NonNullable<typeof config>);
 
   const bundleFolder = path.join(projectRoot, '.acurast', 'bundles');
@@ -90,11 +103,15 @@ export async function deploy({ ctx, wallet, output, studioPanel }: DeployOptions
     if (proceed !== 'Deploy anyway') return; // Cancel / Esc aborts
   }
 
+  // Surface the build command in the confirm dialog — the deploy gate doubles as
+  // consent to run it, since it's an arbitrary shell command from acurast.json.
+  const buildNote = buildCfg?.command ? `\n\nBuild step: ${buildCfg.command}` : '';
+
   const confirm = await vscode.window.showWarningMessage(
     `Deploy "${config.projectName}" to ${network}?`,
     {
       modal: true,
-      detail: `Replicas: ${config.numberOfReplicas ?? 1}\nMax cost/exec: ${config.maxCostPerExecution ?? 'n/a'} (planck ${symbol})${mismatchNote}`,
+      detail: `Replicas: ${config.numberOfReplicas ?? 1}\nMax cost/exec: ${config.maxCostPerExecution ?? 'n/a'} (planck ${symbol})${buildNote}${mismatchNote}`,
     },
     'Deploy'
   );
@@ -125,7 +142,7 @@ export async function deploy({ ctx, wallet, output, studioPanel }: DeployOptions
   if (missing.length > 0) {
     output.appendLine(`[warn] env: skipping ${missing.length} unresolved var(s): ${missing.join(', ')}`);
   }
-  studioPanel.beginDeploy({ project: config.projectName, network, enableDevtools: !!config.enableDevtools });
+  studioPanel.beginDeploy({ project: config.projectName, network, enableDevtools: !!config.enableDevtools, hasBuild: !!buildCfg?.command });
 
   await vscode.window.withProgress(
     {
@@ -134,6 +151,31 @@ export async function deploy({ ctx, wallet, output, studioPanel }: DeployOptions
       cancellable: false,
     },
     async (progress) => {
+      // Build first, while cwd is still the original (runProjectBuild resolves its
+      // own cwd from projectRoot, so this is robust either way). A failure aborts
+      // before any temp dir / SDK work. Runs before the chdir below.
+      if (buildCfg?.command) {
+        try {
+          await runProjectBuild({
+            projectRoot,
+            build: buildCfg,
+            output,
+            onStage: (phase) => {
+              if (phase === 'start') studioPanel.recordDeployStatus('Building', {});
+              else if (phase === 'done') studioPanel.recordDeployStatus('Built', {});
+            },
+            onLog: (level, text) => studioPanel.appendDeployLog(level, text),
+          });
+        } catch (err: unknown) {
+          const msg = (err as Error).message;
+          output.appendLine(`[fail] ${msg}`);
+          studioPanel.appendDeployLog('error', msg);
+          studioPanel.endDeploy('error', msg);
+          vscode.window.showErrorMessage(`Build failed: ${msg}`);
+          return undefined;
+        }
+      }
+
       // SDK writes a transient `temp_script.js` to process.cwd() during IPFS upload
       // with no override; force cwd to a writable temp dir for the call.
       const originalCwd = process.cwd();
@@ -156,17 +198,20 @@ export async function deploy({ ctx, wallet, output, studioPanel }: DeployOptions
             const msg = `[${status}]${data ? ' ' + JSON.stringify(data) : ''}`;
             output.appendLine(msg);
             progress.report({ message: String(status) });
+            // Attribute the status marker to the still-active stage before it advances.
+            studioPanel.appendDeployLog('debug', msg);
             studioPanel.recordDeployStatus(String(status), data);
           },
           logger: {
-            debug: (m) => output.appendLine(`[debug] ${m}`),
-            warn:  (m) => output.appendLine(`[warn] ${m}`),
-            error: (m) => output.appendLine(`[error] ${m}`),
-            log:   (m) => output.appendLine(m),
+            debug: (m) => { output.appendLine(`[debug] ${m}`); studioPanel.appendDeployLog('debug', m); },
+            warn:  (m) => { output.appendLine(`[warn] ${m}`); studioPanel.appendDeployLog('warn', m); },
+            error: (m) => { output.appendLine(`[error] ${m}`); studioPanel.appendDeployLog('error', m); },
+            log:   (m) => { output.appendLine(m); studioPanel.appendDeployLog('info', m); },
           },
         });
 
         output.appendLine(`[done] job registered`);
+        studioPanel.appendDeployLog('info', 'job registered');
         studioPanel.endDeploy('ok');
         if (config.enableDevtools) void studioPanel.fetchDevtoolsUrl();
         vscode.window.showInformationMessage(`Deployed "${config.projectName}" to ${network}.`);

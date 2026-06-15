@@ -45,6 +45,21 @@
     if (d.result === "error") return "Failed";
     return "Idle";
   }
+
+  // Keep a live log box pinned to its newest line as output streams in.
+  function autoscroll(node: HTMLElement) {
+    const toBottom = () => {
+      node.scrollTop = node.scrollHeight;
+    };
+    const obs = new MutationObserver(toBottom);
+    obs.observe(node, { childList: true, subtree: true });
+    toBottom();
+    return {
+      destroy() {
+        obs.disconnect();
+      },
+    };
+  }
 </script>
 
 {#if !deploy}
@@ -54,6 +69,11 @@
     {#if ctx.isAcurastProject}
       <button class="full" onclick={() => send("deploy.start")}
         >Deploy now</button
+      >
+      <button
+        class="full secondary"
+        style="margin-top:6px;"
+        onclick={() => send("build.start")}>Build only</button
       >
     {:else}
       <p style="font-size:11px;">
@@ -339,6 +359,28 @@
         <div class="body">
           <div class="label">{s.label}</div>
           {#if s.detail}<div class="detail">{s.detail}</div>{/if}
+          {#if s.logs && s.logs.length}
+            {#if s.status === "active" || s.status === "error"}
+              <div class="logbox" use:autoscroll>
+                {#each s.logs as ln, i (i)}
+                  <div class="logline log-{ln.level}">{ln.text || " "}</div>
+                {/each}
+              </div>
+            {:else}
+              <details class="logdetails">
+                <summary
+                  >{s.logs.length} log line{s.logs.length === 1
+                    ? ""
+                    : "s"}</summary
+                >
+                <div class="logbox">
+                  {#each s.logs as ln, i (i)}
+                    <div class="logline log-{ln.level}">{ln.text || " "}</div>
+                  {/each}
+                </div>
+              </details>
+            {/if}
+          {/if}
         </div>
       </li>
     {/each}
@@ -509,6 +551,11 @@
       >
         {d.result === "error" ? "Retry deploy" : "Deploy again"}
       </button>
+      <button
+        class="secondary"
+        disabled={!ctx.isAcurastProject}
+        onclick={() => send("build.start")}>Build only</button
+      >
     {/if}
     <button class="secondary" onclick={() => send("deploy.openOutput")}
       >Open output</button

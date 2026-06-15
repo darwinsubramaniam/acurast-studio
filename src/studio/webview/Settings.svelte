@@ -537,6 +537,39 @@
       </Accordion.Content>
     </Accordion.Item>
 
+    <!-- Build -->
+    <Accordion.Item value="build" class="section acc-item">
+      <Accordion.Header>
+        <Accordion.Trigger class={`section-title acc-trigger${dirty ? ' dirty' : ''}`}>Build</Accordion.Trigger>
+      </Accordion.Header>
+      <Accordion.Content class="acc-content">
+      <div class="field">
+        <label for="f_buildCommand">Build command <span class="label-optional">(optional)</span></label>
+        <input id="f_buildCommand" type="text"
+          value={rd('build.command', getNested(p, 'build', 'command')) ?? ''}
+          placeholder="e.g. npm run build · cargo build --release"
+          oninput={(e) => patchField('build.command', (e.target as HTMLInputElement).value)} />
+        <div class="hint">Runs before deploy (and via the Build action) to produce the artifact. Any toolchain — trusted workspace only.</div>
+      </div>
+      <div class="field">
+        <label for="f_buildCwd">Working directory <span class="label-optional">(optional)</span></label>
+        <input id="f_buildCwd" type="text"
+          value={rd('build.cwd', getNested(p, 'build', 'cwd')) ?? ''}
+          placeholder="(project root)"
+          oninput={(e) => patchField('build.cwd', (e.target as HTMLInputElement).value)} />
+        <div class="hint">Where the command runs, relative to the project root.</div>
+      </div>
+      <div class="field">
+        <label for="f_buildOutput">Output artifact <span class="label-optional">(optional)</span></label>
+        <input id="f_buildOutput" type="text"
+          value={rd('build.output', getNested(p, 'build', 'output')) ?? ''}
+          placeholder="e.g. dist/index.js"
+          oninput={(e) => patchField('build.output', (e.target as HTMLInputElement).value)} />
+        <div class="hint">Artifact to deploy; overrides File URL. Verified to exist after the build. Relative to the project root.</div>
+      </div>
+      </Accordion.Content>
+    </Accordion.Item>
+
     <!-- Runtime -->
     <Accordion.Item value="runtime" class="section acc-item">
       <Accordion.Header>

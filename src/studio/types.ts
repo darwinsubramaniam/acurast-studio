@@ -18,6 +18,8 @@ export interface ConfigOpenJsonMsg { type: 'config.openJson'; }
 export interface ConfigChooseMsg { type: 'config.choose'; }
 export interface ConfigNewProjectMsg { type: 'config.newProject'; }
 export interface DeployStartMsg { type: 'deploy.start'; }
+/** Run the project's `build.command` without deploying (standalone "Build" action). */
+export interface BuildStartMsg { type: 'build.start'; projectKey?: string; }
 export interface DeployOpenOutputMsg { type: 'deploy.openOutput'; }
 export interface DeployQueryProcessorsMsg { type: 'deploy.queryProcessors'; }
 export interface DeployCopyMsg { type: 'deploy.copy'; text: string; }
@@ -69,7 +71,7 @@ export interface TunnelVerifyMsg       { type: 'tunnel.verify'; suffix: string; 
 export type InMsg =
   | NavigateMsg | ReadyMsg | WalletActionMsg | RefreshBalanceMsg
   | ConfigSaveMsg | ConfigOpenJsonMsg | ConfigChooseMsg | ConfigNewProjectMsg
-  | DeployStartMsg | DeployOpenOutputMsg | DeployQueryProcessorsMsg | DeployCopyMsg
+  | DeployStartMsg | BuildStartMsg | DeployOpenOutputMsg | DeployQueryProcessorsMsg | DeployCopyMsg
   | DeployDeregisterMsg | PricingFetchMsg
   | FiatFetchListMsg | FiatSaveMsg
   | DevtoolsRefreshKeyMsg | DevtoolsOpenUrlMsg
@@ -151,15 +153,25 @@ export interface FiatSelectionStateMsg {
 }
 
 export type DeployStageId =
-  | 'bundle' | 'upload' | 'prepare' | 'submit'
+  | 'build' | 'bundle' | 'upload' | 'prepare' | 'submit'
   | 'match' | 'acknowledge' | 'envvars';
 export type StageStatus = 'pending' | 'active' | 'done' | 'error';
+
+export type LogLevel = 'info' | 'debug' | 'warn' | 'error';
+/** One line of captured output, attributed to a deploy stage and colored by level. */
+export interface LogLine {
+  level: LogLevel;
+  text: string;
+  ts: number;
+}
 
 export interface DeployStage {
   id: DeployStageId;
   label: string;
   status: StageStatus;
   detail?: string;
+  /** Output captured while this stage was active (build/SDK logs). Colored by level in the webview. */
+  logs?: LogLine[];
 }
 
 export interface DeployJobId {
