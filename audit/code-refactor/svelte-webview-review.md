@@ -48,10 +48,11 @@ The `nonPriceBlocker` computation, the sufficient/overpaying/insufficient icon+l
 - **Fix:** move them to `src/studio/webview/lib/acurastConfig.ts` as exported pure functions and import them. No behavior change; `src/test/unit/` can then cover the SDK-shape normalization that several past commits clearly touched.
 - **✅ Resolved 2026-06-16:** extracted `getNested`, `instantMatchField`, `deepMerge` (internal), `buildPatch(draft, project)`, and `validateConfig(draft, project)` into `src/studio/webview/lib/acurastConfig.ts` (named for the whole acurast.json concern — it both builds the save-patch and validates, not just patches). Pure, no Svelte/DOM imports, with the form `draft` and the selected project passed in instead of read from component state. `Settings.svelte` now imports them; `errors` is `validateConfig(draft, currentProject())` and `onSave` calls `buildPatch(draft, currentProject())`. Added `src/test/unit/acurastConfig.test.ts` (19 cases: list parsing, dotted-key expansion, deep-merge onto original, instantMatch Single/Competing normalization, minProcessorVersions cleanup, required-field/Shell/interval/reuseKeysFrom validation). Verified: `typecheck`, `build:dev`, and full `test:unit` (295 tests) all green.
 
-### 3. Job-action cluster (Diagnose / Deregister / DiagnosisPanel) implemented three times — **Medium**
+### 3. Job-action cluster (Diagnose / Deregister / DiagnosisPanel) implemented three times — **Medium** · ✅ Resolved 2026-06-16
 `History.svelte` local cards (`:357-397`), `History.svelte` online cards (`:522-607`), and `Deploy.svelte` job-id cards (`:337-365`) each rebuild the same diagnose button (identical "Diagnosing…/Re-run diagnosis/Diagnose" label logic), deregister button, and `<DiagnosisPanel>`.
 
 - **Fix:** a `JobActions.svelte` taking `{origin, localId, network, dstate, dreg}` collapses three copies into one and guarantees consistent labels/disabled states.
+- **✅ Resolved 2026-06-16 (revised approach):** a single `JobActions` proved unsafe — the three clusters diverge: Deploy's deregister uses deploy-state flags + `deploy.deregister` while History uses the `deregisters` map + `history.deregister`; button **order** differs (Deploy renders Deregister→Diagnose, History Diagnose→Deregister); and History online interleaves a "Start times" button. A fixed layout would reorder buttons. Instead extracted the one genuinely-identical piece — the Diagnose button — into `DiagnoseButton.svelte` (`{ state, idleLabel='Diagnose', onclick }`), used at all 3 sites (Deploy passes `idleLabel="Why not matched?"`). Moved `.diag-btn` from History's scoped `<style>` to `global.css` so the component (and History's inline "Start times" button) share it. Side effect, intended: Deploy's diagnose button — previously unstyled by `.diag-btn` (the rule lived only in History's scoped CSS) — now gets the link style, a consistency fix. The divergent Deregister blocks were left inline. typecheck/build (no new warnings, no unused-selector)/`test:unit` (295) all green.
 
 ### 4. `Settings.svelte` does six jobs in one file — **Medium**
 Fiat-source config, project picker, the config form, `buildPatch`/validation, market-pricing display, and whitelist / "my processors" management all live together. Extracting (1) and (2) pulls ~250 lines out and leaves a mostly-declarative form component.
@@ -118,7 +119,7 @@ All preserve behavior exactly.
 |---|---------|------|----------|--------|
 | S1 | Pricing/fiat markup duplicated across Deploy & Settings | Structural | High | ✅ Done (2026-06-16) |
 | S2 | Pure config logic trapped in `Settings.svelte` (untestable) | Structural | High | ✅ Done (2026-06-16) |
-| S3 | Job-action cluster implemented 3× | Structural | Medium | Open |
+| S3 | Job-action cluster implemented 3× | Structural | Medium | ✅ Done (2026-06-16, DiagnoseButton) |
 | S4 | `Settings.svelte` doing six jobs | Structural | Medium | Open |
 | S5 | No `OutMsg` union → `as unknown as` casts | Structural | Medium | ✅ Done (2026-06-16) |
 | L1 | Deploy pricing symbol from Studio target, not project network | Logic | Medium (verify) | Open |

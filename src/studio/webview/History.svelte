@@ -13,6 +13,7 @@
   import { ICONS } from "./lib/icons";
   import { planckToAcu, fmtTimestamp, fmtClock, fmtDuration, fmtCountdown, truncate } from "./lib/format";
   import DiagnosisPanel from "./DiagnosisPanel.svelte";
+  import DiagnoseButton from "./DiagnoseButton.svelte";
   import Spinner from "./lib/Spinner.svelte";
 
   interface Props {
@@ -358,17 +359,7 @@
               {@const dstate = diagnoses[diagKey(rec)]}
               {@const dreg = deregisters[diagKey(rec)]}
               <div class="h-card-actions">
-                <button
-                  class="diag-btn"
-                  onclick={() => diagnose(rec)}
-                  disabled={dstate?.status === "loading"}
-                >
-                  {dstate?.status === "loading"
-                    ? "Diagnosing…"
-                    : dstate
-                      ? "Re-run diagnosis"
-                      : "Diagnose"}
-                </button>
+                <DiagnoseButton state={dstate} onclick={() => diagnose(rec)} />
                 {#if dreg?.status === "ok"}
                   <span class="dereg-badge">Deregistered</span>
                 {:else if canDeregister(localStatus[rec.id])}
@@ -524,17 +515,7 @@
                   {@const dreg = deregisters[diagKey(rec)]}
                   {@const astate = assignments[diagKey(rec)]}
                   <div class="h-card-actions">
-                    <button
-                      class="diag-btn"
-                      onclick={() => diagnose(rec)}
-                      disabled={dstate?.status === "loading"}
-                    >
-                      {dstate?.status === "loading"
-                        ? "Diagnosing…"
-                        : dstate
-                          ? "Re-run diagnosis"
-                          : "Diagnose"}
-                    </button>
+                    <DiagnoseButton state={dstate} onclick={() => diagnose(rec)} />
                     {#if rec.registration}
                       <button
                         class="diag-btn"
@@ -785,23 +766,6 @@
     align-items: center;
     gap: 6px;
   }
-  .diag-btn {
-    font-size: 11px;
-    padding: 2px 10px;
-    background: transparent;
-    color: var(--vscode-textLink-foreground);
-    border: 1px solid var(--vscode-panel-border);
-    border-radius: 4px;
-    cursor: pointer;
-  }
-  .diag-btn:hover:not(:disabled) {
-    background: var(--vscode-toolbar-hoverBackground);
-  }
-  .diag-btn:disabled {
-    opacity: 0.6;
-    cursor: default;
-  }
-
   .dereg-btn {
     font-size: 11px;
     padding: 2px 10px;

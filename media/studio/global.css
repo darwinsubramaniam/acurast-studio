@@ -629,3 +629,22 @@ input.field-error, textarea.field-error { border-color: var(--vscode-inputValida
   font-size: 11px; color: var(--vscode-errorForeground);
   word-break: break-word;
 }
+
+/* Diagnose button — shared by Deploy job cards and History
+   (DiagnoseButton.svelte) plus the History "Start times" action. */
+.diag-btn {
+  font-size: 11px;
+  padding: 2px 10px;
+  background: transparent;
+  color: var(--vscode-textLink-foreground);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.diag-btn:hover:not(:disabled) {
+  background: var(--vscode-toolbar-hoverBackground);
+}
+.diag-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

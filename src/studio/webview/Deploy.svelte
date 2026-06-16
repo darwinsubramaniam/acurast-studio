@@ -8,6 +8,7 @@
   import { send } from "./lib/vscode";
   import { ICONS } from "./lib/icons";
   import DiagnosisPanel from "./DiagnosisPanel.svelte";
+  import DiagnoseButton from "./DiagnoseButton.svelte";
   import Spinner from "./lib/Spinner.svelte";
   import {
     planckToAcu,
@@ -277,22 +278,16 @@
         {/if}
         {#if d.network}
           {@const dstate = diagnoses[`${j.origin}:${j.localId}`]}
-          <button
-            class="diag-btn"
-            disabled={dstate?.status === "loading"}
+          <DiagnoseButton
+            state={dstate}
+            idleLabel="Why not matched?"
             onclick={() =>
               send("history.diagnose", {
                 origin: j.origin,
                 localId: j.localId,
                 network: d.network,
               })}
-          >
-            {dstate?.status === "loading"
-              ? "Diagnosing…"
-              : dstate
-                ? "Re-run diagnosis"
-                : "Why not matched?"}
-          </button>
+          />
         {/if}
       </div>
       {#if d.network}
