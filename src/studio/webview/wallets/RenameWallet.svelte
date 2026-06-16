@@ -74,6 +74,5 @@
       {@html ICONS.check} {busy ? 'Saving…' : isRename ? 'Save name' : 'Save description'}
     </button>
     <button class="wz-cancel" onclick={onClose}>Cancel</button>
-    {#if isRename}<div class="wz-note">"Edit description" uses this same screen</div>{/if}
   </div>
 </div>
