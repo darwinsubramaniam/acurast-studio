@@ -7,7 +7,7 @@ vi.mock('../../studio/webview/lib/vscode', () => ({
   send: vi.fn(),
 }));
 
-import Home from '../../studio/webview/Home.svelte';
+import Home from '../../studio/webview/home/Home.svelte';
 import { send } from '../../studio/webview/lib/vscode';
 import { afterEach } from 'vitest';
 

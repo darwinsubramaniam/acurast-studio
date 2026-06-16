@@ -7,7 +7,7 @@ vi.mock('../../studio/webview/lib/vscode', () => ({
   send: vi.fn(),
 }));
 
-import Deploy from '../../studio/webview/Deploy.svelte';
+import Deploy from '../../studio/webview/deploy/Deploy.svelte';
 import { send } from '../../studio/webview/lib/vscode';
 
 afterEach(() => cleanup());

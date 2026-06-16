@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { Route, DeployState, WalletInfo } from "../types";
-  import { ICONS } from "./lib/icons";
-  import { send } from "./lib/vscode";
+  import type { Route, DeployState, WalletInfo } from "../../types";
+  import { ICONS } from "../lib/icons";
+  import { send } from "../lib/vscode";
 
   interface Props {
     ctx: {

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { TunnelStateMsg, AcurastNetwork, WalletInfo } from "../types";
-  import { send } from "./lib/vscode";
-  import { truncate } from "./lib/format";
+  import type { TunnelStateMsg, AcurastNetwork, WalletInfo } from "../../types";
+  import { send } from "../lib/vscode";
+  import { truncate } from "../lib/format";
 
   interface Props {
     tunnel: TunnelStateMsg | null;

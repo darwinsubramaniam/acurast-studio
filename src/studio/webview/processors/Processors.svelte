@@ -3,11 +3,11 @@
     WalletInfo,
     ProcessorsStateMsg,
     ManagedProcessor,
-  } from "../types";
-  import { send } from "./lib/vscode";
-  import { ICONS } from "./lib/icons";
-  import { planckToAcu, fmtRelative, fmtTimestamp, truncate } from "./lib/format";
-  import Spinner from "./lib/Spinner.svelte";
+  } from "../../types";
+  import { send } from "../lib/vscode";
+  import { ICONS } from "../lib/icons";
+  import { planckToAcu, fmtRelative, fmtTimestamp, truncate } from "../lib/format";
+  import Spinner from "../shared/Spinner.svelte";
 
   interface Props {
     wallets: {

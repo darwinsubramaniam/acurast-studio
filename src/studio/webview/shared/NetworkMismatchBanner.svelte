@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { Route } from "../types";
-  import { send } from "./lib/vscode";
-  import { networkLabel as cap, isNetworkMismatch } from "../../lib/network";
+  import type { Route } from "../../types";
+  import { send } from "../lib/vscode";
+  import { networkLabel as cap, isNetworkMismatch } from "../../../lib/network";
 
   interface Props {
     projectNetwork: string | null;

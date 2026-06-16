@@ -7,7 +7,7 @@ vi.mock('../../studio/webview/lib/vscode', () => ({
   send: vi.fn(),
 }));
 
-import Tunnel from '../../studio/webview/Tunnel.svelte';
+import Tunnel from '../../studio/webview/tunnel/Tunnel.svelte';
 import { send } from '../../studio/webview/lib/vscode';
 import type { TunnelStateMsg } from '../../studio/types';
 

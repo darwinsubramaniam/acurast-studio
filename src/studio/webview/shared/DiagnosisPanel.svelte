@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { DiagnosisStateMsg, DiagnosisStatus } from "../types";
-  import { truncate } from "./lib/format";
-  import Spinner from "./lib/Spinner.svelte";
+  import type { DiagnosisStateMsg, DiagnosisStatus } from "../../types";
+  import { truncate } from "../lib/format";
+  import Spinner from "./Spinner.svelte";
 
   interface Props {
     state: DiagnosisStateMsg | undefined;

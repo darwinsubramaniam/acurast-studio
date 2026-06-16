@@ -7,7 +7,7 @@ vi.mock('../../studio/webview/lib/vscode', () => ({
   send: vi.fn(),
 }));
 
-import History from '../../studio/webview/History.svelte';
+import History from '../../studio/webview/history/History.svelte';
 import { send } from '../../studio/webview/lib/vscode';
 import type {
   HistoryStateMsg,

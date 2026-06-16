@@ -7,14 +7,14 @@
     DiagnosisStateMsg,
     DeregisterStateMsg,
     AssignmentsStateMsg,
-  } from "../types";
+  } from "../../types";
   import { untrack } from "svelte";
-  import { send } from "./lib/vscode";
-  import { ICONS } from "./lib/icons";
-  import { planckToAcu, fmtTimestamp, fmtClock, fmtDuration, fmtCountdown, truncate } from "./lib/format";
-  import DiagnosisPanel from "./DiagnosisPanel.svelte";
-  import DiagnoseButton from "./DiagnoseButton.svelte";
-  import Spinner from "./lib/Spinner.svelte";
+  import { send } from "../lib/vscode";
+  import { ICONS } from "../lib/icons";
+  import { planckToAcu, fmtTimestamp, fmtClock, fmtDuration, fmtCountdown, truncate } from "../lib/format";
+  import DiagnosisPanel from "../shared/DiagnosisPanel.svelte";
+  import DiagnoseButton from "../shared/DiagnoseButton.svelte";
+  import Spinner from "../shared/Spinner.svelte";
 
   interface Props {
     historyState: HistoryStateMsg | null;

@@ -1,12 +1,12 @@
 <script lang="ts">
-  import type { Route, PricingStateMsg, FiatListStateMsg, FiatSelectionStateMsg, CoinGeckoPlan, WalletInfo, ProcessorsStateMsg, ManagedProcessor } from '../types';
-  import { send } from './lib/vscode';
-  import Spinner from './lib/Spinner.svelte';
-  import FiatNote from './lib/FiatNote.svelte';
-  import { adviceVerdict, isNonPriceBlocker } from './lib/pricing';
+  import type { Route, PricingStateMsg, FiatListStateMsg, FiatSelectionStateMsg, CoinGeckoPlan, WalletInfo, ProcessorsStateMsg, ManagedProcessor } from '../../types';
+  import { send } from '../lib/vscode';
+  import Spinner from '../shared/Spinner.svelte';
+  import FiatNote from '../shared/FiatNote.svelte';
+  import { adviceVerdict, isNonPriceBlocker } from '../lib/pricing';
   import { Accordion } from 'bits-ui';
-  import { planckToAcu, fmtRelative, truncate, fmtDuration } from './lib/format';
-  import { getNested, instantMatchField, buildPatch, validateConfig } from './lib/acurastConfig';
+  import { planckToAcu, fmtRelative, truncate, fmtDuration } from '../lib/format';
+  import { getNested, instantMatchField, buildPatch, validateConfig } from '../lib/acurastConfig';
 
   // Section ids match the Accordion.Item `value=` below. Open-by-default = listed here.
   let openSections = $state<string[]>(['identity', 'runtime', 'execution', 'scaling']);

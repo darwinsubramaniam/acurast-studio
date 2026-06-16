@@ -7,7 +7,7 @@ vi.mock('../../studio/webview/lib/vscode', () => ({
   send: vi.fn(),
 }));
 
-import Settings from '../../studio/webview/Settings.svelte';
+import Settings from '../../studio/webview/settings/Settings.svelte';
 import { send } from '../../studio/webview/lib/vscode';
 
 afterEach(() => cleanup());

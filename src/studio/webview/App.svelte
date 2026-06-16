@@ -17,14 +17,14 @@
   } from "../types";
   import { send } from "./lib/vscode";
   import { ICONS } from "./lib/icons";
-  import Home from "./Home.svelte";
-  import Wallets from "./Wallets.svelte";
-  import Settings from "./Settings.svelte";
-  import Deploy from "./Deploy.svelte";
-  import History from "./History.svelte";
-  import Processors from "./Processors.svelte";
-  import Tunnel from "./Tunnel.svelte";
-  import NetworkMismatchBanner from "./NetworkMismatchBanner.svelte";
+  import Home from "./home/Home.svelte";
+  import Wallets from "./wallets/Wallets.svelte";
+  import Settings from "./settings/Settings.svelte";
+  import Deploy from "./deploy/Deploy.svelte";
+  import History from "./history/History.svelte";
+  import Processors from "./processors/Processors.svelte";
+  import Tunnel from "./tunnel/Tunnel.svelte";
+  import NetworkMismatchBanner from "./shared/NetworkMismatchBanner.svelte";
 
   interface CtxState {
     isAcurastProject: boolean;

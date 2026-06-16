@@ -7,7 +7,7 @@ vi.mock('../../studio/webview/lib/vscode', () => ({
   send: vi.fn(),
 }));
 
-import Wallets from '../../studio/webview/Wallets.svelte';
+import Wallets from '../../studio/webview/wallets/Wallets.svelte';
 import type { BalanceMsg } from '../../studio/types';
 
 afterEach(() => cleanup());

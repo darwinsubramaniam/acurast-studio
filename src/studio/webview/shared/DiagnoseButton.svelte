@@ -2,7 +2,7 @@
   // Shared "Diagnose" action button used by the Deploy job cards and both
   // History sections. Renders the on-chain-diagnosis trigger with its
   // loading/re-run/idle label states. `.diag-btn` styling lives in global.css.
-  import type { DiagnosisStateMsg } from "../types";
+  import type { DiagnosisStateMsg } from "../../types";
 
   interface Props {
     /** Current diagnosis state for this job, if any. */

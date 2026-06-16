@@ -1,8 +1,8 @@
 <script lang="ts">
-  import type { WalletInfo, BalanceMsg } from '../types';
-  import { send } from './lib/vscode';
-  import { ICONS } from './lib/icons';
-  import Spinner from './lib/Spinner.svelte';
+  import type { WalletInfo, BalanceMsg } from '../../types';
+  import { send } from '../lib/vscode';
+  import { ICONS } from '../lib/icons';
+  import Spinner from '../shared/Spinner.svelte';
 
   interface Props {
     wallets: { list: WalletInfo[]; activeId: string | null; network: string; symbol: string };

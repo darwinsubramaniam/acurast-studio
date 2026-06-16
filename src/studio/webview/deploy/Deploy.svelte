@@ -4,12 +4,12 @@
     DeployState,
     PricingStateMsg,
     DiagnosisStateMsg,
-  } from "../types";
-  import { send } from "./lib/vscode";
-  import { ICONS } from "./lib/icons";
-  import DiagnosisPanel from "./DiagnosisPanel.svelte";
-  import DiagnoseButton from "./DiagnoseButton.svelte";
-  import Spinner from "./lib/Spinner.svelte";
+  } from "../../types";
+  import { send } from "../lib/vscode";
+  import { ICONS } from "../lib/icons";
+  import DiagnosisPanel from "../shared/DiagnosisPanel.svelte";
+  import DiagnoseButton from "../shared/DiagnoseButton.svelte";
+  import Spinner from "../shared/Spinner.svelte";
   import {
     planckToAcu,
     fmtFiat,
@@ -17,9 +17,9 @@
     fmtDuration,
     fmtTimestamp,
     fmtCountdown,
-  } from "./lib/format";
-  import FiatNote from "./lib/FiatNote.svelte";
-  import { adviceVerdict, isNonPriceBlocker } from "./lib/pricing";
+  } from "../lib/format";
+  import FiatNote from "../shared/FiatNote.svelte";
+  import { adviceVerdict, isNonPriceBlocker } from "../lib/pricing";
 
   interface Props {
     ctx: { isAcurastProject: boolean };

@@ -4,7 +4,7 @@
   // converted — matching the inline `{#if fiat}{@const f}{#if f != null}` guards
   // it replaces, so it's a drop-in for the Deploy and Settings cost panels.
   import type { PricingFiatInfo } from "../../types";
-  import { planckToFiat, acuToFiat, fmtFiat } from "./format";
+  import { planckToFiat, acuToFiat, fmtFiat } from "../lib/format";
 
   interface Props {
     /** Planck string when kind='planck', token-unit (ACU/cACU) string when kind='acu'. */
