@@ -56,10 +56,11 @@ The `nonPriceBlocker` computation, the sufficient/overpaying/insufficient icon+l
 ### 4. `Settings.svelte` does six jobs in one file — **Medium**
 Fiat-source config, project picker, the config form, `buildPatch`/validation, market-pricing display, and whitelist / "my processors" management all live together. Extracting (1) and (2) pulls ~250 lines out and leaves a mostly-declarative form component.
 
-### 5. No `OutMsg` union for host→webview messages — **Medium**
+### 5. No `OutMsg` union for host→webview messages — **Medium** · ✅ Resolved 2026-06-16
 `App.svelte:113-159` casts nearly every inbound message with `msg as unknown as BalanceMsg`/`PricingStateMsg`/etc. `InMsg` (webview→host) exists and is exhaustive; there is no symmetric union for the reverse direction, so the `switch` is untyped and a renamed field would not be caught by `tsc`.
 
 - **Fix:** define `type OutMsg = RouteMsg | ContextMsg | WalletsStateMsg | …` in `types.ts` and type the handler's `msg` as `OutMsg`, letting the discriminant narrow each case and deleting the `as unknown as` casts.
+- **✅ Resolved 2026-06-16:** added `OutMsg` to `types.ts` — a 16-member union mirroring `InMsg`, reusing the 9 existing `*StateMsg` interfaces and adding the 6 previously-inline shapes (`RouteMsg`, `ContextMsg`, `WalletsStateMsg`, `ConfigStateMsg`, `DeployStateMsg`, `NetworkMismatchMsg`) plus `BalanceStateMsg` (`BalanceMsg` + its wire `type`). `App.svelte`'s handler is now `event.data as OutMsg`; every `as unknown as …` cast is gone, the discriminant narrows each case, and a `default: msg satisfies never` makes a future unhandled message a compile error. Verified the narrowing under real `tsc` via a temp replica file (since `tsc` doesn't check `.svelte`); typecheck/build/`test:unit` (295) all green.
 
 ---
 
@@ -119,7 +120,7 @@ All preserve behavior exactly.
 | S2 | Pure config logic trapped in `Settings.svelte` (untestable) | Structural | High | ✅ Done (2026-06-16) |
 | S3 | Job-action cluster implemented 3× | Structural | Medium | Open |
 | S4 | `Settings.svelte` doing six jobs | Structural | Medium | Open |
-| S5 | No `OutMsg` union → `as unknown as` casts | Structural | Medium | Open |
+| S5 | No `OutMsg` union → `as unknown as` casts | Structural | Medium | ✅ Done (2026-06-16) |
 | L1 | Deploy pricing symbol from Studio target, not project network | Logic | Medium (verify) | Open |
 | L3 | `<a href>` external links may be CSP-blocked in webview | Logic | Medium | Open |
 | L2 | Clearing unvalidated numeric fields writes `null` | Logic | Low–Medium | Open |

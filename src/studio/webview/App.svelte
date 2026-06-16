@@ -13,6 +13,7 @@
     DeregisterStateMsg,
     AssignmentsStateMsg,
     TunnelStateMsg,
+    OutMsg,
   } from "../types";
   import { send } from "./lib/vscode";
   import { ICONS } from "./lib/icons";
@@ -88,75 +89,71 @@
 
   $effect(() => {
     function onMessage(event: MessageEvent) {
-      const msg = event.data as Record<string, unknown> & { type: string };
+      const msg = event.data as OutMsg;
       switch (msg.type) {
         case "route":
-          route = msg.route as Route;
+          route = msg.route;
           break;
         case "context":
           ctx = {
-            isAcurastProject: msg.isAcurastProject as boolean,
-            configPath: msg.configPath as string | null,
-            configRel: msg.configRel as string | null,
-            configExists: msg.configExists as boolean,
-            anyConfigExists: msg.anyConfigExists as boolean,
+            isAcurastProject: msg.isAcurastProject,
+            configPath: msg.configPath,
+            configRel: msg.configRel,
+            configExists: msg.configExists,
+            anyConfigExists: msg.anyConfigExists,
           };
           break;
         case "wallets.state":
           wallets = {
-            list: msg.wallets as WalletInfo[],
-            activeId: msg.activeId as string | null,
-            network: msg.network as string,
-            symbol: msg.symbol as string,
+            list: msg.wallets,
+            activeId: msg.activeId,
+            network: msg.network,
+            symbol: msg.symbol,
           };
           break;
         case "wallets.balance":
-          balance = msg as unknown as BalanceMsg;
+          balance = msg;
           break;
         case "config.state":
           config = { data: msg.config, projectKey: null };
           pricing = null; // config changed — stale until refreshed
           break;
         case "pricing.state":
-          pricing = msg as unknown as PricingStateMsg;
+          pricing = msg;
           break;
         case "fiat.listState":
-          fiatList = msg as unknown as FiatListStateMsg;
+          fiatList = msg;
           break;
         case "fiat.selection":
-          fiatSelection = msg as unknown as FiatSelectionStateMsg;
+          fiatSelection = msg;
           break;
         case "deploy.state":
-          deploy = msg.state as DeployState | null;
+          deploy = msg.state;
           break;
         case "history.state":
-          historyState = msg as unknown as HistoryStateMsg;
+          historyState = msg;
           break;
         case "processors.state":
-          processorsState = msg as unknown as ProcessorsStateMsg;
+          processorsState = msg;
           break;
         case "tunnel.state":
-          tunnel = msg as unknown as TunnelStateMsg;
+          tunnel = msg;
           break;
         case "network.mismatch":
-          projectNetwork = msg.projectNetwork as string | null;
-          targetNetwork = msg.targetNetwork as string;
+          projectNetwork = msg.projectNetwork;
+          targetNetwork = msg.targetNetwork;
           break;
-        case "diagnosis.state": {
-          const d = msg as unknown as DiagnosisStateMsg;
-          diagnoses = { ...diagnoses, [d.key]: d };
+        case "diagnosis.state":
+          diagnoses = { ...diagnoses, [msg.key]: msg };
           break;
-        }
-        case "deregister.state": {
-          const d = msg as unknown as DeregisterStateMsg;
-          deregisters = { ...deregisters, [d.key]: d };
+        case "deregister.state":
+          deregisters = { ...deregisters, [msg.key]: msg };
           break;
-        }
-        case "assignments.state": {
-          const d = msg as unknown as AssignmentsStateMsg;
-          assignments = { ...assignments, [d.key]: d };
+        case "assignments.state":
+          assignments = { ...assignments, [msg.key]: msg };
           break;
-        }
+        default:
+          msg satisfies never;
       }
     }
     window.addEventListener("message", onMessage);

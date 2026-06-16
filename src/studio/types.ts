@@ -84,6 +84,45 @@ export type InMsg =
   | NetworkSetTargetMsg
   | TunnelComputeMsg | TunnelVerifyMsg;
 
+// ── Host → webview messages (OutMsg) ──────────────────────────────────────────
+// The reverse-direction mirror of InMsg: every message StudioPanel.post() sends
+// to the webview. App.svelte types its message handler as OutMsg so the `type`
+// discriminant narrows each case (no `as unknown as` casts). The 9 *StateMsg
+// interfaces below already carry their own `type` and are folded into the union;
+// these are the previously-inline shapes that lacked a named interface.
+export interface RouteMsg { type: 'route'; route: Route; }
+export interface ContextMsg {
+  type: 'context';
+  isAcurastProject: boolean;
+  configPath: string | null;
+  configRel: string | null;
+  configExists: boolean;
+  anyConfigExists: boolean;
+}
+export interface WalletsStateMsg {
+  type: 'wallets.state';
+  wallets: WalletInfo[];
+  activeId: string | null;
+  network: string;
+  symbol: string;
+}
+/** Balance payload (BalanceMsg) tagged with its wire `type`. */
+export interface BalanceStateMsg extends BalanceMsg { type: 'wallets.balance'; }
+export interface ConfigStateMsg { type: 'config.state'; config: unknown; }
+export interface DeployStateMsg { type: 'deploy.state'; state: DeployState | null; }
+export interface NetworkMismatchMsg {
+  type: 'network.mismatch';
+  projectNetwork: string | null;
+  targetNetwork: string;
+}
+
+export type OutMsg =
+  | RouteMsg | ContextMsg | WalletsStateMsg | BalanceStateMsg
+  | ConfigStateMsg | DeployStateMsg | NetworkMismatchMsg
+  | PricingStateMsg | FiatListStateMsg | FiatSelectionStateMsg
+  | HistoryStateMsg | ProcessorsStateMsg | TunnelStateMsg
+  | DiagnosisStateMsg | DeregisterStateMsg | AssignmentsStateMsg;
+
 export interface SerializedFees {
   numberOfExecutions: string;
   numberOfReplicas: string;
