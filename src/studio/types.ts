@@ -67,6 +67,8 @@ export interface HistoryRemoveMsg      { type: 'history.remove'; id: string; }
 export interface HistoryOpenFolderMsg  { type: 'history.openFolder'; path: string; }
 /** Align the Studio target network (`acurast.network` setting) to `network`. */
 export interface NetworkSetTargetMsg   { type: 'network.setTarget'; network: string; }
+/** Open the Studio network quick-pick (the same picker the status bar uses). */
+export interface NetworkOpenPickerMsg  { type: 'network.openPicker'; }
 /** Recompute the tunnel DNS records for `suffix` on `network`, for `walletId` (defaults to active). */
 export interface TunnelComputeMsg      { type: 'tunnel.compute'; suffix: string; network: AcurastNetwork; walletId?: string; }
 /** Resolve and verify the published tunnel DNS records for `suffix` on `network`, for `walletId` (defaults to active). */
@@ -81,7 +83,7 @@ export type InMsg =
   | DevtoolsRefreshKeyMsg | DevtoolsOpenUrlMsg | OpenExternalMsg
   | ProcessorsQueryMsg | ProcessorsAdvertiseMsg
   | HistoryLoadMsg | HistoryFetchOnlineMsg | JobDiagnoseMsg | HistoryDeregisterMsg | HistoryAssignmentsMsg | HistoryRemovePathMsg | HistoryRemoveMsg | HistoryOpenFolderMsg
-  | NetworkSetTargetMsg
+  | NetworkSetTargetMsg | NetworkOpenPickerMsg
   | TunnelComputeMsg | TunnelVerifyMsg;
 
 // ── Host → webview messages (OutMsg) ──────────────────────────────────────────

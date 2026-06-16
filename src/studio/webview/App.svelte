@@ -187,7 +187,7 @@
 {/if}
 
 {#if route === "home"}
-  <Home {ctx} {wallets} {deploy} {navigate} />
+  <Home {ctx} {wallets} {balance} {deploy} {navigate} />
 {:else if route === "wallets"}
   <Wallets {wallets} {balance} />
 {:else if route === "settings"}

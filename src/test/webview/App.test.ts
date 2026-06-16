@@ -28,7 +28,8 @@ describe('App bootstrap', () => {
 
   it('renders the Home route by default', () => {
     render(App);
-    expect(screen.getByText('Acurast Studio')).toBeInTheDocument();
+    // The Home route is the only one with the donation footer.
+    expect(screen.getByText('Support development')).toBeInTheDocument();
   });
 });
 
@@ -48,7 +49,7 @@ describe('message: route', () => {
     await tick();
     dispatch({ type: 'route', route: 'home' });
     await tick();
-    expect(screen.getByRole('heading', { name: 'Acurast Studio' })).toBeInTheDocument();
+    expect(screen.getByText('Support development')).toBeInTheDocument();
   });
 });
 

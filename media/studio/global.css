@@ -1,4 +1,13 @@
-:root { color-scheme: light dark; }
+:root {
+  color-scheme: light dark;
+  /* Acurast brand accents — the only non-theme colors in the webview. All
+     surfaces and text stay on --vscode-* vars so light & high-contrast themes
+     still adapt; only these greens are constant (the brand identity). */
+  --acu-green: #a6e22e;
+  --acu-green-deep: #3e5310;
+  --acu-on-accent: #0a0a0a;
+  --acu-live-bg: #232e0e;
+}
 body {
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size);
@@ -22,49 +31,124 @@ body {
 .topbar .title-icon svg { width: 16px; height: 16px; }
 .topbar h2 { font-size: 12px; margin: 0; text-transform: uppercase; letter-spacing: 0.05em; color: var(--vscode-descriptionForeground); }
 
-/* Home */
-.hero {
-  padding: 14px 4px 6px;
-  text-align: center;
-  color: var(--vscode-descriptionForeground);
+/* ── Home: StatusBar header (logo · Studio · network pill · gear) ──────────── */
+.studio-statusbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 4px;
 }
-.hero svg { width: 36px; height: 36px; opacity: 0.7; }
-.hero h1 { font-size: 14px; margin: 8px 0 4px; color: var(--vscode-foreground); }
-.hero p { font-size: 12px; margin: 0; line-height: 1.4; }
-
-.nav-grid { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
-.nav-card {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 12px;
-  background: var(--vscode-editor-background);
-  border: 1px solid var(--vscode-panel-border, transparent);
-  border-radius: 4px;
-  cursor: pointer;
-  text-align: left;
-  width: 100%;
-  font: inherit;
+.studio-statusbar .brand { display: flex; align-items: center; gap: 9px; }
+.studio-statusbar .brand .logo { display: inline-flex; color: var(--acu-green); }
+.studio-statusbar .brand .logo svg { width: 24px; height: 15px; }
+.studio-statusbar .brand .name {
+  font-size: 14px; font-weight: 600; letter-spacing: -0.01em;
   color: var(--vscode-foreground);
 }
-.nav-card:hover {
-  background: var(--vscode-list-hoverBackground);
-  border-color: var(--vscode-focusBorder);
+.studio-statusbar .right { display: flex; align-items: center; gap: 10px; }
+.net-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px 4px 8px;
+  background: var(--acu-green-deep);
+  border: none; border-radius: 999px; cursor: pointer;
 }
-.nav-card:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.net-pill:hover { filter: brightness(1.18); }
+.net-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--acu-green); }
+.net-pill .label {
+  font-size: 11px; font-weight: 500; text-transform: capitalize; color: var(--acu-green);
 }
+.gear-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 22px; padding: 0; border: none; border-radius: 4px;
+  background: transparent; color: var(--vscode-descriptionForeground); cursor: pointer;
+}
+.gear-btn:hover { background: var(--vscode-toolbar-hoverBackground); color: var(--vscode-foreground); }
+.gear-btn svg { width: 16px; height: 16px; }
+.home-divider { height: 1px; background: var(--vscode-panel-border, transparent); margin: 0 -8px 12px; }
+
+/* ── Home: Active wallet summary card ──────────────────────────────────────── */
+.active-wallet {
+  display: flex; align-items: center; gap: 11px;
+  width: 100%; text-align: left; font: inherit;
+  padding: 10px 13px; margin-bottom: 12px;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border, transparent);
+  border-radius: 10px; cursor: pointer; color: var(--vscode-foreground);
+}
+.active-wallet:hover { border-color: var(--vscode-focusBorder); background: var(--vscode-list-hoverBackground); }
+.aw-avatar {
+  flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--acu-green-deep); color: var(--acu-green);
+}
+.aw-avatar svg { width: 16px; height: 16px; }
+.aw-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.aw-name-row { display: flex; align-items: center; gap: 7px; }
+.aw-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aw-badge {
+  flex-shrink: 0; font-size: 8.5px; font-weight: 600; letter-spacing: 0.04em;
+  padding: 1px 6px 2px; border-radius: 4px; text-transform: uppercase;
+  background: var(--acu-green-deep); color: var(--acu-green);
+}
+.aw-addr {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 11.5px; color: var(--vscode-descriptionForeground);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.aw-balance { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.aw-balance .amt { display: flex; align-items: baseline; gap: 4px; }
+.aw-balance .val { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.aw-balance .sym { font-size: 10px; font-weight: 500; color: var(--vscode-descriptionForeground); }
+.aw-balance .lbl { font-size: 10px; color: var(--vscode-descriptionForeground); opacity: 0.8; }
+.aw-balance .err { font-size: 11px; color: var(--vscode-errorForeground); }
+
+/* ── Home: Nav list (icon-square cards) ────────────────────────────────────── */
+.nav-grid { display: flex; flex-direction: column; gap: 8px; margin: 0 0 12px; }
+.nav-card {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 12px;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border, transparent);
+  border-radius: 10px;
+  cursor: pointer; text-align: left; width: 100%; font: inherit;
+  color: var(--vscode-foreground);
+}
+.nav-card:hover { background: var(--vscode-list-hoverBackground); border-color: var(--vscode-focusBorder); }
+.nav-card:disabled { opacity: 0.55; cursor: default; }
 .nav-card:disabled:hover { background: var(--vscode-editor-background); border-color: var(--vscode-panel-border, transparent); }
 .nav-card .icon {
-  width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+  /* No square background — bare glyph. Width keeps the icon column aligned with
+     the green wallet avatar / Live Monitoring square. */
+  flex-shrink: 0; width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
   color: var(--vscode-descriptionForeground);
-  flex-shrink: 0;
 }
 .nav-card .icon svg { width: 18px; height: 18px; }
 .nav-card .body { flex: 1; min-width: 0; }
-.nav-card .title { font-size: 13px; font-weight: 600; }
-.nav-card .sub { font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 2px; }
-.nav-card .chev { color: var(--vscode-descriptionForeground); opacity: 0.6; }
-.nav-card .chev svg { width: 12px; height: 12px; }
+.nav-card .title { font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; }
+.nav-card .sub { font-size: 11.5px; color: var(--vscode-descriptionForeground); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-card .chev { flex-shrink: 0; color: var(--vscode-descriptionForeground); opacity: 0.55; display: inline-flex; }
+.nav-card .chev svg { width: 13px; height: 13px; }
+
+/* Live Monitoring — green-accented placeholder until telemetry ships. */
+.nav-card.live-card { background: var(--acu-live-bg); border: 1.5px solid var(--acu-green); }
+.nav-card.live-card:disabled { opacity: 1; }
+.nav-card.live-card:disabled:hover { background: var(--acu-live-bg); border-color: var(--acu-green); }
+.nav-card.live-card .icon { background: var(--acu-green-deep); color: var(--acu-green); }
+.nav-card.live-card .sub { color: var(--acu-green); opacity: 0.85; }
+.live-badge {
+  display: inline-block; margin-left: 7px; vertical-align: middle;
+  font-size: 8.5px; font-weight: 600; letter-spacing: 0.04em;
+  padding: 1px 6px 2px; border-radius: 4px; text-transform: uppercase;
+  background: var(--acu-green-deep); color: var(--acu-green);
+}
+
+/* Security note (Home footer) */
+.security-note {
+  display: flex; align-items: center; gap: 7px;
+  padding-top: 2px; margin-bottom: 4px;
+  color: var(--vscode-descriptionForeground); opacity: 0.85;
+}
+.security-note svg { width: 13px; height: 13px; flex-shrink: 0; }
+.security-note span { font-size: 10.5px; }
 .badge {
   display: inline-block;
   font-size: 9px;
