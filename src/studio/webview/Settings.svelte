@@ -6,6 +6,7 @@
   import { adviceVerdict, isNonPriceBlocker } from './lib/pricing';
   import { Accordion } from 'bits-ui';
   import { planckToAcu, fmtRelative, truncate, fmtDuration } from './lib/format';
+  import { getNested, instantMatchField, buildPatch, validateConfig } from './lib/acurastConfig';
 
   // Section ids match the Accordion.Item `value=` below. Open-by-default = listed here.
   let openSections = $state<string[]>(['identity', 'runtime', 'execution', 'scaling']);
@@ -110,175 +111,14 @@
     return Number.isFinite(n) && n > 0 ? fmtDuration(n) : '';
   }
 
-  // Read an instantMatch field from a stored config, tolerating both the SDK's
-  // array shape `[{ processor, maxAllowedStartDelayInMs }]` and the legacy
-  // single-object shape `{ processor, ... }`.
-  function imField(p: Record<string, unknown>, field: string): unknown {
-    const im = getNested(p, 'assignmentStrategy', 'instantMatch');
-    const first = Array.isArray(im) ? im[0] : im;
-    return first && typeof first === 'object' ? (first as Record<string, unknown>)[field] : undefined;
-  }
-
-  function getNested(p: Record<string, unknown>, ...keys: string[]): unknown {
-    let cur: unknown = p;
-    for (const k of keys) {
-      if (!cur || typeof cur !== 'object') return undefined;
-      cur = (cur as Record<string, unknown>)[k];
-    }
-    return cur;
-  }
-
-  function deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): Record<string, unknown> {
-    const result = { ...target };
-    for (const [k, v] of Object.entries(source)) {
-      if (v !== null && v !== undefined && typeof v === 'object' && !Array.isArray(v) &&
-          result[k] !== null && result[k] !== undefined && typeof result[k] === 'object' && !Array.isArray(result[k])) {
-        result[k] = deepMerge(result[k] as Record<string, unknown>, v as Record<string, unknown>);
-      } else {
-        result[k] = v;
-      }
-    }
-    return result;
-  }
-
-  function buildPatch(): Record<string, unknown> {
-    const p = currentProject() ?? {};
-    const patch: Record<string, unknown> = {};
-
-    for (const [k, v] of Object.entries(draft)) {
-      if (k === 'includeEnvironmentVariables' && typeof v === 'string') {
-        patch[k] = v.split(',').map((s: string) => s.trim()).filter(Boolean);
-        continue;
-      }
-      if (k === 'processorWhitelist' && typeof v === 'string') {
-        patch[k] = v.split('\n').map((s: string) => s.trim()).filter(Boolean);
-        continue;
-      }
-      if (k === 'reuseKeysFrom') {
-        const raw = String(v ?? '').trim();
-        if (!raw || raw === 'null') { patch[k] = null; }
-        else { try { patch[k] = JSON.parse(raw); } catch { /* skip invalid */ } }
-        continue;
-      }
-      if (k.includes('.')) {
-        const parts = k.split('.');
-        let node = patch;
-        for (let i = 0; i < parts.length - 1; i++) {
-          if (!(parts[i] in node) || typeof node[parts[i]] !== 'object' || Array.isArray(node[parts[i]])) {
-            node[parts[i]] = {};
-          }
-          node = node[parts[i]] as Record<string, unknown>;
-        }
-        node[parts[parts.length - 1]] = v;
-      } else {
-        patch[k] = v;
-      }
-    }
-
-    for (const k of Object.keys(patch)) {
-      const pv = patch[k];
-      const orig = p[k];
-      if (pv && typeof pv === 'object' && !Array.isArray(pv) &&
-          orig && typeof orig === 'object' && !Array.isArray(orig)) {
-        patch[k] = deepMerge(orig as Record<string, unknown>, pv as Record<string, unknown>);
-      }
-    }
-
-    // Clean up assignmentStrategy. The SDK validates instantMatch as an ARRAY
-    // of { processor, maxAllowedStartDelayInMs } (it calls .map on it), so
-    // normalize our internal single-object draft into that shape on the way out.
-    if (patch.assignmentStrategy && typeof patch.assignmentStrategy === 'object') {
-      const as = patch.assignmentStrategy as Record<string, unknown>;
-      if (as.type === 'Competing') {
-        delete as.instantMatch;
-      } else if (as.instantMatch != null) {
-        const cur = currentProject() ?? {};
-        const raw = Array.isArray(as.instantMatch) ? as.instantMatch[0] : as.instantMatch;
-        const im = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
-        const proc = im.processor;
-        if (!proc || String(proc).trim() === '') {
-          delete as.instantMatch;
-        } else {
-          // Required by the schema; fall back to the prior value, then the
-          // schedule's top-level maxStartDelay, then 10s.
-          const candidates = [im.maxAllowedStartDelayInMs, imField(cur, 'maxAllowedStartDelayInMs'),
-            rd('maxAllowedStartDelayInMs', cur.maxAllowedStartDelayInMs)];
-          let delay = 10000;
-          for (const c of candidates) {
-            const n = Number(c);
-            if (c != null && Number.isFinite(n) && n >= 0) { delay = n; break; }
-          }
-          as.instantMatch = [{ processor: String(proc).trim(), maxAllowedStartDelayInMs: delay }];
-        }
-      }
-    }
-
-    // Clean up empty minProcessorVersions
-    if (patch.minProcessorVersions && typeof patch.minProcessorVersions === 'object') {
-      const mv = patch.minProcessorVersions as Record<string, unknown>;
-      const hasAny = Object.values(mv).some(v => v !== null && v !== undefined && String(v).trim() !== '');
-      if (!hasAny) patch.minProcessorVersions = null;
-    }
-
-    return patch;
-  }
-
-  const errors = $derived.by(() => {
-    const p = currentProject();
-    if (!p) return {} as Record<string, string>;
-    const errs: Record<string, string> = {};
-
-    const name = rd('projectName', p.projectName);
-    if (!name || String(name).trim() === '') errs.projectName = 'Required';
-
-    const fUrl = rd('fileUrl', p.fileUrl);
-    if (!fUrl || String(fUrl).trim() === '') errs.fileUrl = 'Required';
-
-    const runtime = (rd('runtime', p.runtime) ?? 'NodeJSWithBundle') as string;
-    if (runtime === 'Shell') {
-      const imgUrl = rd('image.url', getNested(p, 'image', 'url'));
-      if (!imgUrl || String(imgUrl).trim() === '') errs['image.url'] = 'Required for Shell runtime';
-      const imgSha = rd('image.sha256', getNested(p, 'image', 'sha256'));
-      if (!imgSha || String(imgSha).trim() === '') {
-        errs['image.sha256'] = 'Required for Shell runtime';
-      } else if (!/^[a-fA-F0-9]{64}$/.test(String(imgSha))) {
-        errs['image.sha256'] = 'Must be 64-character hex string';
-      }
-    }
-
-    const execType = (rd('execution.type', getNested(p, 'execution', 'type')) ?? 'onetime') as string;
-    if (execType === 'interval') {
-      const iv = rd('execution.intervalInMs', getNested(p, 'execution', 'intervalInMs'));
-      if (!iv || Number(iv) <= 0) errs['execution.intervalInMs'] = 'Required, must be > 0';
-      const ne = rd('execution.numberOfExecutions', getNested(p, 'execution', 'numberOfExecutions'));
-      if (!ne || Number(ne) <= 0 || !Number.isInteger(Number(ne))) errs['execution.numberOfExecutions'] = 'Required, positive integer';
-    }
-
-    const reuseVal = draft.reuseKeysFrom;
-    if (reuseVal !== undefined && reuseVal !== null) {
-      const raw = String(reuseVal).trim();
-      if (raw && raw !== 'null') {
-        try {
-          const parsed = JSON.parse(raw);
-          if (!Array.isArray(parsed) || parsed.length !== 3 ||
-              parsed[0] !== 'Acurast' || typeof parsed[1] !== 'string' || typeof parsed[2] !== 'number') {
-            errs.reuseKeysFrom = 'Must be ["Acurast", "address", deploymentId]';
-          }
-        } catch {
-          errs.reuseKeysFrom = 'Invalid JSON';
-        }
-      }
-    }
-
-    return errs;
-  });
+  const errors = $derived.by(() => validateConfig(draft, currentProject()));
 
   const hasErrors = $derived(Object.keys(errors).length > 0);
 
   function onSave() {
     const key = activeKey();
     if (!key || !dirty || hasErrors) return;
-    send('config.save', { projectKey: key, patch: buildPatch() });
+    send('config.save', { projectKey: key, patch: buildPatch(draft, currentProject()) });
   }
 
   function onDiscard() {
@@ -394,7 +234,7 @@
     {@const assignType = (rd('assignmentStrategy.type', getNested(p, 'assignmentStrategy', 'type')) ?? 'Single') as string}
     {@const mutability = (rd('mutability', p.mutability) ?? 'Immutable') as string}
     {@const modules = (rd('requiredModules', p.requiredModules) ?? []) as string[]}
-    {@const imProcessor = rd('assignmentStrategy.instantMatch.processor', imField(p, 'processor')) as string | null | undefined}
+    {@const imProcessor = rd('assignmentStrategy.instantMatch.processor', instantMatchField(p, 'processor')) as string | null | undefined}
 
     {#snippet durEcho(v: unknown)}
       {@const h = msHuman(v)}
@@ -667,9 +507,9 @@
           <div class="field">
             <label for="f_imDelay">Instant Match Max Start Delay (ms)</label>
             <input id="f_imDelay" type="number"
-              value={rd('assignmentStrategy.instantMatch.maxAllowedStartDelayInMs', imField(p, 'maxAllowedStartDelayInMs')) ?? 10000}
+              value={rd('assignmentStrategy.instantMatch.maxAllowedStartDelayInMs', instantMatchField(p, 'maxAllowedStartDelayInMs')) ?? 10000}
               oninput={(e) => { const n = Number((e.target as HTMLInputElement).value); patchField('assignmentStrategy.instantMatch.maxAllowedStartDelayInMs', isNaN(n) ? null : n); }} />
-            {@render durEcho(rd('assignmentStrategy.instantMatch.maxAllowedStartDelayInMs', imField(p, 'maxAllowedStartDelayInMs')) ?? 10000)}
+            {@render durEcho(rd('assignmentStrategy.instantMatch.maxAllowedStartDelayInMs', instantMatchField(p, 'maxAllowedStartDelayInMs')) ?? 10000)}
           </div>
         {/if}
       {/if}

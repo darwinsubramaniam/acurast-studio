@@ -42,10 +42,11 @@ The `nonPriceBlocker` computation, the sufficient/overpaying/insufficient icon+l
 - **Fix (no behavior change):** extract a `{#snippet fiatAmount(value, rate, kind)}` (or `FiatAmount.svelte`) for the repeated fragment, and lift `adviceIcon`/`adviceLabel`/fallback-text into `lib/pricing.ts` so both components call the same functions. Optionally a shared `PricingPanel.svelte`; at minimum unify the leaf helpers.
 - **✅ Resolved 2026-06-16:** added `src/studio/webview/lib/FiatNote.svelte` (the fiat-conversion fragment, 12 call sites collapsed) and `src/studio/webview/lib/pricing.ts` (`adviceVerdict()` returning the `AdviceVerdict` `{ icon, label }` via a lookup table, replacing the duplicated icon/label ternaries, plus `isNonPriceBlocker()`). `Deploy.svelte` and `Settings.svelte` now share both. Fallback-reason copy was left per-component — the wording genuinely differs between the two views, so unifying it would have changed rendered text. Verified: `typecheck` + `build:dev` clean.
 
-### 2. Pure config logic trapped inside `Settings.svelte` — **High** (maintainability / testability)
+### 2. Pure config logic trapped inside `Settings.svelte` — **High** (maintainability / testability) · ✅ Resolved 2026-06-16
 `buildPatch()` (`:142-222`), `deepMerge` (`:129-140`), `getNested` (`:120-127`), `imField` (`:114-118`), and the `errors` validator (`:224-272`) are pure data transforms with intricate branching (dotted-key expansion, instantMatch array normalization, `reuseKeysFrom` parsing). They are exactly the code that needs unit tests but can't be tested without booting a Svelte component.
 
-- **Fix:** move them to `src/studio/webview/lib/configPatch.ts` as exported pure functions and import them. No behavior change; `src/test/unit/` can then cover the SDK-shape normalization that several past commits clearly touched.
+- **Fix:** move them to `src/studio/webview/lib/acurastConfig.ts` as exported pure functions and import them. No behavior change; `src/test/unit/` can then cover the SDK-shape normalization that several past commits clearly touched.
+- **✅ Resolved 2026-06-16:** extracted `getNested`, `instantMatchField`, `deepMerge` (internal), `buildPatch(draft, project)`, and `validateConfig(draft, project)` into `src/studio/webview/lib/acurastConfig.ts` (named for the whole acurast.json concern — it both builds the save-patch and validates, not just patches). Pure, no Svelte/DOM imports, with the form `draft` and the selected project passed in instead of read from component state. `Settings.svelte` now imports them; `errors` is `validateConfig(draft, currentProject())` and `onSave` calls `buildPatch(draft, currentProject())`. Added `src/test/unit/acurastConfig.test.ts` (19 cases: list parsing, dotted-key expansion, deep-merge onto original, instantMatch Single/Competing normalization, minProcessorVersions cleanup, required-field/Shell/interval/reuseKeysFrom validation). Verified: `typecheck`, `build:dev`, and full `test:unit` (295 tests) all green.
 
 ### 3. Job-action cluster (Diagnose / Deregister / DiagnosisPanel) implemented three times — **Medium**
 `History.svelte` local cards (`:357-397`), `History.svelte` online cards (`:522-607`), and `Deploy.svelte` job-id cards (`:337-365`) each rebuild the same diagnose button (identical "Diagnosing…/Re-run diagnosis/Diagnose" label logic), deregister button, and `<DiagnosisPanel>`.
@@ -99,7 +100,7 @@ The pattern `const n = Number(value); patchField(key, isNaN(n) ? null : n)` (e.g
 
 All preserve behavior exactly.
 
-1. **Extract `buildPatch`/`deepMerge`/`getNested`/`imField`/validator to `lib/configPatch.ts`** and import into `Settings.svelte`. Pure move; enables unit tests.
+1. **Extract `buildPatch`/`deepMerge`/`getNested`/`instantMatchField`/validator to `lib/acurastConfig.ts`** and import into `Settings.svelte`. Pure move; enables unit tests.
 2. **Extract the fiat fragment to `{#snippet fiatAmount(...)}`** (or `FiatAmount.svelte`) and reuse in `Deploy` and `Settings`. Identical output, one source of truth.
 3. **Introduce `jobKey()`** and replace the inline string-builds and `diagKey`. Mechanical.
 4. **Add the `OutMsg` union** and type the `App.svelte` message handler with it; delete the `as unknown as` casts. No runtime change.
@@ -115,7 +116,7 @@ All preserve behavior exactly.
 | # | Finding | Type | Priority | Status |
 |---|---------|------|----------|--------|
 | S1 | Pricing/fiat markup duplicated across Deploy & Settings | Structural | High | ✅ Done (2026-06-16) |
-| S2 | Pure config logic trapped in `Settings.svelte` (untestable) | Structural | High | Open |
+| S2 | Pure config logic trapped in `Settings.svelte` (untestable) | Structural | High | ✅ Done (2026-06-16) |
 | S3 | Job-action cluster implemented 3× | Structural | Medium | Open |
 | S4 | `Settings.svelte` doing six jobs | Structural | Medium | Open |
 | S5 | No `OutMsg` union → `as unknown as` casts | Structural | Medium | Open |
