@@ -54,8 +54,10 @@ The `nonPriceBlocker` computation, the sufficient/overpaying/insufficient icon+l
 - **Fix:** a `JobActions.svelte` taking `{origin, localId, network, dstate, dreg}` collapses three copies into one and guarantees consistent labels/disabled states.
 - **✅ Resolved 2026-06-16 (revised approach):** a single `JobActions` proved unsafe — the three clusters diverge: Deploy's deregister uses deploy-state flags + `deploy.deregister` while History uses the `deregisters` map + `history.deregister`; button **order** differs (Deploy renders Deregister→Diagnose, History Diagnose→Deregister); and History online interleaves a "Start times" button. A fixed layout would reorder buttons. Instead extracted the one genuinely-identical piece — the Diagnose button — into `DiagnoseButton.svelte` (`{ state, idleLabel='Diagnose', onclick }`), used at all 3 sites (Deploy passes `idleLabel="Why not matched?"`). Moved `.diag-btn` from History's scoped `<style>` to `global.css` so the component (and History's inline "Start times" button) share it. Side effect, intended: Deploy's diagnose button — previously unstyled by `.diag-btn` (the rule lived only in History's scoped CSS) — now gets the link style, a consistency fix. The divergent Deregister blocks were left inline. typecheck/build (no new warnings, no unused-selector)/`test:unit` (295) all green.
 
-### 4. `Settings.svelte` does six jobs in one file — **Medium**
+### 4. `Settings.svelte` does six jobs in one file — **Medium** · ✅ Resolved 2026-06-16
 Fiat-source config, project picker, the config form, `buildPatch`/validation, market-pricing display, and whitelist / "my processors" management all live together. Extracting (1) and (2) pulls ~250 lines out and leaves a mostly-declarative form component.
+
+- **✅ Resolved 2026-06-16:** S1 (pricing/fiat helpers) and S2 (config patch/validation) extracted the bulk per the remedy above. This pass additionally pulled the two remaining self-contained sub-features into their own components — `settings/FiatPricingSettings.svelte` (its own fiat form state + `fiat.*` messages; `fiatList`/`fiatSelection` props) and `settings/ProcessorWhitelist.svelte` (whitelist chips + "my processors" loader + the `wl-*` styles; `value`/`onChange`/`activeWallet`/`processorsState`/`network` props). The Accordion wrappers stay in the parent (no bits-ui context risk). `Settings.svelte` is now **701 lines** (1,179 pre-review → 1,012 after S1/S2 → 701) and reads as a mostly-declarative form. Landed alongside the **folder-per-route** webview restructure (`settings/` holds the panel + its private children; cross-route components in `shared/`). Build + typecheck + `test:unit` (295, incl. the Settings mount test) all green.
 
 ### 5. No `OutMsg` union for host→webview messages — **Medium** · ✅ Resolved 2026-06-16
 `App.svelte:113-159` casts nearly every inbound message with `msg as unknown as BalanceMsg`/`PricingStateMsg`/etc. `InMsg` (webview→host) exists and is exhaustive; there is no symmetric union for the reverse direction, so the `switch` is untyped and a renamed field would not be caught by `tsc`.
@@ -120,7 +122,7 @@ All preserve behavior exactly.
 | S1 | Pricing/fiat markup duplicated across Deploy & Settings | Structural | High | ✅ Done (2026-06-16) |
 | S2 | Pure config logic trapped in `Settings.svelte` (untestable) | Structural | High | ✅ Done (2026-06-16) |
 | S3 | Job-action cluster implemented 3× | Structural | Medium | ✅ Done (2026-06-16, DiagnoseButton) |
-| S4 | `Settings.svelte` doing six jobs | Structural | Medium | Open |
+| S4 | `Settings.svelte` doing six jobs | Structural | Medium | ✅ Done (2026-06-16) |
 | S5 | No `OutMsg` union → `as unknown as` casts | Structural | Medium | ✅ Done (2026-06-16) |
 | L1 | Deploy pricing symbol from Studio target, not project network | Logic | Medium (verify) | Open |
 | L3 | `<a href>` external links may be CSP-blocked in webview | Logic | Medium | Open |

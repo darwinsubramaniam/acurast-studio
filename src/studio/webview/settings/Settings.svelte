@@ -1,11 +1,13 @@
 <script lang="ts">
-  import type { Route, PricingStateMsg, FiatListStateMsg, FiatSelectionStateMsg, CoinGeckoPlan, WalletInfo, ProcessorsStateMsg, ManagedProcessor } from '../../types';
+  import type { Route, PricingStateMsg, FiatListStateMsg, FiatSelectionStateMsg, WalletInfo, ProcessorsStateMsg } from '../../types';
   import { send } from '../lib/vscode';
   import Spinner from '../shared/Spinner.svelte';
   import FiatNote from '../shared/FiatNote.svelte';
+  import FiatPricingSettings from './FiatPricingSettings.svelte';
+  import ProcessorWhitelist from './ProcessorWhitelist.svelte';
   import { adviceVerdict, isNonPriceBlocker } from '../lib/pricing';
   import { Accordion } from 'bits-ui';
-  import { planckToAcu, fmtRelative, truncate, fmtDuration } from '../lib/format';
+  import { planckToAcu, fmtDuration } from '../lib/format';
   import { getNested, instantMatchField, buildPatch, validateConfig } from '../lib/acurastConfig';
 
   // Section ids match the Accordion.Item `value=` below. Open-by-default = listed here.
@@ -22,53 +24,6 @@
     processorsState: ProcessorsStateMsg | null;
   }
   let { ctx, config, pricing, fiatList, fiatSelection, wallets, processorsState }: Props = $props();
-
-  // Pricing config form state — local edits before save.
-  const EXCHANGERS: Array<{ id: number; name: string }> = [
-    { id: 1, name: 'CoinMarketCap' },
-    { id: 2, name: 'CoinGecko' },
-  ];
-  let fiatExchangerId = $state<number>(2);
-  let fiatCurrencyId = $state<string>('');
-  let fiatApiKey = $state<string>('');
-  let fiatApiKeyTouched = $state<boolean>(false);
-  let coingeckoPlan = $state<CoinGeckoPlan>('demo');
-
-  $effect(() => {
-    if (!fiatSelection) return;
-    fiatExchangerId = fiatSelection.exchangerId;
-    fiatCurrencyId = fiatSelection.currencyId;
-    coingeckoPlan = fiatSelection.coingeckoPlan;
-    fiatApiKey = '';
-    fiatApiKeyTouched = false;
-  });
-
-  function fiatRefreshList() {
-    send('fiat.fetchList', {
-      exchangerId: fiatExchangerId,
-      apiKey: fiatApiKey.trim() || undefined,
-      coingeckoPlan: fiatExchangerId === 2 ? coingeckoPlan : undefined,
-    });
-  }
-
-  function fiatSave() {
-    send('fiat.save', {
-      exchangerId: fiatExchangerId,
-      currencyId: fiatCurrencyId,
-      apiKey: fiatApiKeyTouched ? fiatApiKey.trim() : undefined,
-      coingeckoPlan: fiatExchangerId === 2 ? coingeckoPlan : undefined,
-    });
-  }
-
-  function fiatClear() {
-    fiatCurrencyId = '';
-    send('fiat.save', {
-      exchangerId: fiatExchangerId,
-      currencyId: '',
-      apiKey: fiatApiKeyTouched ? fiatApiKey.trim() : undefined,
-      coingeckoPlan: fiatExchangerId === 2 ? coingeckoPlan : undefined,
-    });
-  }
 
   let draft = $state<Record<string, unknown>>({});
   let dirty = $derived(Object.keys(draft).length > 0);
@@ -162,44 +117,6 @@
       : '';
   }
 
-  let whitelist = $derived.by<string[]>(() => {
-    const raw = (rd('processorWhitelist', whitelistText(currentProject())) ?? '') as string;
-    return raw.split('\n').map((s) => s.trim()).filter(Boolean);
-  });
-
-  function setWhitelist(list: string[]) {
-    patchField('processorWhitelist', list.join('\n'));
-  }
-  function addToWhitelist(addr: string) {
-    if (whitelist.includes(addr)) return;
-    setWhitelist([...whitelist, addr]);
-  }
-  function removeFromWhitelist(addr: string) {
-    setWhitelist(whitelist.filter((a) => a !== addr));
-  }
-
-  function loadMyProcessors() {
-    if (!activeWallet) return;
-    send('processors.query', {
-      address: activeWallet.address,
-      network: projectNetwork(),
-    });
-  }
-
-  // Only trust processor results that belong to the active wallet.
-  let myProcMatches = $derived(
-    !!activeWallet && processorsState?.address === activeWallet.address,
-  );
-  let myProcStatus = $derived(myProcMatches ? processorsState?.status : undefined);
-  let myProcessors = $derived<ManagedProcessor[]>(
-    myProcMatches && processorsState?.status === 'ok'
-      ? processorsState?.result?.processors ?? []
-      : [],
-  );
-  function isOnline(lastSeen: number): boolean {
-    return !!lastSeen && Date.now() - lastSeen <= 60 * 60 * 1000;
-  }
-
   const satoshiToACU = planckToAcu;
 
   function inBucket(price: string, bucket: { range_min: string; range_max: string }): boolean {
@@ -259,68 +176,7 @@
         <Accordion.Trigger class="section-title acc-trigger">Fiat Pricing</Accordion.Trigger>
       </Accordion.Header>
       <Accordion.Content class="acc-content">
-      <div class="field">
-        <label for="f_fiatExchanger">Price source</label>
-        <select id="f_fiatExchanger" onchange={(e) => { fiatExchangerId = Number((e.target as HTMLSelectElement).value); }}>
-          {#each EXCHANGERS as ex}
-            <option value={ex.id} selected={ex.id === fiatExchangerId}>{ex.name}</option>
-          {/each}
-        </select>
-        <div class="hint">CoinMarketCap requires an API key. CoinGecko works keyless (public API) or with a Demo/Pro key.</div>
-      </div>
-      {#if fiatExchangerId === 2}
-        <div class="field">
-          <label for="f_fiatPlan">CoinGecko plan</label>
-          <select id="f_fiatPlan" onchange={(e) => { coingeckoPlan = (e.target as HTMLSelectElement).value as CoinGeckoPlan; }}>
-            <option value="demo" selected={coingeckoPlan === 'demo'}>Demo (api.coingecko.com)</option>
-            <option value="pro" selected={coingeckoPlan === 'pro'}>Pro (pro-api.coingecko.com)</option>
-          </select>
-          <div class="hint">Both key types start with <code>CG-</code> so the tier can't be auto-detected. Leave key blank to use the public/keyless API.</div>
-        </div>
-      {/if}
-      <div class="field">
-        <label for="f_fiatApiKey">API key {fiatSelection?.hasApiKey && fiatExchangerId === fiatSelection.exchangerId ? '(stored)' : ''}</label>
-        <input id="f_fiatApiKey" type="password" autocomplete="off"
-          placeholder={fiatSelection?.hasApiKey && fiatExchangerId === fiatSelection.exchangerId ? '•••••••• (saved — type to replace)' : 'optional (blank = public/keyless)'}
-          value={fiatApiKey}
-          oninput={(e) => { fiatApiKey = (e.target as HTMLInputElement).value; fiatApiKeyTouched = true; }} />
-        <div class="hint">Stored in the OS keychain (SecretStorage). Not written to settings.json.</div>
-      </div>
-      <div class="field">
-        <label for="f_fiatCurrency">Display currency</label>
-        <div style="display:flex; gap:6px;">
-          <select id="f_fiatCurrency" style="flex:1;"
-            onchange={(e) => { fiatCurrencyId = (e.target as HTMLSelectElement).value; }}
-            disabled={!fiatList || fiatList.status !== 'ok' || fiatList.exchangerId !== fiatExchangerId}>
-            <option value="" selected={fiatCurrencyId === ''}>— Disabled —</option>
-            {#if fiatList && fiatList.status === 'ok' && fiatList.exchangerId === fiatExchangerId && fiatList.list}
-              {#each fiatList.list as c (c.id)}
-                <option value={c.id} selected={c.id === fiatCurrencyId}>{c.symbol} — {c.name}{c.sign ? ` (${c.sign})` : ''}</option>
-              {/each}
-            {/if}
-          </select>
-          <button class="secondary" style="font-size:11px;" disabled={fiatList?.status === 'loading'} onclick={fiatRefreshList}>
-            {#if fiatList?.status === 'loading' && fiatList.exchangerId === fiatExchangerId}
-              <Spinner size={10} label="Loading…" />
-            {:else}
-              Load list
-            {/if}
-          </button>
-        </div>
-        {#if fiatList?.status === 'error' && fiatList.exchangerId === fiatExchangerId}
-          <div class="error-hint">{fiatList.error}</div>
-        {:else if !fiatList || fiatList.exchangerId !== fiatExchangerId}
-          <div class="hint">Click "Load list" to populate the currency picker for the chosen source.</div>
-        {:else}
-          <div class="hint">Shown alongside ACU in the deploy cost estimate.</div>
-        {/if}
-      </div>
-      <div class="toolbar">
-        <button onclick={fiatSave}>Save pricing source</button>
-        {#if fiatCurrencyId}
-          <button class="secondary" onclick={fiatClear}>Disable fiat</button>
-        {/if}
-      </div>
+      <FiatPricingSettings {fiatList} {fiatSelection} />
       </Accordion.Content>
     </Accordion.Item>
 
@@ -793,78 +649,13 @@
           <div class="hint" style="margin-top:4px;">Shell module auto-injected for Shell runtime</div>
         {/if}
       </div>
-      <div class="field">
-        <label for="f_whitelist">Processor Whitelist <span class="label-optional">(optional)</span></label>
-
-        {#if whitelist.length}
-          <div class="wl-chips">
-            {#each whitelist as addr (addr)}
-              <span class="wl-chip" title={addr}>
-                <span class="wl-chip-addr">{truncate(addr)}</span>
-                <button type="button" class="wl-chip-x" title="Remove" aria-label="Remove {addr}"
-                  onclick={() => removeFromWhitelist(addr)}>×</button>
-              </span>
-            {/each}
-          </div>
-        {/if}
-
-        <!-- Add from the processors this wallet manages -->
-        <div class="wl-mine">
-          <div class="wl-mine-head">
-            <span class="wl-mine-title">
-              My processors{activeWallet ? ` · ${activeWallet.name || truncate(activeWallet.address)}` : ''}
-            </span>
-            <button type="button" class="secondary wl-load"
-              disabled={!activeWallet || myProcStatus === 'loading'}
-              onclick={loadMyProcessors}>
-              {#if myProcStatus === 'loading'}
-                <Spinner size={10} label="Loading…" />
-              {:else}
-                {myProcessors.length ? '⟳ Refresh' : 'Load'}
-              {/if}
-            </button>
-          </div>
-
-          {#if !activeWallet}
-            <div class="hint">Set an active wallet to list processors you can whitelist.</div>
-          {:else if myProcStatus === 'error'}
-            <div class="error-hint">{processorsState?.error ?? 'Failed to load processors.'}</div>
-          {:else if myProcStatus === 'ok' && myProcessors.length === 0}
-            <div class="hint">No processors are paired to this wallet on {projectNetwork()}.</div>
-          {:else if myProcessors.length}
-            {@const addable = myProcessors.filter((mp) => !whitelist.includes(mp.address))}
-            <div class="wl-list">
-              {#each myProcessors as mp (mp.address)}
-                {@const added = whitelist.includes(mp.address)}
-                <div class="wl-row" class:added>
-                  <span class="wl-dot {isOnline(mp.lastSeen) ? 'on' : 'off'}"
-                    title={isOnline(mp.lastSeen) ? 'Online' : `Last seen ${fmtRelative(mp.lastSeen)}`}></span>
-                  <span class="wl-row-addr" title={mp.address}>{truncate(mp.address)}</span>
-                  {#if mp.version}<span class="wl-ver">{mp.version}</span>{/if}
-                  <button type="button" class="wl-add" disabled={added}
-                    onclick={() => addToWhitelist(mp.address)}>
-                    {added ? 'Added' : 'Add'}
-                  </button>
-                </div>
-              {/each}
-            </div>
-            {#if addable.length > 1}
-              <button type="button" class="secondary wl-add-all"
-                onclick={() => setWhitelist([...whitelist, ...addable.map((mp) => mp.address)])}>
-                Add all ({addable.length})
-              </button>
-            {/if}
-          {:else}
-            <div class="hint">Click “Load” to pull the processors paired to this wallet.</div>
-          {/if}
-        </div>
-
-        <textarea id="f_whitelist" rows="3"
-          value={rd('processorWhitelist', whitelistText(p)) ?? ''}
-          placeholder="One address per line — leave blank to allow any processor"
-          oninput={(e) => patchField('processorWhitelist', (e.target as HTMLTextAreaElement).value)}></textarea>
-        <div class="hint">Only whitelisted processors can run this deployment. Edit directly or add yours above.</div>
-      </div>
+      <ProcessorWhitelist
+        value={String(rd('processorWhitelist', whitelistText(p)) ?? '')}
+        onChange={(v) => patchField('processorWhitelist', v)}
+        {activeWallet}
+        {processorsState}
+        network={projectNetwork()}
+      />
       <div class="field">
         <label for="f_minAndroid">Min processor Android version <span class="label-optional">(optional)</span></label>
         <input id="f_minAndroid" type="text"
@@ -906,107 +697,5 @@
   .dur-echo {
     color: var(--vscode-textLink-foreground);
     font-variant-numeric: tabular-nums;
-  }
-  .wl-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin-bottom: 6px;
-  }
-  .wl-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 1px 4px 1px 8px;
-    border-radius: 10px;
-    background: var(--vscode-badge-background);
-    color: var(--vscode-badge-foreground);
-    font-size: 11px;
-    font-family: var(--vscode-editor-font-family, monospace);
-  }
-  .wl-chip-x {
-    background: transparent;
-    border: none;
-    color: inherit;
-    cursor: pointer;
-    font-size: 14px;
-    line-height: 1;
-    padding: 0 2px;
-    opacity: 0.7;
-  }
-  .wl-chip-x:hover {
-    opacity: 1;
-  }
-
-  .wl-mine {
-    border: 1px solid var(--vscode-panel-border);
-    border-radius: 6px;
-    padding: 8px;
-    margin-bottom: 6px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .wl-mine-head {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .wl-mine-title {
-    font-size: 11px;
-    color: var(--vscode-descriptionForeground);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .wl-load {
-    margin-left: auto;
-    font-size: 10px;
-    padding: 2px 8px;
-    flex: none;
-  }
-
-  .wl-list {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-  }
-  .wl-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-  }
-  .wl-row.added {
-    opacity: 0.6;
-  }
-  .wl-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    flex: none;
-  }
-  .wl-dot.on {
-    background: var(--vscode-testing-iconPassed, #3fb950);
-  }
-  .wl-dot.off {
-    background: var(--vscode-descriptionForeground);
-  }
-  .wl-row-addr {
-    font-family: var(--vscode-editor-font-family, monospace);
-  }
-  .wl-ver {
-    color: var(--vscode-descriptionForeground);
-  }
-  .wl-add {
-    margin-left: auto;
-    font-size: 10px;
-    padding: 1px 8px;
-    flex: none;
-  }
-  .wl-add-all {
-    font-size: 10px;
-    padding: 2px 8px;
-    align-self: flex-start;
   }
 </style>
