@@ -1,17 +1,18 @@
 <script lang="ts">
-  import type { Route, PricingStateMsg, FiatListStateMsg, FiatSelectionStateMsg, WalletInfo, ProcessorsStateMsg } from '../../types';
+  import type { Route, PricingStateMsg, FiatListStateMsg, FiatSelectionStateMsg, WalletInfo, ProcessorsStateMsg, InstantMatchEntry } from '../../types';
   import { send } from '../lib/vscode';
   import Spinner from '../shared/Spinner.svelte';
   import FiatNote from '../shared/FiatNote.svelte';
   import FiatPricingSettings from './FiatPricingSettings.svelte';
   import ProcessorWhitelist from './ProcessorWhitelist.svelte';
+  import InstantMatchProcessors from './InstantMatchProcessors.svelte';
   import { adviceVerdict, isNonPriceBlocker } from '../lib/pricing';
   import { Accordion } from 'bits-ui';
   import { planckToAcu, fmtDuration } from '../lib/format';
-  import { getNested, instantMatchField, buildPatch, validateConfig } from '../lib/acurastConfig';
+  import { getNested, instantMatchEntries, buildPatch, validateConfig } from '../lib/acurastConfig';
 
   // Section ids match the Accordion.Item `value=` below. Open-by-default = listed here.
-  let openSections = $state<string[]>(['identity', 'runtime', 'execution', 'scaling']);
+  let openSections = $state<string[]>(['identity', 'runtime', 'assignment', 'execution', 'scaling']);
 
   interface Props {
     ctx: { configPath: string | null; configRel: string | null };
@@ -151,7 +152,7 @@
     {@const assignType = (rd('assignmentStrategy.type', getNested(p, 'assignmentStrategy', 'type')) ?? 'Single') as string}
     {@const mutability = (rd('mutability', p.mutability) ?? 'Immutable') as string}
     {@const modules = (rd('requiredModules', p.requiredModules) ?? []) as string[]}
-    {@const imProcessor = rd('assignmentStrategy.instantMatch.processor', instantMatchField(p, 'processor')) as string | null | undefined}
+    {@const imEntries = (rd('assignmentStrategy.instantMatch', instantMatchEntries(p)) ?? []) as InstantMatchEntry[]}
 
     {#snippet durEcho(v: unknown)}
       {@const h = msHuman(v)}
@@ -336,14 +337,14 @@
       </Accordion.Content>
     </Accordion.Item>
 
-    <!-- Execution -->
-    <Accordion.Item value="execution" class="section acc-item">
+    <!-- Assignment Strategy -->
+    <Accordion.Item value="assignment" class="section acc-item">
       <Accordion.Header>
-        <Accordion.Trigger class={`section-title acc-trigger${dirty ? ' dirty' : ''}`}>Execution</Accordion.Trigger>
+        <Accordion.Trigger class={`section-title acc-trigger${dirty ? ' dirty' : ''}`}>Assignment Strategy</Accordion.Trigger>
       </Accordion.Header>
       <Accordion.Content class="acc-content">
       <div class="field">
-        <label for="f_assignType">Assignment Strategy</label>
+        <label for="f_assignType">Strategy</label>
         <select id="f_assignType" onchange={(e) => patchField('assignmentStrategy.type', (e.target as HTMLSelectElement).value)}>
           {#each ['Single', 'Competing'] as opt}
             <option value={opt} selected={opt === assignType}>{opt}</option>
@@ -352,23 +353,23 @@
         <div class="hint">{assignType === 'Single' ? 'One set of processors for all executions' : 'New processors assigned per execution'}</div>
       </div>
       {#if assignType === 'Single'}
-        <div class="field">
-          <label for="f_imProcessor">Instant Match Processor <span class="label-optional">(optional)</span></label>
-          <input id="f_imProcessor" type="text"
-            value={imProcessor ?? ''}
-            placeholder="5CiP… (leave blank for open matching)"
-            oninput={(e) => patchField('assignmentStrategy.instantMatch.processor', (e.target as HTMLInputElement).value || null)} />
-        </div>
-        {#if imProcessor}
-          <div class="field">
-            <label for="f_imDelay">Instant Match Max Start Delay (ms)</label>
-            <input id="f_imDelay" type="number"
-              value={rd('assignmentStrategy.instantMatch.maxAllowedStartDelayInMs', instantMatchField(p, 'maxAllowedStartDelayInMs')) ?? 10000}
-              oninput={(e) => { const n = Number((e.target as HTMLInputElement).value); patchField('assignmentStrategy.instantMatch.maxAllowedStartDelayInMs', isNaN(n) ? null : n); }} />
-            {@render durEcho(rd('assignmentStrategy.instantMatch.maxAllowedStartDelayInMs', instantMatchField(p, 'maxAllowedStartDelayInMs')) ?? 10000)}
-          </div>
-        {/if}
+        <InstantMatchProcessors
+          value={imEntries}
+          onChange={(v) => patchField('assignmentStrategy.instantMatch', v)}
+          {activeWallet}
+          {processorsState}
+          network={projectNetwork()}
+        />
       {/if}
+      </Accordion.Content>
+    </Accordion.Item>
+
+    <!-- Execution -->
+    <Accordion.Item value="execution" class="section acc-item">
+      <Accordion.Header>
+        <Accordion.Trigger class={`section-title acc-trigger${dirty ? ' dirty' : ''}`}>Execution</Accordion.Trigger>
+      </Accordion.Header>
+      <Accordion.Content class="acc-content">
       <div class="field">
         <label for="f_execType">Execution Type</label>
         <select id="f_execType" onchange={(e) => patchField('execution.type', (e.target as HTMLSelectElement).value)}>

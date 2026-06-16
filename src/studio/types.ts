@@ -303,6 +303,16 @@ export interface ProcessorsStateMsg {
   error?: string;
 }
 
+/**
+ * One entry of a Single strategy's `instantMatch` array: a processor pinned for
+ * the deployment plus its own max start delay. The array may hold zero (open
+ * matching), one, or many such entries.
+ */
+export interface InstantMatchEntry {
+  processor: string;
+  maxAllowedStartDelayInMs: number;
+}
+
 export interface ChainEvent {
   ts: number;
   section: string;

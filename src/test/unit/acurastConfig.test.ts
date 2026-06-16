@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildPatch, validateConfig, getNested, instantMatchField } from '../../studio/webview/lib/acurastConfig';
+import { buildPatch, validateConfig, getNested, instantMatchField, instantMatchEntries } from '../../studio/webview/lib/acurastConfig';
 
 describe('getNested', () => {
   it('walks a key path', () => {
@@ -26,6 +26,50 @@ describe('instantMatchField', () => {
   });
 });
 
+describe('instantMatchEntries', () => {
+  it('reads a multi-entry SDK array, preserving each processor delay', () => {
+    const p = { assignmentStrategy: { instantMatch: [
+      { processor: '5a', maxAllowedStartDelayInMs: 5000 },
+      { processor: '5b', maxAllowedStartDelayInMs: 20000 },
+    ] } };
+    expect(instantMatchEntries(p)).toEqual([
+      { processor: '5a', maxAllowedStartDelayInMs: 5000 },
+      { processor: '5b', maxAllowedStartDelayInMs: 20000 },
+    ]);
+  });
+
+  it('coerces a legacy single-object shape into a one-element list', () => {
+    const p = { assignmentStrategy: { instantMatch: { processor: '5y', maxAllowedStartDelayInMs: 3000 } } };
+    expect(instantMatchEntries(p)).toEqual([{ processor: '5y', maxAllowedStartDelayInMs: 3000 }]);
+  });
+
+  it('trims processors and drops blank/empty entries', () => {
+    const p = { assignmentStrategy: { instantMatch: [
+      { processor: ' 5a ', maxAllowedStartDelayInMs: 1000 },
+      { processor: '   ' },
+      {},
+    ] } };
+    expect(instantMatchEntries(p)).toEqual([{ processor: '5a', maxAllowedStartDelayInMs: 1000 }]);
+  });
+
+  it('defaults a missing or negative delay to 10s', () => {
+    const p = { assignmentStrategy: { instantMatch: [
+      { processor: '5a', maxAllowedStartDelayInMs: -1 },
+      { processor: '5b' },
+    ] } };
+    expect(instantMatchEntries(p)).toEqual([
+      { processor: '5a', maxAllowedStartDelayInMs: 10000 },
+      { processor: '5b', maxAllowedStartDelayInMs: 10000 },
+    ]);
+  });
+
+  it('returns an empty list when instantMatch is absent or null', () => {
+    expect(instantMatchEntries({})).toEqual([]);
+    expect(instantMatchEntries(null)).toEqual([]);
+    expect(instantMatchEntries({ assignmentStrategy: {} })).toEqual([]);
+  });
+});
+
 describe('buildPatch', () => {
   it('splits comma-separated env vars and trims/drops empties', () => {
     const patch = buildPatch({ includeEnvironmentVariables: 'A, B ,,C' }, {});
@@ -35,6 +79,10 @@ describe('buildPatch', () => {
   it('splits the whitelist on newlines', () => {
     const patch = buildPatch({ processorWhitelist: 'a\n b \n\nc' }, {});
     expect(patch.processorWhitelist).toEqual(['a', 'b', 'c']);
+  });
+
+  it('emits an empty whitelist array when the last address is removed (any processor allowed)', () => {
+    expect(buildPatch({ processorWhitelist: '' }, { processorWhitelist: ['5old'] }).processorWhitelist).toEqual([]);
   });
 
   it('parses reuseKeysFrom, treating empty/null as null and skipping invalid JSON', () => {
@@ -68,6 +116,62 @@ describe('buildPatch', () => {
   it('drops instantMatch entirely for a Competing strategy', () => {
     const patch = buildPatch(
       { 'assignmentStrategy.type': 'Competing', 'assignmentStrategy.instantMatch.processor': '5proc' },
+      {},
+    );
+    expect(patch.assignmentStrategy).toEqual({ type: 'Competing' });
+  });
+
+  it('keeps a multi-entry instantMatch array, trimming and preserving each delay', () => {
+    const patch = buildPatch(
+      {
+        'assignmentStrategy.type': 'Single',
+        'assignmentStrategy.instantMatch': [
+          { processor: ' 5a ', maxAllowedStartDelayInMs: 5000 },
+          { processor: '5b', maxAllowedStartDelayInMs: 30000 },
+        ],
+      },
+      {},
+    );
+    expect(patch.assignmentStrategy).toEqual({
+      type: 'Single',
+      instantMatch: [
+        { processor: '5a', maxAllowedStartDelayInMs: 5000 },
+        { processor: '5b', maxAllowedStartDelayInMs: 30000 },
+      ],
+    });
+  });
+
+  it('drops blank-processor entries and defaults a missing delay within the array', () => {
+    const patch = buildPatch(
+      {
+        'assignmentStrategy.type': 'Single',
+        'assignmentStrategy.instantMatch': [
+          { processor: '', maxAllowedStartDelayInMs: 1000 },
+          { processor: '5b' },
+        ],
+      },
+      {},
+    );
+    expect(patch.assignmentStrategy).toEqual({
+      type: 'Single',
+      instantMatch: [{ processor: '5b', maxAllowedStartDelayInMs: 10000 }],
+    });
+  });
+
+  it('drops instantMatch when the array is emptied (open matching), overriding a stored value', () => {
+    const patch = buildPatch(
+      { 'assignmentStrategy.type': 'Single', 'assignmentStrategy.instantMatch': [] },
+      { assignmentStrategy: { type: 'Single', instantMatch: [{ processor: '5old', maxAllowedStartDelayInMs: 1 }] } },
+    );
+    expect(patch.assignmentStrategy).toEqual({ type: 'Single' });
+  });
+
+  it('drops a multi-entry instantMatch array for a Competing strategy', () => {
+    const patch = buildPatch(
+      {
+        'assignmentStrategy.type': 'Competing',
+        'assignmentStrategy.instantMatch': [{ processor: '5a', maxAllowedStartDelayInMs: 5000 }],
+      },
       {},
     );
     expect(patch.assignmentStrategy).toEqual({ type: 'Competing' });
