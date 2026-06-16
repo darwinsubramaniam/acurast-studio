@@ -1,12 +1,33 @@
 :root {
   color-scheme: light dark;
-  /* Acurast brand accents — the only non-theme colors in the webview. All
-     surfaces and text stay on --vscode-* vars so light & high-contrast themes
-     still adapt; only these greens are constant (the brand identity). */
-  --acu-green: #a6e22e;
-  --acu-green-deep: #3e5310;
-  --acu-on-accent: #0a0a0a;
-  --acu-live-bg: #232e0e;
+  /* Acurast brand accents — semantic tokens so the green identity adapts between
+     VS Code light & dark themes (light values are overridden under
+     body.vscode-light below). Surfaces/text otherwise stay on --vscode-* vars.
+     Reuse these tokens for every panel so all routes share one accent system.
+     Defaults below are the DARK-theme values (Figma node 31-2). */
+  --acu-green: #a6e22e;            /* brand green: net-pill dot, LIVE accents */
+  --acu-on-accent: #0a0a0a;        /* text on bright green */
+  --acu-accent-soft-bg: #3e5310;   /* soft green surface: pill / avatar / live icon */
+  --acu-accent-soft-fg: #a6e22e;   /* green text/icon on soft surface + brand logo */
+  --acu-badge-bg: #3e5310;         /* ACTIVE / status badge background */
+  --acu-badge-fg: #a6e22e;         /* ACTIVE / status badge text */
+  --acu-live-bg: #232e0e;          /* Live Monitoring card surface */
+  --acu-live-border: #a6e22e;      /* Live Monitoring card border */
+  --acu-live-fg: #a6e22e;          /* Live Monitoring sub text */
+}
+
+/* Light themes: soften the greens to pale tints with dark-green text, matching
+   the Figma light-theme panel (node 61-2). VS Code adds these body classes. */
+body.vscode-light,
+body.vscode-high-contrast-light {
+  --acu-green: #8fc400;
+  --acu-accent-soft-bg: #eaf6ce;
+  --acu-accent-soft-fg: #3f7a00;
+  --acu-badge-bg: #a6e22e;
+  --acu-badge-fg: #0a0a0a;
+  --acu-live-bg: #eaf6ce;
+  --acu-live-border: #8fc400;
+  --acu-live-fg: #3f7a00;
 }
 body {
   font-family: var(--vscode-font-family);
@@ -37,7 +58,7 @@ body {
   padding: 12px 4px;
 }
 .studio-statusbar .brand { display: flex; align-items: center; gap: 9px; }
-.studio-statusbar .brand .logo { display: inline-flex; color: var(--acu-green); }
+.studio-statusbar .brand .logo { display: inline-flex; color: var(--acu-accent-soft-fg); }
 .studio-statusbar .brand .logo svg { width: 24px; height: 15px; }
 .studio-statusbar .brand .name {
   font-size: 14px; font-weight: 600; letter-spacing: -0.01em;
@@ -47,13 +68,13 @@ body {
 .net-pill {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 4px 10px 4px 8px;
-  background: var(--acu-green-deep);
+  background: var(--acu-accent-soft-bg);
   border: none; border-radius: 999px; cursor: pointer;
 }
-.net-pill:hover { filter: brightness(1.18); }
-.net-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--acu-green); }
+.net-pill:hover { filter: brightness(1.08); }
+.net-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--acu-accent-soft-fg); }
 .net-pill .label {
-  font-size: 11px; font-weight: 500; text-transform: capitalize; color: var(--acu-green);
+  font-size: 11px; font-weight: 500; text-transform: capitalize; color: var(--acu-accent-soft-fg);
 }
 .gear-btn {
   display: inline-flex; align-items: center; justify-content: center;
@@ -77,7 +98,7 @@ body {
 .aw-avatar {
   flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
-  background: var(--acu-green-deep); color: var(--acu-green);
+  background: var(--acu-accent-soft-bg); color: var(--acu-accent-soft-fg);
 }
 .aw-avatar svg { width: 16px; height: 16px; }
 .aw-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
@@ -86,7 +107,7 @@ body {
 .aw-badge {
   flex-shrink: 0; font-size: 8.5px; font-weight: 600; letter-spacing: 0.04em;
   padding: 1px 6px 2px; border-radius: 4px; text-transform: uppercase;
-  background: var(--acu-green-deep); color: var(--acu-green);
+  background: var(--acu-badge-bg); color: var(--acu-badge-fg);
 }
 .aw-addr {
   font-family: var(--vscode-editor-font-family, monospace);
@@ -129,16 +150,17 @@ body {
 .nav-card .chev svg { width: 13px; height: 13px; }
 
 /* Live Monitoring — green-accented placeholder until telemetry ships. */
-.nav-card.live-card { background: var(--acu-live-bg); border: 1.5px solid var(--acu-green); }
+.nav-card.live-card { background: var(--acu-live-bg); border: 1.5px solid var(--acu-live-border); }
 .nav-card.live-card:disabled { opacity: 1; }
-.nav-card.live-card:disabled:hover { background: var(--acu-live-bg); border-color: var(--acu-green); }
-.nav-card.live-card .icon { background: var(--acu-green-deep); color: var(--acu-green); }
-.nav-card.live-card .sub { color: var(--acu-green); opacity: 0.85; }
+.nav-card.live-card:disabled:hover { background: var(--acu-live-bg); border-color: var(--acu-live-border); }
+.nav-card.live-card .icon { background: var(--acu-accent-soft-bg); color: var(--acu-accent-soft-fg); }
+.nav-card.live-card .title { color: var(--vscode-foreground); }
+.nav-card.live-card .sub { color: var(--acu-live-fg); opacity: 0.9; }
 .live-badge {
   display: inline-block; margin-left: 7px; vertical-align: middle;
   font-size: 8.5px; font-weight: 600; letter-spacing: 0.04em;
   padding: 1px 6px 2px; border-radius: 4px; text-transform: uppercase;
-  background: var(--acu-green-deep); color: var(--acu-green);
+  background: var(--acu-badge-bg); color: var(--acu-badge-fg);
 }
 
 /* Security note (Home footer) */
