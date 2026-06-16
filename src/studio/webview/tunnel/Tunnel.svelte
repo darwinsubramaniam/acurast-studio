@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { TunnelStateMsg, AcurastNetwork, WalletInfo } from "../../types";
+  import { onDestroy } from "svelte";
   import { send } from "../lib/vscode";
   import { truncate } from "../lib/format";
 
@@ -11,6 +12,8 @@
 
   // Local, immediate input state. Seeded once from the host so its echo (which
   // normalizes the suffix and resolves the default wallet) never fights the caret.
+  // After seeding, all three stay user-controlled — later host echoes are ignored
+  // by design (the selections made here are the source of truth, not a bug).
   let suffix = $state("");
   let network = $state<AcurastNetwork>("canary");
   let selectedWalletId = $state("");
@@ -33,6 +36,11 @@
       250,
     );
   }
+  // Cancel any pending suffix-debounce on teardown so a stale tunnel.compute
+  // can't fire after the view unmounts.
+  onDestroy(() => {
+    if (debounce) clearTimeout(debounce);
+  });
   function onNetworkChange() {
     send("tunnel.compute", { suffix, network, walletId: selectedWalletId });
   }

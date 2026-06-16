@@ -74,22 +74,30 @@ Fiat-source config, project picker, the config form, `buildPatch`/validation, ma
 
 - **✅ Verified & resolved 2026-06-16:** confirmed real. `studioPanel.pushPricing` computes fees/advice from the **project** network (`config.network`, `studioPanel.ts:572`) but the `pricing.state` message carried no symbol, so Deploy labelled those numbers with `wallets.symbol` (Studio target). Label-only — the figures were already the project-network token amounts. The suggested `d.network` source doesn't work here: the cost-estimate that uses the symbol lives in Deploy's **no-active-deploy** branch, where there is no `d.network`. Fix instead carries the symbol with the pricing data: the host now sets `symbol: SYMBOL[network]` on the `pricing.state` `'ok'` post (same project `network`, computed atomically), `PricingStateMsg` gained an optional `symbol`, and Deploy's cost panel uses `{@const sym = pricing.symbol ?? symbol}` for the unit labels (the `symbol` prop remains a type-safe fallback). `Settings.svelte` was already correct (derives its `sym` from the project network) and is unchanged. typecheck/build/`test:unit` (295) all green.
 
-### 2. Clearing a numeric field silently writes `null` to the config — **Low–Medium edge case**
+### 2. Clearing a numeric field silently writes `null` to the config — **Low–Medium edge case** · ✅ Resolved 2026-06-16 (non-issue)
 The pattern `const n = Number(value); patchField(key, isNaN(n) ? null : n)` (e.g. `Settings:746, 752, 767`) means emptying *Replicas*, *Max cost*, or any usage-limit field stores `null`. Required fields (interval, numberOfExecutions) are caught by `errors`, but `numberOfReplicas`/`maxCostPerExecution`/`usageLimit.*` are not — a user who clears them persists `null`. If the SDK treats `null` as "unset/default" that's fine; if it expects a number this could surprise. Flagging the asymmetry between validated and unvalidated numeric fields.
+
+- **✅ Resolved 2026-06-16 (non-issue):** on inspection the premise doesn't hold. These are `<input type="number">`, so clearing yields `''`, and `Number('') === 0` → `isNaN(0)` is false → the handler writes **`0`**, not `null`. `null` would require non-numeric text, which `type="number"` rejects. `0` is sensible here (it's the documented "unlimited" for the usage limits). No code change.
 
 ### 3. `<a href>` external links in `Wallets.svelte` vs `send('openExternal')` everywhere else — **Medium** · ✅ Resolved 2026-06-16
 `Wallets.svelte:91,93` open funding/faucet pages with raw `<a href="https://…">`, while `Home.svelte:185` deliberately routes the donation link through `send('openExternal', {url})`. In a VS Code webview, plain anchor navigation is frequently blocked by CSP / opens inside the webview frame, so these faucet links may not work. Route them through `openExternal` for consistency and to guarantee they open in the system browser.
 
 - **✅ Resolved 2026-06-16:** the webview CSP is `default-src 'none'` (no `navigate-to`), so plain anchor navigation is governed only by VS Code's implicit link handling — fragile. Routed the two faucet links through the existing https-scheme-validated `openExternal` channel: added `openFunding(e)` to `Wallets.svelte` (`e.preventDefault()` then `send('openExternal', { url: fundingUrl(wallets.network) })`) and wired both `<a>`s to it via `onclick`. The `href` stays for accessibility + fallback. Hardening/consistency with `Home`'s donation link rather than a confirmed break. build (no a11y warning — real href) + `test:unit` (295) green.
 
-### 4. Status badge can go stale — **Low**
+### 4. Status badge can go stale — **Low** · ✅ Resolved 2026-06-16 (won't fix)
 `History.svelte:228-234` `jobStatus()` reads `Date.now()` at render time, so a `scheduled` job won't flip to `active` until something else re-renders the list. The live countdown text uses the reactive `now`, but the badge does not. Acceptable, but a long-open History view can show a stale badge.
 
-### 5. Tunnel `seeded` also freezes wallet/network selection — **Low edge case**
+- **✅ Resolved 2026-06-16 (won't fix):** the only real fix is a perpetual 1s clock to live-recompute a cosmetic badge in the on-chain section, which already self-heals on any interaction (fetch, paginate, re-open). Not worth the ongoing timer cost for a Low-impact edge. Left as-is.
+
+### 5. Tunnel `seeded` also freezes wallet/network selection — **Low edge case** · ✅ Resolved 2026-06-16 (by design)
 `Tunnel.svelte:19-26` seeds `network`/`selectedWalletId` once. The comment justifies this for the suffix (caret), but it also freezes the wallet dropdown — if the active wallet changes elsewhere while the Tunnel view stays mounted, the dropdown keeps the old selection. Probably fine, but the freeze is broader than the comment's stated reason.
 
-### 6. Tunnel debounce timer not cleared on destroy — **Low**
+- **✅ Resolved 2026-06-16 (by design):** intentional. After the one-time seed, `network`/`selectedWalletId` are user-controlled local state (the selects write them and send `tunnel.compute`); ignoring later host echoes keeps the user's choices authoritative, not a bug. Clarified the comment in `Tunnel.svelte` to say so; no behavior change.
+
+### 6. Tunnel debounce timer not cleared on destroy — **Low** · ✅ Resolved 2026-06-16
 `Tunnel.svelte:28-35` sets a 250ms `setTimeout` with no `$effect`-based cleanup. Navigating away with a pending timer fires `send()` after unmount. Harmless today, but a dangling timer; wrap the debounce in an `$effect` cleanup or clear on destroy.
+
+- **✅ Resolved 2026-06-16:** added `onDestroy(() => { if (debounce) clearTimeout(debounce); })` to `Tunnel.svelte` so a pending suffix-debounce can't fire `tunnel.compute` after the view unmounts.
 
 ---
 
@@ -130,10 +138,10 @@ All preserve behavior exactly.
 | S5 | No `OutMsg` union → `as unknown as` casts | Structural | Medium | ✅ Done (2026-06-16) |
 | L1 | Deploy pricing symbol from Studio target, not project network | Logic | Medium (verify) | ✅ Done (2026-06-16) |
 | L3 | `<a href>` external links may be CSP-blocked in webview | Logic | Medium | ✅ Done (2026-06-16) |
-| L2 | Clearing unvalidated numeric fields writes `null` | Logic | Low–Medium | Open |
-| L4 | Status badge can go stale until re-render | Logic | Low | Open |
-| L5 | Tunnel `seeded` freezes wallet/network selection | Logic | Low | Open |
-| L6 | Tunnel debounce timer not cleared on destroy | Logic | Low | Open |
+| L2 | Clearing unvalidated numeric fields writes `null` | Logic | Low–Medium | ✅ Done (non-issue) |
+| L4 | Status badge can go stale until re-render | Logic | Low | ✅ Done (won't fix) |
+| L5 | Tunnel `seeded` freezes wallet/network selection | Logic | Low | ✅ Done (by design) |
+| L6 | Tunnel debounce timer not cleared on destroy | Logic | Low | ✅ Done (2026-06-16) |
 
 ---
 
