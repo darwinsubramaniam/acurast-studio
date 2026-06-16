@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/svelte';
+import { render, screen, cleanup, fireEvent } from '@testing-library/svelte';
 
 vi.mock('../../studio/webview/lib/vscode', () => ({
   vscode: { postMessage: vi.fn() },
@@ -14,6 +14,8 @@ afterEach(() => cleanup());
 beforeEach(() => vi.resetAllMocks());
 
 const WALLET = { id: 'w1', address: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY', publicKey: 'pk1', name: 'Main', description: '' };
+const WALLET2 = { id: 'w2', address: '5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy', publicKey: 'pk2', name: 'Deploy Key', description: '' };
+const WALLET3 = { id: 'w3', address: '5F3sa2TJAWMqDhXG6jhV4N8ko9SxwGy8TpaNS1repo5EYjQX', publicKey: 'pk3', name: 'Canary Test', description: '' };
 
 const WALLETS_CANARY = { list: [WALLET], activeId: 'w1', network: 'canary', symbol: 'cACU' };
 const WALLETS_MAINNET = { list: [WALLET], activeId: 'w1', network: 'mainnet', symbol: 'ACU' };
@@ -21,24 +23,21 @@ const WALLETS_MAINNET = { list: [WALLET], activeId: 'w1', network: 'mainnet', sy
 const BAL_ZERO: BalanceMsg = { status: 'ok', value: 0, symbol: 'cACU' };
 const BAL_NONZERO: BalanceMsg = { status: 'ok', value: 1.5, symbol: 'cACU' };
 const BAL_LOADING: BalanceMsg = { status: 'loading' };
-const BAL_IDLE: BalanceMsg = { status: 'idle' };
 const BAL_ERROR: BalanceMsg = { status: 'error', message: 'Connection failed' };
+
+/** Build the per-wallet balances map keyed by the active wallet id. */
+const bal = (b: BalanceMsg, id = 'w1') => ({ [id]: b });
 
 // ---------------------------------------------------------------------------
 
-describe('no-funds banner — canary network', () => {
-  it('shows banner when active wallet balance is 0', () => {
-    render(Wallets, { props: { wallets: WALLETS_CANARY, balance: BAL_ZERO } });
+describe('no-funds nudge — canary network', () => {
+  it('shows the nudge when the active wallet balance is 0', () => {
+    render(Wallets, { props: { wallets: WALLETS_CANARY, walletBalances: bal(BAL_ZERO), walletOp: null } });
     expect(screen.getByText(/No funds yet/)).toBeInTheDocument();
   });
 
-  it('shows cACU token name in the banner', () => {
-    render(Wallets, { props: { wallets: WALLETS_CANARY, balance: BAL_ZERO } });
-    expect(screen.getByText('cACU', { selector: 'strong' })).toBeInTheDocument();
-  });
-
-  it('links to the faucet', () => {
-    render(Wallets, { props: { wallets: WALLETS_CANARY, balance: BAL_ZERO } });
+  it('links to the canary faucet', () => {
+    render(Wallets, { props: { wallets: WALLETS_CANARY, walletBalances: bal(BAL_ZERO), walletOp: null } });
     const link = screen.getByRole('link', { name: /Acurast Faucet/i });
     expect(link).toHaveAttribute('href', 'https://faucet.acurast.com/');
   });
@@ -46,85 +45,127 @@ describe('no-funds banner — canary network', () => {
 
 // ---------------------------------------------------------------------------
 
-describe('no-funds banner — mainnet', () => {
-  it('shows banner when active wallet balance is 0', () => {
-    render(Wallets, { props: { wallets: WALLETS_MAINNET, balance: { ...BAL_ZERO, symbol: 'ACU' } } });
+describe('no-funds nudge — mainnet', () => {
+  it('shows the nudge when the active wallet balance is 0', () => {
+    render(Wallets, { props: { wallets: WALLETS_MAINNET, walletBalances: bal({ ...BAL_ZERO, symbol: 'ACU' }), walletOp: null } });
     expect(screen.getByText(/No funds yet/)).toBeInTheDocument();
   });
 
   it('links to the ACU docs page', () => {
-    render(Wallets, { props: { wallets: WALLETS_MAINNET, balance: { ...BAL_ZERO, symbol: 'ACU' } } });
+    render(Wallets, { props: { wallets: WALLETS_MAINNET, walletBalances: bal({ ...BAL_ZERO, symbol: 'ACU' }), walletOp: null } });
     const link = screen.getByRole('link', { name: /get ACU/i });
     expect(link).toHaveAttribute('href', 'https://docs.acurast.com/token-holders/how-to-get-acu/');
   });
 
-  it('does not show the faucet link', () => {
-    render(Wallets, { props: { wallets: WALLETS_MAINNET, balance: { ...BAL_ZERO, symbol: 'ACU' } } });
+  it('does not show a faucet link', () => {
+    render(Wallets, { props: { wallets: WALLETS_MAINNET, walletBalances: bal({ ...BAL_ZERO, symbol: 'ACU' }), walletOp: null } });
     expect(screen.queryByRole('link', { name: /faucet/i })).not.toBeInTheDocument();
   });
 });
 
 // ---------------------------------------------------------------------------
 
-describe('no-funds banner — hidden cases', () => {
+describe('no-funds nudge — hidden cases', () => {
   it('does not show when balance is positive', () => {
-    render(Wallets, { props: { wallets: WALLETS_CANARY, balance: BAL_NONZERO } });
+    render(Wallets, { props: { wallets: WALLETS_CANARY, walletBalances: bal(BAL_NONZERO), walletOp: null } });
     expect(screen.queryByText(/No funds yet/)).not.toBeInTheDocument();
   });
 
   it('does not show while balance is loading', () => {
-    render(Wallets, { props: { wallets: WALLETS_CANARY, balance: BAL_LOADING } });
+    render(Wallets, { props: { wallets: WALLETS_CANARY, walletBalances: bal(BAL_LOADING), walletOp: null } });
     expect(screen.queryByText(/No funds yet/)).not.toBeInTheDocument();
   });
 
-  it('does not show when balance is idle', () => {
-    render(Wallets, { props: { wallets: WALLETS_CANARY, balance: BAL_IDLE } });
+  it('does not show before the first balance fetch (no entry)', () => {
+    render(Wallets, { props: { wallets: WALLETS_CANARY, walletBalances: {}, walletOp: null } });
     expect(screen.queryByText(/No funds yet/)).not.toBeInTheDocument();
   });
 
-  it('does not show when balance fetch errored', () => {
-    render(Wallets, { props: { wallets: WALLETS_CANARY, balance: BAL_ERROR } });
-    expect(screen.queryByText(/No funds yet/)).not.toBeInTheDocument();
-  });
-
-  it('does not show when the wallet is not the active one', () => {
-    const wallets = { ...WALLETS_CANARY, activeId: 'other' };
-    render(Wallets, { props: { wallets, balance: BAL_ZERO } });
+  it('does not show when the balance fetch errored', () => {
+    render(Wallets, { props: { wallets: WALLETS_CANARY, walletBalances: bal(BAL_ERROR), walletOp: null } });
     expect(screen.queryByText(/No funds yet/)).not.toBeInTheDocument();
   });
 });
 
 // ---------------------------------------------------------------------------
 
-describe('balance loading indicator', () => {
+describe('active card balance states', () => {
   it('shows a spinner while the balance is loading', () => {
-    const { container } = render(Wallets, { props: { wallets: WALLETS_CANARY, balance: BAL_LOADING } });
+    const { container } = render(Wallets, { props: { wallets: WALLETS_CANARY, walletBalances: bal(BAL_LOADING), walletOp: null } });
     expect(container.querySelector('.spinner')).toBeInTheDocument();
   });
 
-  it('shows a spinner before the first balance fetch (idle)', () => {
-    const { container } = render(Wallets, { props: { wallets: WALLETS_CANARY, balance: BAL_IDLE } });
+  it('shows a spinner before the first balance fetch (no entry)', () => {
+    const { container } = render(Wallets, { props: { wallets: WALLETS_CANARY, walletBalances: {}, walletOp: null } });
     expect(container.querySelector('.spinner')).toBeInTheDocument();
   });
 
   it('shows the value and no spinner once the balance resolves', () => {
-    const { container } = render(Wallets, { props: { wallets: WALLETS_CANARY, balance: BAL_NONZERO } });
+    const { container } = render(Wallets, { props: { wallets: WALLETS_CANARY, walletBalances: bal(BAL_NONZERO), walletOp: null } });
     expect(container.querySelector('.spinner')).not.toBeInTheDocument();
-    expect(screen.getByText(/1\.5000 cACU/)).toBeInTheDocument();
+    expect(screen.getByText('1.50')).toBeInTheDocument();
   });
 
-  it('shows the error message and no spinner when the fetch fails', () => {
-    const { container } = render(Wallets, { props: { wallets: WALLETS_CANARY, balance: BAL_ERROR } });
+  it('shows "Balance unavailable" and no spinner when the fetch fails', () => {
+    const { container } = render(Wallets, { props: { wallets: WALLETS_CANARY, walletBalances: bal(BAL_ERROR), walletOp: null } });
     expect(container.querySelector('.spinner')).not.toBeInTheDocument();
-    expect(screen.getByText('Connection failed')).toBeInTheDocument();
+    expect(screen.getByText('Balance unavailable')).toBeInTheDocument();
   });
 });
 
 // ---------------------------------------------------------------------------
 
+describe('all-wallets list', () => {
+  it('renders a row with the balance for a non-active wallet', () => {
+    const wallets = { list: [WALLET, WALLET2], activeId: 'w1', network: 'canary', symbol: 'cACU' };
+    render(Wallets, { props: { wallets, walletBalances: { w1: BAL_NONZERO, w2: { status: 'ok', value: 4.2, symbol: 'cACU' } }, walletOp: null } });
+    expect(screen.getByText('Deploy Key')).toBeInTheDocument();
+    expect(screen.getByText(/4\.20 cACU/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Set active/i })).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe('wallet search', () => {
+  const wallets = { list: [WALLET, WALLET2, WALLET3], activeId: 'w1', network: 'canary', symbol: 'cACU' };
+  const balances = {
+    w1: BAL_NONZERO,
+    w2: { status: 'ok', value: 4.2, symbol: 'cACU' } as BalanceMsg,
+    w3: BAL_ZERO,
+  };
+
+  it('shows a search bar once there are 2+ other wallets', () => {
+    render(Wallets, { props: { wallets, walletBalances: balances, walletOp: null } });
+    expect(screen.getByPlaceholderText(/search wallets by name/i)).toBeInTheDocument();
+  });
+
+  it('hides the search bar when there is only one other wallet', () => {
+    const two = { list: [WALLET, WALLET2], activeId: 'w1', network: 'canary', symbol: 'cACU' };
+    render(Wallets, { props: { wallets: two, walletBalances: balances, walletOp: null } });
+    expect(screen.queryByPlaceholderText(/search wallets by name/i)).not.toBeInTheDocument();
+  });
+
+  it('filters the other wallets but keeps the active wallet in view', async () => {
+    render(Wallets, { props: { wallets, walletBalances: balances, walletOp: null } });
+    await fireEvent.input(screen.getByPlaceholderText(/search wallets by name/i), { target: { value: 'deploy' } });
+    expect(screen.getByText('Deploy Key')).toBeInTheDocument();
+    expect(screen.queryByText('Canary Test')).not.toBeInTheDocument();
+    // The active wallet is never affected by the search.
+    expect(screen.getByText('Main')).toBeInTheDocument();
+  });
+
+  it('shows a no-match message but keeps the active wallet when nothing matches', async () => {
+    render(Wallets, { props: { wallets, walletBalances: balances, walletOp: null } });
+    await fireEvent.input(screen.getByPlaceholderText(/search wallets by name/i), { target: { value: 'zzz' } });
+    expect(screen.getByText(/No wallets match/i)).toBeInTheDocument();
+    expect(screen.getByText('Main')).toBeInTheDocument();
+  });
+});
+
 describe('empty wallet list', () => {
   it('shows create/import prompts when no wallets exist', () => {
-    render(Wallets, { props: { wallets: { list: [], activeId: null, network: 'canary', symbol: 'cACU' }, balance: BAL_IDLE } });
+    render(Wallets, { props: { wallets: { list: [], activeId: null, network: 'canary', symbol: 'cACU' }, walletBalances: {}, walletOp: null } });
     expect(screen.getByRole('button', { name: /Create New Wallet/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Import Existing/i })).toBeInTheDocument();
   });

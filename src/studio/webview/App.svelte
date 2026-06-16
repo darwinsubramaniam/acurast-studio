@@ -13,6 +13,7 @@
     DeregisterStateMsg,
     AssignmentsStateMsg,
     TunnelStateMsg,
+    WalletOpResultMsg,
     OutMsg,
   } from "../types";
   import { send } from "./lib/vscode";
@@ -59,6 +60,12 @@
     symbol: "ACU",
   });
   let balance = $state<BalanceMsg>({ status: "idle" });
+  // Per-wallet balances for the Wallets list (keyed by wallet id), all on the
+  // Studio target network. `balance` above stays the active-only Home value.
+  let walletBalances = $state<Record<string, BalanceMsg>>({});
+  // Latest in-panel wallet flow result; Wallets.svelte reacts to it via $effect
+  // keyed on its host-incremented `seq`.
+  let walletOp = $state<WalletOpResultMsg | null>(null);
   let config = $state<ConfigState>({ data: null, projectKey: null });
   let deploy = $state<DeployState | null>(null);
   let pricing = $state<PricingStateMsg | null>(null);
@@ -113,6 +120,12 @@
           break;
         case "wallets.balance":
           balance = msg;
+          break;
+        case "wallets.balances":
+          walletBalances = msg.balances;
+          break;
+        case "wallet.opResult":
+          walletOp = msg;
           break;
         case "config.state":
           config = { data: msg.config, projectKey: null };
@@ -189,7 +202,7 @@
 {#if route === "home"}
   <Home {ctx} {wallets} {balance} {deploy} {navigate} />
 {:else if route === "wallets"}
-  <Wallets {wallets} {balance} />
+  <Wallets {wallets} {walletBalances} {walletOp} />
 {:else if route === "settings"}
   <NetworkMismatchBanner
     {projectNetwork}
