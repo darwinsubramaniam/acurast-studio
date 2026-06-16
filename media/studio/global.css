@@ -29,10 +29,16 @@ body.vscode-high-contrast-light {
   --acu-live-border: #8fc400;
   --acu-live-fg: #3f7a00;
 }
+/* Paint the panel surface so it follows the VS Code theme. Without an explicit
+   background the webview canvas defaults to black, so a light theme would show
+   black gutters/gaps behind the cards. sideBar-background is the panel tone
+   (light gray in light themes, dark gray in dark) — cards sit on editor-background. */
+html { background: var(--vscode-sideBar-background, var(--vscode-editor-background)); }
 body {
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size);
   color: var(--vscode-foreground);
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
   padding: 0 8px 12px;
   margin: 0;
 }
