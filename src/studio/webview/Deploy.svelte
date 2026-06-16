@@ -11,14 +11,14 @@
   import Spinner from "./lib/Spinner.svelte";
   import {
     planckToAcu,
-    planckToFiat,
-    acuToFiat,
     fmtFiat,
     fmtClock,
     fmtDuration,
     fmtTimestamp,
     fmtCountdown,
   } from "./lib/format";
+  import FiatNote from "./lib/FiatNote.svelte";
+  import { adviceVerdict, isNonPriceBlocker } from "./lib/pricing";
 
   interface Props {
     ctx: { isAcurastProject: boolean };
@@ -31,7 +31,6 @@
   let { ctx, deploy, pricing, diagnoses, symbol }: Props = $props();
 
   const satoshiToACU = planckToAcu;
-  const satoshiToFiat = planckToFiat;
   const fmtTime = fmtClock;
 
   // Live clock driving the per-processor start countdowns. Ticks once a second
@@ -123,26 +122,13 @@
         {@const fiat =
           pricing.fiat && !pricing.fiat.error ? pricing.fiat : null}
         {#if advice}
-          {@const nonPriceBlocker =
-            advice.status === "insufficient" &&
-            advice.suggestedPrice != null &&
-            parseFloat(advice.currentPrice) >= parseFloat(advice.suggestedPrice)}
+          {@const nonPriceBlocker = isNonPriceBlocker(advice)}
+          {@const verdict = adviceVerdict(advice.status)}
           <div
             class="pricing-status-row pricing-{advice.status}"
             style="margin-bottom:6px;"
           >
-            <span>
-              {advice.status === "sufficient"
-                ? "✓"
-                : advice.status === "overpaying"
-                  ? "⚠"
-                  : "✗"}
-              {advice.status === "sufficient"
-                ? "Sufficient"
-                : advice.status === "overpaying"
-                  ? "Overpaying"
-                  : "Insufficient"}
-            </span>
+            <span>{verdict.icon} {verdict.label}</span>
             <span class="pricing-match"
               >{advice.matchedProcessors}/{advice.requiredProcessors} processors</span
             >
@@ -151,46 +137,19 @@
             <span class="pricing-label">Your price</span>
             <span class="pricing-value">
               {satoshiToACU(advice.currentPrice)} {symbol} / exec
-              {#if fiat}{@const f = satoshiToFiat(
-                  advice.currentPrice,
-                  fiat.acuPriceFiat,
-                )}{#if f != null}<span class="pricing-fiat"
-                    >(~{fmtFiat(
-                      f,
-                      fiat.currencySign,
-                      fiat.currencySymbol,
-                    )})</span
-                  >{/if}{/if}
+              <FiatNote value={advice.currentPrice} kind="planck" {fiat} />
             </span>
             {#if advice.suggestedPrice && advice.status !== "sufficient"}
               <span class="pricing-label">Suggested</span>
               <span class="pricing-value">
                 {satoshiToACU(advice.suggestedPrice)} {symbol} / exec
-                {#if fiat}{@const f = satoshiToFiat(
-                    advice.suggestedPrice,
-                    fiat.acuPriceFiat,
-                  )}{#if f != null}<span class="pricing-fiat"
-                      >(~{fmtFiat(
-                        f,
-                        fiat.currencySign,
-                        fiat.currencySymbol,
-                      )})</span
-                    >{/if}{/if}
+                <FiatNote value={advice.suggestedPrice} kind="planck" {fiat} />
               </span>
             {/if}
             <span class="pricing-label">Total max</span>
             <span class="pricing-value">
               {fees.maxTotalCostCACU} {symbol}
-              {#if fiat}{@const f = acuToFiat(
-                  fees.maxTotalCostCACU,
-                  fiat.acuPriceFiat,
-                )}{#if f != null}<span class="pricing-fiat"
-                    >(~{fmtFiat(
-                      f,
-                      fiat.currencySign,
-                      fiat.currencySymbol,
-                    )})</span
-                  >{/if}{/if}
+              <FiatNote value={fees.maxTotalCostCACU} kind="acu" {fiat} />
             </span>
           </div>
           {#if nonPriceBlocker}
@@ -217,30 +176,12 @@
             <span class="pricing-label">Max / exec</span>
             <span class="pricing-value">
               {fees.maxCostPerExecutionCACU} {symbol}
-              {#if fiat}{@const f = acuToFiat(
-                  fees.maxCostPerExecutionCACU,
-                  fiat.acuPriceFiat,
-                )}{#if f != null}<span class="pricing-fiat"
-                    >(~{fmtFiat(
-                      f,
-                      fiat.currencySign,
-                      fiat.currencySymbol,
-                    )})</span
-                  >{/if}{/if}
+              <FiatNote value={fees.maxCostPerExecutionCACU} kind="acu" {fiat} />
             </span>
             <span class="pricing-label">Total max</span>
             <span class="pricing-value">
               {fees.maxTotalCostCACU} {symbol}
-              {#if fiat}{@const f = acuToFiat(
-                  fees.maxTotalCostCACU,
-                  fiat.acuPriceFiat,
-                )}{#if f != null}<span class="pricing-fiat"
-                    >(~{fmtFiat(
-                      f,
-                      fiat.currencySign,
-                      fiat.currencySymbol,
-                    )})</span
-                  >{/if}{/if}
+              <FiatNote value={fees.maxTotalCostCACU} kind="acu" {fiat} />
             </span>
           </div>
           {#if pricing.fallbackReason === "no-wallet"}
