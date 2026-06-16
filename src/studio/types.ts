@@ -7,11 +7,42 @@ export type Route = 'home' | 'wallets' | 'settings' | 'deploy' | 'history' | 'pr
 
 export interface NavigateMsg { type: 'navigate'; route: Route; }
 export interface ReadyMsg { type: 'ready'; }
+/**
+ * Simple, fire-and-forget wallet action. The richer create/import/reveal/rename/
+ * editDescription/delete flows now run as in-panel webview wizards and use the
+ * granular `wallet.*` request messages below (which post `wallet.opResult` back);
+ * only `setActive` stays here since it needs no in-panel UI.
+ */
 export interface WalletActionMsg {
   type: 'wallet';
-  action: 'create' | 'import' | 'reveal' | 'delete' | 'copyAddress' | 'rename' | 'editDescription' | 'setActive';
+  action: 'setActive';
   id?: string;
 }
+
+// ── In-panel wallet flow requests (webview → host) ─────────────────────────────
+// Each is answered by a WalletOpResultMsg (`wallet.opResult`) so the webview
+// wizard can advance / show errors. Secrets stay on the host (WalletService).
+export interface WalletCreateMsg {
+  type: 'wallet.create';
+  name: string;
+  description: string;
+  password: string;
+}
+/** Validate a pasted phrase (checksum) + detect duplicates before advancing import. */
+export interface WalletCheckPhraseMsg { type: 'wallet.checkPhrase'; mnemonic: string; }
+export interface WalletImportMsg {
+  type: 'wallet.import';
+  mnemonic: string;
+  name: string;
+  description: string;
+  password: string;
+}
+export interface WalletRevealMsg { type: 'wallet.reveal'; id: string; password: string; }
+export interface WalletRenameMsg { type: 'wallet.rename'; id: string; name: string; }
+export interface WalletEditDescriptionMsg { type: 'wallet.editDescription'; id: string; description: string; }
+export interface WalletDeleteMsg { type: 'wallet.delete'; id: string; }
+/** Copy arbitrary text (address / mnemonic) via the host — CSP blocks the webview clipboard. */
+export interface WalletCopyMsg { type: 'wallet.copy'; text: string; note?: string; }
 export interface RefreshBalanceMsg { type: 'refreshBalance'; }
 export interface ConfigSaveMsg { type: 'config.save'; projectKey: string; patch: Record<string, unknown>; }
 export interface ConfigOpenJsonMsg { type: 'config.openJson'; }
@@ -76,6 +107,8 @@ export interface TunnelVerifyMsg       { type: 'tunnel.verify'; suffix: string; 
 
 export type InMsg =
   | NavigateMsg | ReadyMsg | WalletActionMsg | RefreshBalanceMsg
+  | WalletCreateMsg | WalletCheckPhraseMsg | WalletImportMsg | WalletRevealMsg
+  | WalletRenameMsg | WalletEditDescriptionMsg | WalletDeleteMsg | WalletCopyMsg
   | ConfigSaveMsg | ConfigOpenJsonMsg | ConfigChooseMsg | ConfigNewProjectMsg
   | DeployStartMsg | BuildStartMsg | DeployOpenOutputMsg | DeployQueryProcessorsMsg | DeployCopyMsg
   | DeployDeregisterMsg | PricingFetchMsg
@@ -108,8 +141,36 @@ export interface WalletsStateMsg {
   network: string;
   symbol: string;
 }
-/** Balance payload (BalanceMsg) tagged with its wire `type`. */
+/** Balance payload (BalanceMsg) tagged with its wire `type`. Active wallet only —
+ * used by the Home summary card. The Wallets list uses WalletsBalancesMsg. */
 export interface BalanceStateMsg extends BalanceMsg { type: 'wallets.balance'; }
+/** Per-wallet balances (keyed by wallet id) for the Wallets list, all fetched on
+ * the Studio target network. Posted as a `loading` map first, then resolved. */
+export interface WalletsBalancesMsg { type: 'wallets.balances'; balances: Record<string, BalanceMsg>; }
+/**
+ * Result of an in-panel wallet flow request (create/import/reveal/...), answering
+ * the matching `wallet.*` InMsg. `seq` is host-incremented so the webview's
+ * `$effect` fires on every result even when the payload repeats.
+ */
+export interface WalletOpResultMsg {
+  type: 'wallet.opResult';
+  op: 'create' | 'checkPhrase' | 'import' | 'reveal' | 'rename' | 'editDescription' | 'delete';
+  ok: boolean;
+  seq: number;
+  /** Affected / created wallet. */
+  id?: string;
+  address?: string;
+  name?: string;
+  /** Create-success (for the backup step) and reveal-success (the decrypted phrase). */
+  mnemonic?: string;
+  // checkPhrase fields:
+  valid?: boolean;
+  duplicate?: boolean;
+  existingName?: string;
+  existingAddress?: string;
+  /** Error text / "Incorrect password — try again". */
+  message?: string;
+}
 export interface ConfigStateMsg { type: 'config.state'; config: unknown; }
 export interface DeployStateMsg { type: 'deploy.state'; state: DeployState | null; }
 export interface NetworkMismatchMsg {
@@ -120,6 +181,7 @@ export interface NetworkMismatchMsg {
 
 export type OutMsg =
   | RouteMsg | ContextMsg | WalletsStateMsg | BalanceStateMsg
+  | WalletsBalancesMsg | WalletOpResultMsg
   | ConfigStateMsg | DeployStateMsg | NetworkMismatchMsg
   | PricingStateMsg | FiatListStateMsg | FiatSelectionStateMsg
   | HistoryStateMsg | ProcessorsStateMsg | TunnelStateMsg

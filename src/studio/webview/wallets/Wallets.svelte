@@ -1,121 +1,69 @@
 <script lang="ts">
-  import type { WalletInfo, BalanceMsg } from '../../types';
+  import type { WalletInfo, BalanceMsg, WalletOpResultMsg } from '../../types';
   import { send } from '../lib/vscode';
-  import { ICONS } from '../lib/icons';
-  import Spinner from '../shared/Spinner.svelte';
+  import WalletList from './WalletList.svelte';
+  import CreateWallet from './CreateWallet.svelte';
+  import ImportWallet from './ImportWallet.svelte';
+  import RevealPhrase from './RevealPhrase.svelte';
+  import RenameWallet from './RenameWallet.svelte';
+  import DeleteWallet from './DeleteWallet.svelte';
+  import type { WalletMenuAction } from './WalletMenu.svelte';
 
   interface Props {
     wallets: { list: WalletInfo[]; activeId: string | null; network: string; symbol: string };
-    balance: BalanceMsg;
+    walletBalances: Record<string, BalanceMsg>;
+    walletOp: WalletOpResultMsg | null;
   }
-  let { wallets, balance }: Props = $props();
+  let { wallets, walletBalances, walletOp }: Props = $props();
 
-  let ordered = $derived.by(() => {
-    const { list, activeId } = wallets;
-    const active = list.find(w => w.id === activeId);
-    const others = list.filter(w => w.id !== activeId);
-    return active ? [active, ...others] : list;
-  });
+  type View = 'list' | 'create' | 'import' | 'reveal' | 'rename' | 'editDesc' | 'delete';
+  let view = $state<View>('list');
+  let targetId = $state<string | null>(null);
 
-  function shortAddr(address: string) {
-    return address.slice(0, 8) + '…' + address.slice(-6);
-  }
+  let targetWallet = $derived(targetId ? (wallets.list.find((w) => w.id === targetId) ?? null) : null);
 
-  function balanceText(bal: BalanceMsg): { text: string; cls: string } {
-    if (bal.status === 'idle' || bal.status === 'loading') return { text: '…', cls: 'muted' };
-    if (bal.status === 'ok' && bal.value != null) return { text: `${bal.value.toFixed(4)} ${bal.symbol ?? ''}`, cls: '' };
-    return { text: bal.message || 'Failed', cls: 'error' };
+  function backToList() {
+    view = 'list';
+    targetId = null;
   }
 
-  function isZeroBalance(bal: BalanceMsg): boolean {
-    return bal.status === 'ok' && bal.value != null && bal.value === 0;
-  }
-
-  function fundingUrl(network: string): string {
-    return network === 'mainnet'
-      ? 'https://docs.acurast.com/token-holders/how-to-get-acu/'
-      : 'https://faucet.acurast.com/';
-  }
-
-  // Open funding links via the host (vscode.env.openExternal) rather than relying
-  // on the webview's <a> navigation, which the `default-src 'none'` CSP can block.
-  // preventDefault stops the in-frame navigation; the href stays for accessibility.
-  function openFunding(e: MouseEvent) {
-    e.preventDefault();
-    send('openExternal', { url: fundingUrl(wallets.network) });
+  function handleAction(action: WalletMenuAction, id: string) {
+    if (action === 'copyAddress') {
+      const w = wallets.list.find((x) => x.id === id);
+      if (w) send('wallet.copy', { text: w.address, note: 'Address copied to clipboard' });
+      return;
+    }
+    if (action === 'setActive') {
+      send('wallet', { action: 'setActive', id });
+      return;
+    }
+    targetId = id;
+    if (action === 'reveal') view = 'reveal';
+    else if (action === 'rename') view = 'rename';
+    else if (action === 'editDescription') view = 'editDesc';
+    else if (action === 'delete') view = 'delete';
   }
 </script>
 
-{#if wallets.list.length === 0}
-  <div class="empty" style="text-align:center;">
-    <div style="margin: 12px 0; opacity:0.7;">{@html ICONS.wallet}</div>
-    <p>No wallets yet. Create or import one to deploy jobs on Acurast.</p>
-    <button class="full" onclick={() => send('wallet', { action: 'create' })}>Create New Wallet</button>
-    <button class="full secondary with-icon" onclick={() => send('wallet', { action: 'import' })}>
-      {@html ICONS.importIcon} Import Existing
-    </button>
-  </div>
+{#if view === 'create'}
+  <CreateWallet network={wallets.network} {walletOp} onClose={backToList} />
+{:else if view === 'import'}
+  <ImportWallet network={wallets.network} {walletOp} onClose={backToList} />
+{:else if view === 'reveal' && targetWallet}
+  <RevealPhrase wallet={targetWallet} {walletOp} onClose={backToList} />
+{:else if view === 'rename' && targetWallet}
+  <RenameWallet wallet={targetWallet} mode="rename" {walletOp} onClose={backToList} />
+{:else if view === 'editDesc' && targetWallet}
+  <RenameWallet wallet={targetWallet} mode="editDescription" {walletOp} onClose={backToList} />
+{:else if view === 'delete' && targetWallet}
+  <DeleteWallet wallet={targetWallet} {walletOp} onClose={backToList} />
 {:else}
-  <div class="toolbar">
-    <button onclick={() => send('wallet', { action: 'create' })}>+ New</button>
-    <button class="secondary with-icon" onclick={() => send('wallet', { action: 'import' })}>
-      {@html ICONS.importIcon} Import
-    </button>
-  </div>
-
-  {#each ordered as w (w.id)}
-    {@const isActive = w.id === wallets.activeId}
-    <div class="wallet-card {isActive ? 'active' : ''}">
-      <div class="wallet-card-head">
-        <div class="name">{w.name}</div>
-        {#if isActive}<span class="active-badge">Active</span>{/if}
-      </div>
-
-      {#if w.description}
-        <div class="description">{w.description}</div>
-      {/if}
-
-      <div class="address" title={w.address}>{shortAddr(w.address)}</div>
-
-      {#if isActive}
-        {@const bal = balanceText(balance)}
-        <div class="balance-row">
-          <div class="balance-value {bal.cls}">
-            {#if balance.status === 'loading' || balance.status === 'idle'}
-              <Spinner size={12} />
-            {:else}
-              {bal.text}
-            {/if}
-          </div>
-          <div class="balance-network">{wallets.network}</div>
-          <button class="icon-btn" onclick={() => send('refreshBalance')} title="Refresh">
-            {@html ICONS.refresh}
-          </button>
-        </div>
-        {#if isZeroBalance(balance)}
-          <div class="no-funds-banner">
-            <span>No funds yet.</span>
-            {#if wallets.network === 'canary'}
-              Get test <strong>cACU</strong> from the <a href={fundingUrl(wallets.network)} onclick={openFunding}>Acurast Faucet</a>.
-            {:else}
-              Learn how to <a href={fundingUrl(wallets.network)} onclick={openFunding}>get ACU</a>.
-            {/if}
-          </div>
-        {/if}
-      {/if}
-
-      <div class="actions">
-        {#if !isActive}
-          <button onclick={() => send('wallet', { action: 'setActive', id: w.id })}>Set Active</button>
-        {/if}
-        <button onclick={() => send('wallet', { action: 'copyAddress', id: w.id })}>Copy</button>
-        <button onclick={() => send('wallet', { action: 'rename', id: w.id })}>Rename</button>
-        <button onclick={() => send('wallet', { action: 'editDescription', id: w.id })}>Edit Desc</button>
-        <button onclick={() => send('wallet', { action: 'reveal', id: w.id })}>Reveal</button>
-        <button class="danger icon-action" onclick={() => send('wallet', { action: 'delete', id: w.id })} title="Delete wallet">
-          {@html ICONS.trash}
-        </button>
-      </div>
-    </div>
-  {/each}
+  <WalletList
+    {wallets}
+    balances={walletBalances}
+    onCreate={() => (view = 'create')}
+    onImport={() => (view = 'import')}
+    onRefresh={() => send('refreshBalance')}
+    onAction={handleAction}
+  />
 {/if}

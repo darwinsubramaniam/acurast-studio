@@ -19,7 +19,7 @@ import { verifyTunnelDns } from '../tunnel/dnsVerify';
 import { Exchanger } from '../sdk/exchanger/exchanger';
 import { CoinGecko, type CoinGeckoPlan } from '../sdk/exchanger/coingecko';
 import { DeploymentStore } from '../deployments/deploymentStore';
-import type { Route, InMsg, WalletActionMsg, DeployState, DeployStage, DeployStageId, StageStatus, LogLevel, DeployJobId, ProcessorPubKey, ProcessorInfo, ChainEvent, PricingFiatInfo, FiatListItem, StoredDeploymentWithMeta, HistoryStateMsg, OnlineJobRegistration, LocalJobStatus, ProcessorsStateMsg, DiagnosisStateMsg, DeregisterStateMsg, AssignmentsStateMsg, TunnelStateMsg, TunnelTxtRecord, TunnelVerifyState, WalletInfo } from './types';
+import type { Route, InMsg, WalletActionMsg, WalletCreateMsg, WalletImportMsg, WalletOpResultMsg, BalanceMsg, DeployState, DeployStage, DeployStageId, StageStatus, LogLevel, DeployJobId, ProcessorPubKey, ProcessorInfo, ChainEvent, PricingFiatInfo, FiatListItem, StoredDeploymentWithMeta, HistoryStateMsg, OnlineJobRegistration, LocalJobStatus, ProcessorsStateMsg, DiagnosisStateMsg, DeregisterStateMsg, AssignmentsStateMsg, TunnelStateMsg, TunnelTxtRecord, TunnelVerifyState, WalletInfo } from './types';
 
 const BALANCE_POLL_MS = 30_000;
 const FIAT_PRICE_TTL_MS = 60_000;
@@ -52,6 +52,9 @@ export class StudioPanel implements vscode.WebviewViewProvider {
   // running chain query drop its result instead of posting it.
   private _historyGen = 0;
   private _balanceTimer: NodeJS.Timeout | undefined;
+  // Monotonic stamp on every wallet.opResult so the webview's $effect re-fires
+  // even when two results carry identical payloads (e.g. same wrong-password error).
+  private _walletOpSeq = 0;
   private _deploy: DeployState | null = null;
   // Coalesces frequent log-driven state pushes (see scheduleDeployPush).
   private _deployPushTimer: NodeJS.Timeout | undefined;
@@ -211,8 +214,35 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       case 'wallet':
         await this.runWalletAction(msg);
         break;
+      case 'wallet.create':
+        await this.createWalletInPanel(msg);
+        break;
+      case 'wallet.checkPhrase':
+        await this.checkPhraseInPanel(msg.mnemonic);
+        break;
+      case 'wallet.import':
+        await this.importWalletInPanel(msg);
+        break;
+      case 'wallet.reveal':
+        await this.revealInPanel(msg.id, msg.password);
+        break;
+      case 'wallet.rename':
+        await this.renameInPanel(msg.id, msg.name);
+        break;
+      case 'wallet.editDescription':
+        await this.editDescriptionInPanel(msg.id, msg.description);
+        break;
+      case 'wallet.delete':
+        await this.deleteInPanel(msg.id);
+        break;
+      case 'wallet.copy':
+        if (msg.text) {
+          await vscode.env.clipboard.writeText(msg.text);
+          vscode.window.setStatusBarMessage(msg.note ?? 'Copied to clipboard', 1500);
+        }
+        break;
       case 'refreshBalance':
-        await this.pushBalance();
+        await this.pushBalanceForRoute();
         break;
       case 'config.save':
         await this.saveConfigPatch(msg.projectKey, msg.patch);
@@ -333,21 +363,92 @@ export class StudioPanel implements vscode.WebviewViewProvider {
   }
 
   private async runWalletAction(msg: WalletActionMsg) {
-    const cmdMap: Record<WalletActionMsg['action'], string> = {
-      create: 'acurast.wallet.create',
-      import: 'acurast.wallet.import',
-      reveal: 'acurast.wallet.reveal',
-      delete: 'acurast.wallet.delete',
-      copyAddress: 'acurast.wallet.copyAddress',
-      rename: 'acurast.wallet.rename',
-      editDescription: 'acurast.wallet.editDescription',
-      setActive: 'acurast.wallet.setActive',
-    };
-    if (msg.action === 'setActive' && msg.id) {
-      await this.wallet.setActive(msg.id);
-      return;
+    // The remaining `wallet` action is `setActive`; the create/import/reveal/
+    // rename/editDescription/delete flows are in-panel wizards (the wallet.*
+    // request messages) and the native palette commands still exist separately.
+    if (msg.action === 'setActive' && msg.id) await this.wallet.setActive(msg.id);
+  }
+
+  /** Post a wallet flow result to the webview, stamped with a fresh sequence. */
+  private postWalletOp(payload: Omit<WalletOpResultMsg, 'type' | 'seq'>) {
+    this.post({ type: 'wallet.opResult', seq: ++this._walletOpSeq, ...payload });
+  }
+
+  private async createWalletInPanel(msg: WalletCreateMsg) {
+    try {
+      const { mnemonic, info } = await this.wallet.create(
+        { name: msg.name.trim(), description: msg.description.trim() },
+        msg.password,
+      );
+      this.postWalletOp({ op: 'create', ok: true, id: info.id, address: info.address, name: info.name, mnemonic });
+    } catch (err: unknown) {
+      this.postWalletOp({ op: 'create', ok: false, message: (err as Error).message });
     }
-    await vscode.commands.executeCommand(cmdMap[msg.action], msg.id);
+  }
+
+  private async checkPhraseInPanel(mnemonic: string) {
+    try {
+      const { valid, existing } = await this.wallet.checkMnemonic(mnemonic);
+      this.postWalletOp({
+        op: 'checkPhrase', ok: true, valid,
+        duplicate: !!existing,
+        existingName: existing?.name,
+        existingAddress: existing?.address,
+      });
+    } catch (err: unknown) {
+      this.postWalletOp({ op: 'checkPhrase', ok: false, message: (err as Error).message });
+    }
+  }
+
+  private async importWalletInPanel(msg: WalletImportMsg) {
+    try {
+      const info = await this.wallet.import(
+        msg.mnemonic,
+        { name: msg.name.trim(), description: msg.description.trim() },
+        msg.password,
+      );
+      this.postWalletOp({ op: 'import', ok: true, id: info.id, address: info.address, name: info.name });
+    } catch (err: unknown) {
+      this.postWalletOp({ op: 'import', ok: false, message: (err as Error).message });
+    }
+  }
+
+  private async revealInPanel(id: string, password: string) {
+    try {
+      const mnemonic = await this.wallet.reveal(id, password);
+      this.postWalletOp({ op: 'reveal', ok: true, id, mnemonic });
+    } catch {
+      // decrypt throws on a wrong password (and a missing wallet); surface the
+      // friendly message the mock shows rather than the raw crypto error.
+      this.postWalletOp({ op: 'reveal', ok: false, id, message: 'Incorrect password — try again' });
+    }
+  }
+
+  private async renameInPanel(id: string, name: string) {
+    try {
+      await this.wallet.updateMetadata(id, { name: name.trim() });
+      this.postWalletOp({ op: 'rename', ok: true, id });
+    } catch (err: unknown) {
+      this.postWalletOp({ op: 'rename', ok: false, id, message: (err as Error).message });
+    }
+  }
+
+  private async editDescriptionInPanel(id: string, description: string) {
+    try {
+      await this.wallet.updateMetadata(id, { description: description.trim() });
+      this.postWalletOp({ op: 'editDescription', ok: true, id });
+    } catch (err: unknown) {
+      this.postWalletOp({ op: 'editDescription', ok: false, id, message: (err as Error).message });
+    }
+  }
+
+  private async deleteInPanel(id: string) {
+    try {
+      await this.wallet.delete(id);
+      this.postWalletOp({ op: 'delete', ok: true, id });
+    } catch (err: unknown) {
+      this.postWalletOp({ op: 'delete', ok: false, id, message: (err as Error).message });
+    }
   }
 
   private post(msg: unknown) {
@@ -507,12 +608,12 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       network: this.network,
       symbol: SYMBOL[this.network],
     });
-    if (activeId && (this._route === 'wallets' || this._route === 'home')) await this.pushBalance();
+    if (activeId) await this.pushBalanceForRoute();
   }
 
   private startBalancePoll() {
     this.stopBalancePoll();
-    this._balanceTimer = setInterval(() => this.pushBalance(), BALANCE_POLL_MS);
+    this._balanceTimer = setInterval(() => void this.pushBalanceForRoute(), BALANCE_POLL_MS);
   }
 
   private stopBalancePoll() {
@@ -520,6 +621,15 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       clearInterval(this._balanceTimer);
       this._balanceTimer = undefined;
     }
+  }
+
+  /**
+   * The Wallets list shows a balance per wallet; Home shows only the active one.
+   * Branch by route so we don't fan out N balance RPCs while sitting on Home.
+   */
+  private async pushBalanceForRoute() {
+    if (this._route === 'wallets') await this.pushAllBalances();
+    else if (this._route === 'home') await this.pushBalance();
   }
 
   private async pushBalance() {
@@ -538,6 +648,39 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     } catch (err: unknown) {
       this.post({ type: 'wallets.balance', status: 'error', message: (err as Error).message });
     }
+  }
+
+  /**
+   * Fetch every wallet's balance on the Studio target network for the Wallets
+   * list. Posts a `loading` map first so all rows show a spinner, then the
+   * resolved map. Each row resolves independently so one bad RPC doesn't sink
+   * the rest. Guards against the network changing mid-fetch via a captured `gen`.
+   */
+  private async pushAllBalances() {
+    const network = this.network;
+    const symbol = SYMBOL[network];
+    const wallets = await this.wallet.list();
+    if (!wallets.length) {
+      this.post({ type: 'wallets.balances', balances: {} });
+      return;
+    }
+    const loading: Record<string, BalanceMsg> = {};
+    for (const w of wallets) loading[w.id] = { status: 'loading' };
+    this.post({ type: 'wallets.balances', balances: loading });
+
+    const entries = await Promise.all(
+      wallets.map(async (w): Promise<[string, BalanceMsg]> => {
+        try {
+          const value = await acurastClient.getBalance(network, w.address);
+          return [w.id, { status: 'ok', value, symbol, network }];
+        } catch (err: unknown) {
+          return [w.id, { status: 'error', message: (err as Error).message, network }];
+        }
+      }),
+    );
+    // Drop the result if the target network changed while we were fetching.
+    if (network !== this.network) return;
+    this.post({ type: 'wallets.balances', balances: Object.fromEntries(entries) });
   }
 
   private async pushConfig() {

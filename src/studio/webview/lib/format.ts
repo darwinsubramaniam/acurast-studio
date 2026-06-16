@@ -54,6 +54,11 @@ export function truncate(s: string | undefined, n = 10): string {
   return s.slice(0, n) + '…' + s.slice(-6);
 }
 
+/** SS58 address → `5GrwvaEF…HGKutQY` (8 leading + 6 trailing). */
+export function shortAddr(a: string | undefined): string {
+  return truncate(a, 8);
+}
+
 /** ms epoch → relative time like '3 minutes ago', '2 hours ago', '2 years ago'; '—' for falsy. */
 export function fmtRelative(ts: number): string {
   if (!ts) return '—';

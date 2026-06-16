@@ -99,6 +99,35 @@ describe('WalletService', () => {
     });
   });
 
+  describe('checkMnemonic()', () => {
+    const KNOWN = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+
+    it('accepts a valid phrase that is not yet in the vault', async () => {
+      const result = await wallet.checkMnemonic(KNOWN);
+      expect(result.valid).toBe(true);
+      expect(result.existing).toBeUndefined();
+    });
+
+    it('rejects an invalid phrase', async () => {
+      const result = await wallet.checkMnemonic('not a valid mnemonic phrase at all');
+      expect(result.valid).toBe(false);
+      expect(result.existing).toBeUndefined();
+    });
+
+    it('flags a phrase already backing an imported wallet', async () => {
+      const info = await wallet.import(KNOWN, { name: 'Treasury', description: '' }, PASSWORD);
+      const result = await wallet.checkMnemonic(KNOWN);
+      expect(result.valid).toBe(true);
+      expect(result.existing?.id).toBe(info.id);
+      expect(result.existing?.name).toBe('Treasury');
+    });
+
+    it('normalizes whitespace before validating', async () => {
+      const result = await wallet.checkMnemonic(`  ${KNOWN.replace(/ /g, '   ')}  `);
+      expect(result.valid).toBe(true);
+    });
+  });
+
   describe('reveal()', () => {
     it('returns the original mnemonic with the correct password', async () => {
       const { mnemonic, info } = await wallet.create({ name: 'W', description: '' }, PASSWORD);

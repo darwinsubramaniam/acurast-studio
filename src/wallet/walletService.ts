@@ -101,6 +101,22 @@ export class WalletService {
     return info;
   }
 
+  /**
+   * Inspect a pasted recovery phrase without importing it: confirm the BIP39
+   * checksum and report whether a wallet with the same derived id already exists.
+   * Powers the in-panel import flow's pre-advance validation (the webview already
+   * does the cheap word-count check; this does the crypto the webview can't).
+   */
+  async checkMnemonic(mnemonic: string): Promise<{ valid: boolean; existing?: WalletInfo }> {
+    await this._ready;
+    const trimmed = mnemonic.trim().replace(/\s+/g, ' ');
+    if (!mnemonicValidate(trimmed)) return { valid: false };
+    const id = this.makeId(this.derive(trimmed).publicKey);
+    const vault = await this.loadVault();
+    const existing = vault.wallets.find((w) => w.info.id === id)?.info;
+    return { valid: true, existing };
+  }
+
   async updateMetadata(id: string, patch: Partial<WalletMetadata>): Promise<WalletInfo> {
     const vault = await this.loadVault();
     const idx = vault.wallets.findIndex((w) => w.info.id === id);
