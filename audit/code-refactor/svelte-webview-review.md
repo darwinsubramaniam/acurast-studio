@@ -77,8 +77,10 @@ Fiat-source config, project picker, the config form, `buildPatch`/validation, ma
 ### 2. Clearing a numeric field silently writes `null` to the config — **Low–Medium edge case**
 The pattern `const n = Number(value); patchField(key, isNaN(n) ? null : n)` (e.g. `Settings:746, 752, 767`) means emptying *Replicas*, *Max cost*, or any usage-limit field stores `null`. Required fields (interval, numberOfExecutions) are caught by `errors`, but `numberOfReplicas`/`maxCostPerExecution`/`usageLimit.*` are not — a user who clears them persists `null`. If the SDK treats `null` as "unset/default" that's fine; if it expects a number this could surprise. Flagging the asymmetry between validated and unvalidated numeric fields.
 
-### 3. `<a href>` external links in `Wallets.svelte` vs `send('openExternal')` everywhere else — **Medium**
+### 3. `<a href>` external links in `Wallets.svelte` vs `send('openExternal')` everywhere else — **Medium** · ✅ Resolved 2026-06-16
 `Wallets.svelte:91,93` open funding/faucet pages with raw `<a href="https://…">`, while `Home.svelte:185` deliberately routes the donation link through `send('openExternal', {url})`. In a VS Code webview, plain anchor navigation is frequently blocked by CSP / opens inside the webview frame, so these faucet links may not work. Route them through `openExternal` for consistency and to guarantee they open in the system browser.
+
+- **✅ Resolved 2026-06-16:** the webview CSP is `default-src 'none'` (no `navigate-to`), so plain anchor navigation is governed only by VS Code's implicit link handling — fragile. Routed the two faucet links through the existing https-scheme-validated `openExternal` channel: added `openFunding(e)` to `Wallets.svelte` (`e.preventDefault()` then `send('openExternal', { url: fundingUrl(wallets.network) })`) and wired both `<a>`s to it via `onclick`. The `href` stays for accessibility + fallback. Hardening/consistency with `Home`'s donation link rather than a confirmed break. build (no a11y warning — real href) + `test:unit` (295) green.
 
 ### 4. Status badge can go stale — **Low**
 `History.svelte:228-234` `jobStatus()` reads `Date.now()` at render time, so a `scheduled` job won't flip to `active` until something else re-renders the list. The live countdown text uses the reactive `now`, but the badge does not. Acceptable, but a long-open History view can show a stale badge.
@@ -127,7 +129,7 @@ All preserve behavior exactly.
 | S4 | `Settings.svelte` doing six jobs | Structural | Medium | ✅ Done (2026-06-16) |
 | S5 | No `OutMsg` union → `as unknown as` casts | Structural | Medium | ✅ Done (2026-06-16) |
 | L1 | Deploy pricing symbol from Studio target, not project network | Logic | Medium (verify) | ✅ Done (2026-06-16) |
-| L3 | `<a href>` external links may be CSP-blocked in webview | Logic | Medium | Open |
+| L3 | `<a href>` external links may be CSP-blocked in webview | Logic | Medium | ✅ Done (2026-06-16) |
 | L2 | Clearing unvalidated numeric fields writes `null` | Logic | Low–Medium | Open |
 | L4 | Status badge can go stale until re-render | Logic | Low | Open |
 | L5 | Tunnel `seeded` freezes wallet/network selection | Logic | Low | Open |

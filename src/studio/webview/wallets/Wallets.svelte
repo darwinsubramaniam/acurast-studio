@@ -36,6 +36,14 @@
       ? 'https://docs.acurast.com/token-holders/how-to-get-acu/'
       : 'https://faucet.acurast.com/';
   }
+
+  // Open funding links via the host (vscode.env.openExternal) rather than relying
+  // on the webview's <a> navigation, which the `default-src 'none'` CSP can block.
+  // preventDefault stops the in-frame navigation; the href stays for accessibility.
+  function openFunding(e: MouseEvent) {
+    e.preventDefault();
+    send('openExternal', { url: fundingUrl(wallets.network) });
+  }
 </script>
 
 {#if wallets.list.length === 0}
@@ -88,9 +96,9 @@
           <div class="no-funds-banner">
             <span>No funds yet.</span>
             {#if wallets.network === 'canary'}
-              Get test <strong>cACU</strong> from the <a href={fundingUrl(wallets.network)}>Acurast Faucet</a>.
+              Get test <strong>cACU</strong> from the <a href={fundingUrl(wallets.network)} onclick={openFunding}>Acurast Faucet</a>.
             {:else}
-              Learn how to <a href={fundingUrl(wallets.network)}>get ACU</a>.
+              Learn how to <a href={fundingUrl(wallets.network)} onclick={openFunding}>get ACU</a>.
             {/if}
           </div>
         {/if}
