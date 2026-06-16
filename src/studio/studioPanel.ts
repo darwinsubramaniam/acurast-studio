@@ -150,7 +150,8 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     this.updateRouteContext();
     if (this._view) {
       this.post({ type: 'route', route });
-      if (route === 'wallets') {
+      // Home also surfaces the active wallet's balance, so poll on both routes.
+      if (route === 'wallets' || route === 'home') {
         await this.pushWallets();
         this.startBalancePoll();
       } else {
@@ -179,7 +180,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     view.webview.html = this.html(view.webview);
 
     view.onDidChangeVisibility(() => {
-      if (view.visible && this._route === 'wallets') this.startBalancePoll();
+      if (view.visible && (this._route === 'wallets' || this._route === 'home')) this.startBalancePoll();
       else this.stopBalancePoll();
     });
     view.onDidDispose(() => { this.stopBalancePoll(); void this.stopChainWatch(); });
@@ -196,7 +197,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
         this._route = msg.route;
         this.updateRouteContext();
         this.post({ type: 'route', route: msg.route });
-        if (msg.route === 'wallets') {
+        if (msg.route === 'wallets' || msg.route === 'home') {
           await this.pushWallets();
           this.startBalancePoll();
         } else {
@@ -317,6 +318,11 @@ export class StudioPanel implements vscode.WebviewViewProvider {
         await setTargetNetwork(msg.network);
         vscode.window.setStatusBarMessage(`Acurast network: ${networkLabel(msg.network)}`, 2000);
         break;
+      case 'network.openPicker':
+        // Reuse the status bar's confirmed network quick-pick (registered by
+        // AcurastStatusBar) so the Home pill and status bar share one flow.
+        await vscode.commands.executeCommand('acurast.studio.statusBarMenu');
+        break;
       case 'tunnel.compute':
         await this.pushTunnel(msg.suffix, msg.network, msg.walletId);
         break;
@@ -352,7 +358,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     this.post({ type: 'route', route: this._route });
     await this.pushContext();
     await this.pushWallets();
-    if (this._route === 'wallets') this.startBalancePoll();
+    if (this._route === 'wallets' || this._route === 'home') this.startBalancePoll();
     await this.pushConfig();
     await this.pushNetworkMismatch();
     await this.pushFiatSelection();
@@ -501,7 +507,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       network: this.network,
       symbol: SYMBOL[this.network],
     });
-    if (activeId && this._route === 'wallets') await this.pushBalance();
+    if (activeId && (this._route === 'wallets' || this._route === 'home')) await this.pushBalance();
   }
 
   private startBalancePoll() {
