@@ -14,6 +14,8 @@
   --acu-live-bg: #232e0e;          /* Live Monitoring card surface */
   --acu-live-border: #a6e22e;      /* Live Monitoring card border */
   --acu-live-fg: #a6e22e;          /* Live Monitoring sub text */
+  --acu-icon-trace: #a6cfee;       /* nav / UI icon line color ("traces") */
+  --acu-icon-fire: #a6e22e;        /* rocket flame + icon accent ("fire") */
 }
 
 /* Light themes: soften the greens to pale tints with dark-green text, matching
@@ -28,6 +30,8 @@ body.vscode-high-contrast-light {
   --acu-live-bg: #eaf6ce;
   --acu-live-border: #8fc400;
   --acu-live-fg: #3f7a00;
+  --acu-icon-trace: #57606a;
+  --acu-icon-fire: #3f7a00;
 }
 /* Paint the panel surface so it follows the VS Code theme. Without an explicit
    background the webview canvas defaults to black, so a light theme would show
@@ -143,10 +147,11 @@ body {
 .nav-card:disabled:hover { background: var(--vscode-editor-background); border-color: var(--vscode-panel-border, transparent); }
 .nav-card .icon {
   /* No square background — bare glyph. Width keeps the icon column aligned with
-     the green wallet avatar / Live Monitoring square. */
+     the green wallet avatar / Live Monitoring square. Icon "trace" lines follow
+     the theme-aware --acu-icon-trace (blue #a6cfee dark / #57606a light). */
   flex-shrink: 0; width: 34px; height: 34px;
   display: flex; align-items: center; justify-content: center;
-  color: var(--vscode-descriptionForeground);
+  color: var(--acu-icon-trace);
 }
 .nav-card .icon svg { width: 18px; height: 18px; }
 .nav-card .body { flex: 1; min-width: 0; }
