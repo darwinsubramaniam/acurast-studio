@@ -122,6 +122,9 @@
         {@const advice = pricing.advice}
         {@const fiat =
           pricing.fiat && !pricing.fiat.error ? pricing.fiat : null}
+        <!-- Symbol of the project (acurast.json) network the pricing was computed
+             under — NOT the Studio-target `symbol` prop, which may diverge. -->
+        {@const sym = pricing.symbol ?? symbol}
         {#if advice}
           {@const nonPriceBlocker = isNonPriceBlocker(advice)}
           {@const verdict = adviceVerdict(advice.status)}
@@ -137,19 +140,19 @@
           <div class="pricing-rows">
             <span class="pricing-label">Your price</span>
             <span class="pricing-value">
-              {satoshiToACU(advice.currentPrice)} {symbol} / exec
+              {satoshiToACU(advice.currentPrice)} {sym} / exec
               <FiatNote value={advice.currentPrice} kind="planck" {fiat} />
             </span>
             {#if advice.suggestedPrice && advice.status !== "sufficient"}
               <span class="pricing-label">Suggested</span>
               <span class="pricing-value">
-                {satoshiToACU(advice.suggestedPrice)} {symbol} / exec
+                {satoshiToACU(advice.suggestedPrice)} {sym} / exec
                 <FiatNote value={advice.suggestedPrice} kind="planck" {fiat} />
               </span>
             {/if}
             <span class="pricing-label">Total max</span>
             <span class="pricing-value">
-              {fees.maxTotalCostCACU} {symbol}
+              {fees.maxTotalCostCACU} {sym}
               <FiatNote value={fees.maxTotalCostCACU} kind="acu" {fiat} />
             </span>
           </div>
@@ -176,12 +179,12 @@
           <div class="pricing-rows">
             <span class="pricing-label">Max / exec</span>
             <span class="pricing-value">
-              {fees.maxCostPerExecutionCACU} {symbol}
+              {fees.maxCostPerExecutionCACU} {sym}
               <FiatNote value={fees.maxCostPerExecutionCACU} kind="acu" {fiat} />
             </span>
             <span class="pricing-label">Total max</span>
             <span class="pricing-value">
-              {fees.maxTotalCostCACU} {symbol}
+              {fees.maxTotalCostCACU} {sym}
               <FiatNote value={fees.maxTotalCostCACU} kind="acu" {fiat} />
             </span>
           </div>

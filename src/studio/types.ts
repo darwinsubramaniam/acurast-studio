@@ -165,6 +165,10 @@ export interface PricingFiatInfo {
 export interface PricingStateMsg {
   type: 'pricing.state';
   status: 'idle' | 'loading' | 'ok' | 'error';
+  /** Token symbol of the project (acurast.json) network the pricing was computed
+   * under ('ACU' | 'cACU') — set on `status: 'ok'`. Labels the fees/advice values,
+   * which are project-network-scoped (not the Studio target). */
+  symbol?: string;
   fees?: SerializedFees;
   advice?: SerializedAdvice;
   fiat?: PricingFiatInfo;

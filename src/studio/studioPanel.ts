@@ -588,6 +588,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     this.post({
       type: 'pricing.state',
       status: 'ok',
+      symbol: SYMBOL[network],
       fees: {
         numberOfExecutions: fees.numberOfExecutions.toFixed(),
         numberOfReplicas: fees.numberOfReplicas.toFixed(),

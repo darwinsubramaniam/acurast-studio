@@ -69,8 +69,10 @@ Fiat-source config, project picker, the config form, `buildPatch`/validation, ma
 
 ## Logic Review
 
-### 1. Deploy pricing shows the Studio-target symbol, not the project-deploy symbol — **Medium (please verify)**
+### 1. Deploy pricing shows the Studio-target symbol, not the project-deploy symbol — **Medium (please verify)** · ✅ Resolved 2026-06-16 (verified real)
 `App.svelte:220` passes `symbol={wallets.symbol}` to `Deploy`, where `wallets.symbol` follows the **Studio target** (`acurast.network` setting). But per CLAUDE.md, deploy *pricing* follows the **project** `acurast.json` network — and `Settings.svelte:398` correctly derives its symbol from the project network (`'mainnet' ? 'ACU' : 'cACU'`). In the documented mismatch case (project=canary, target=mainnet), Deploy renders canary-priced numbers labelled `ACU`. The numbers come from the project network; only the unit label is wrong. Confirm and, if real, derive Deploy's symbol from `d.network` like Settings does.
+
+- **✅ Verified & resolved 2026-06-16:** confirmed real. `studioPanel.pushPricing` computes fees/advice from the **project** network (`config.network`, `studioPanel.ts:572`) but the `pricing.state` message carried no symbol, so Deploy labelled those numbers with `wallets.symbol` (Studio target). Label-only — the figures were already the project-network token amounts. The suggested `d.network` source doesn't work here: the cost-estimate that uses the symbol lives in Deploy's **no-active-deploy** branch, where there is no `d.network`. Fix instead carries the symbol with the pricing data: the host now sets `symbol: SYMBOL[network]` on the `pricing.state` `'ok'` post (same project `network`, computed atomically), `PricingStateMsg` gained an optional `symbol`, and Deploy's cost panel uses `{@const sym = pricing.symbol ?? symbol}` for the unit labels (the `symbol` prop remains a type-safe fallback). `Settings.svelte` was already correct (derives its `sym` from the project network) and is unchanged. typecheck/build/`test:unit` (295) all green.
 
 ### 2. Clearing a numeric field silently writes `null` to the config — **Low–Medium edge case**
 The pattern `const n = Number(value); patchField(key, isNaN(n) ? null : n)` (e.g. `Settings:746, 752, 767`) means emptying *Replicas*, *Max cost*, or any usage-limit field stores `null`. Required fields (interval, numberOfExecutions) are caught by `errors`, but `numberOfReplicas`/`maxCostPerExecution`/`usageLimit.*` are not — a user who clears them persists `null`. If the SDK treats `null` as "unset/default" that's fine; if it expects a number this could surprise. Flagging the asymmetry between validated and unvalidated numeric fields.
@@ -124,7 +126,7 @@ All preserve behavior exactly.
 | S3 | Job-action cluster implemented 3× | Structural | Medium | ✅ Done (2026-06-16, DiagnoseButton) |
 | S4 | `Settings.svelte` doing six jobs | Structural | Medium | ✅ Done (2026-06-16) |
 | S5 | No `OutMsg` union → `as unknown as` casts | Structural | Medium | ✅ Done (2026-06-16) |
-| L1 | Deploy pricing symbol from Studio target, not project network | Logic | Medium (verify) | Open |
+| L1 | Deploy pricing symbol from Studio target, not project network | Logic | Medium (verify) | ✅ Done (2026-06-16) |
 | L3 | `<a href>` external links may be CSP-blocked in webview | Logic | Medium | Open |
 | L2 | Clearing unvalidated numeric fields writes `null` | Logic | Low–Medium | Open |
 | L4 | Status badge can go stale until re-render | Logic | Low | Open |
