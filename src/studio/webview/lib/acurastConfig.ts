@@ -7,6 +7,8 @@
 // `image.url`); `project` is the currently-selected project object from
 // acurast.json (null when none is selected).
 
+import type { InstantMatchEntry } from '../../types';
+
 const DEFAULT_START_DELAY_MS = 10_000;
 const RUNTIME_DEFAULT = 'NodeJSWithBundle';
 const EXEC_TYPE_DEFAULT = 'onetime';
@@ -41,6 +43,27 @@ export function instantMatchField(p: Record<string, unknown>, field: string): un
   const im = getNested(p, 'assignmentStrategy', 'instantMatch');
   const first = Array.isArray(im) ? im[0] : im;
   return first && typeof first === 'object' ? (first as Record<string, unknown>)[field] : undefined;
+}
+
+/** Coerce a raw value to a non-negative finite delay, defaulting to 10s. */
+function toDelay(v: unknown): number {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? n : DEFAULT_START_DELAY_MS;
+}
+
+// Read a stored config's instantMatch as a clean entry list, tolerating both the
+// SDK's array shape `[{ processor, maxAllowedStartDelayInMs }]` and the legacy
+// single-object shape. Entries with a blank processor are dropped.
+export function instantMatchEntries(p: Record<string, unknown> | null): InstantMatchEntry[] {
+  const im = p ? getNested(p, 'assignmentStrategy', 'instantMatch') : undefined;
+  const raw = Array.isArray(im) ? im : im != null ? [im] : [];
+  return raw
+    .filter((e): e is Record<string, unknown> => !!e && typeof e === 'object' && !Array.isArray(e))
+    .filter((e) => e.processor != null && String(e.processor).trim() !== '')
+    .map((e) => ({
+      processor: String(e.processor).trim(),
+      maxAllowedStartDelayInMs: toDelay(e.maxAllowedStartDelayInMs),
+    }));
 }
 
 /** Recursively merge `source` onto `target`; nested plain objects merge, everything else overwrites. */
@@ -144,9 +167,11 @@ function resolveStartDelay(
 
 /**
  * Normalize assignmentStrategy. The SDK validates instantMatch as an ARRAY of
- * { processor, maxAllowedStartDelayInMs } (it calls .map on it), so collapse our
- * internal single-object draft into that shape — dropping it for Competing or an
- * empty processor. Guard is array-inclusive (matches the original).
+ * { processor, maxAllowedStartDelayInMs } (it calls .map on it). instantMatch may
+ * hold zero, one, or many processors — each with its own start delay — so clean
+ * every entry: trim its processor, resolve its delay, and drop blanks. An empty
+ * result (or a Competing strategy) drops instantMatch entirely (open matching).
+ * Tolerates a legacy single-object draft by treating it as a one-element array.
  */
 function normalizeInstantMatch(
   patch: Record<string, unknown>,
@@ -162,14 +187,19 @@ function normalizeInstantMatch(
   if (strategy.instantMatch == null) return;
 
   const currentProject = project ?? {};
-  const firstEntry = Array.isArray(strategy.instantMatch) ? strategy.instantMatch[0] : strategy.instantMatch;
-  const entry = (firstEntry && typeof firstEntry === 'object' ? firstEntry : {}) as Record<string, unknown>;
-  const proc = entry.processor;
-  if (!proc || String(proc).trim() === '') {
+  const raw = Array.isArray(strategy.instantMatch) ? strategy.instantMatch : [strategy.instantMatch];
+  const entries = raw
+    .filter((e): e is Record<string, unknown> => !!e && typeof e === 'object' && !Array.isArray(e))
+    .filter((e) => e.processor != null && String(e.processor).trim() !== '')
+    .map((e) => ({
+      processor: String(e.processor).trim(),
+      maxAllowedStartDelayInMs: resolveStartDelay(e, draft, currentProject),
+    }));
+  if (entries.length === 0) {
     delete strategy.instantMatch;
     return;
   }
-  strategy.instantMatch = [{ processor: String(proc).trim(), maxAllowedStartDelayInMs: resolveStartDelay(entry, draft, currentProject) }];
+  strategy.instantMatch = entries;
 }
 
 /** Null out minProcessorVersions when every version field is blank. Guard is array-inclusive. */

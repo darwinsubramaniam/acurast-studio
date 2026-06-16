@@ -30,6 +30,13 @@ function propsFor(project: Record<string, unknown>) {
 
 const VALID = { projectName: 'demo', fileUrl: './index.js' };
 
+// The patch object from the most recent config.save message.
+function patchFromLastSave(): Record<string, unknown> {
+  const call = vi.mocked(send).mock.calls.find((c) => c[0] === 'config.save');
+  if (!call) throw new Error('config.save was not sent');
+  return (call[1] as { patch: Record<string, unknown> }).patch;
+}
+
 // The env-vars input lives in the (collapsed) "Advanced" accordion section.
 async function openAdvanced() {
   await fireEvent.click(screen.getByText('Advanced'));
@@ -115,5 +122,72 @@ describe('Settings — build section', () => {
       projectKey: 'demo',
       patch: expect.objectContaining({ build: { command: 'new', cwd: 'app', output: 'dist/index.js' } }),
     });
+  });
+});
+
+// Instant-match lives in the Assignment Strategy accordion section, open by
+// default — assignmentStrategy.type defaults to "Single", so the editor shows.
+describe('Settings — instant-match processors', () => {
+  it('renders stored instant-match entries as table rows with their own delays', () => {
+    render(Settings, { props: propsFor({
+      ...VALID,
+      assignmentStrategy: { type: 'Single', instantMatch: [{ processor: '5aaa', maxAllowedStartDelayInMs: 7000 }] },
+    }) });
+    expect(screen.getByTitle('5aaa')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('7000')).toBeInTheDocument();
+  });
+
+  it('saves a newly added processor as a Single instantMatch array (default 10s delay)', async () => {
+    render(Settings, { props: propsFor(VALID) });
+
+    // Target the instant-match add field by its section label — the whitelist
+    // add field shares the same placeholder. Enter commits the add.
+    const input = screen.getByRole('textbox', { name: /Instant Match Processors/i });
+    await fireEvent.input(input, { target: { value: '5newproc' } });
+    await fireEvent.keyDown(input, { key: 'Enter' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    expect(patchFromLastSave().assignmentStrategy).toMatchObject({
+      instantMatch: [{ processor: '5newproc', maxAllowedStartDelayInMs: 10000 }],
+    });
+  });
+
+  it('drops instantMatch when the only processor is removed (open matching)', async () => {
+    render(Settings, { props: propsFor({
+      ...VALID,
+      assignmentStrategy: { type: 'Single', instantMatch: [{ processor: '5aaa', maxAllowedStartDelayInMs: 7000 }] },
+    }) });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove 5aaa' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    expect(patchFromLastSave().assignmentStrategy).toEqual({ type: 'Single' });
+  });
+});
+
+// The whitelist (now a 2-column table) lives in the collapsed "Advanced" section.
+describe('Settings — processor whitelist', () => {
+  async function openAdvancedSection() {
+    await fireEvent.click(screen.getByText('Advanced'));
+  }
+
+  it('renders stored whitelist addresses as table rows', async () => {
+    render(Settings, { props: propsFor({ ...VALID, processorWhitelist: ['5wwww'] }) });
+    await openAdvancedSection();
+    expect(screen.getByTitle('5wwww')).toBeInTheDocument();
+  });
+
+  it('saves a newly added whitelist address as an array', async () => {
+    render(Settings, { props: propsFor(VALID) });
+    await openAdvancedSection();
+
+    // Target the whitelist add field by its section label (shared placeholder
+    // with instant match); Enter commits the add.
+    const input = screen.getByRole('textbox', { name: /Processor Whitelist/i });
+    await fireEvent.input(input, { target: { value: '5wnew' } });
+    await fireEvent.keyDown(input, { key: 'Enter' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    expect(patchFromLastSave().processorWhitelist).toEqual(['5wnew']);
   });
 });

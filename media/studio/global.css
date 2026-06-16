@@ -648,3 +648,73 @@ input.field-error, textarea.field-error { border-color: var(--vscode-inputValida
   opacity: 0.6;
   cursor: default;
 }
+
+/* Processor tables — shared look between ProcessorWhitelist (Processor · Remove)
+   and InstantMatchProcessors (Processor · Max Delay · Remove). Only the column
+   count differs; the table, address cell, remove button and "add" row are the
+   same in both. */
+.proc-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 6px;
+  font-size: 11px;
+}
+.proc-table th {
+  text-align: left;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--vscode-descriptionForeground);
+  padding: 2px 6px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+.proc-th-remove {
+  width: 1%;
+  text-align: center;
+  white-space: nowrap;
+}
+.proc-table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  vertical-align: middle;
+}
+.proc-cell-addr {
+  font-family: var(--vscode-editor-font-family, monospace);
+  word-break: break-all;
+}
+.proc-remove-cell {
+  width: 1%;
+  text-align: center;
+}
+.proc-remove {
+  padding: 3px 6px;
+  background: transparent;
+  color: var(--vscode-errorForeground);
+  border: 1px solid var(--vscode-errorForeground);
+  border-radius: 2px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.proc-remove:hover {
+  background: var(--vscode-inputValidation-errorBackground);
+}
+.proc-remove svg {
+  width: 12px;
+  height: 12px;
+  display: block;
+}
+/* Manual "add a processor address" row. */
+.proc-add {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.proc-add input {
+  flex: 1;
+}
+.proc-add button {
+  flex: none;
+}
