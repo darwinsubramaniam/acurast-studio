@@ -240,5 +240,5 @@
 {:else if route === "processors"}
   <Processors {wallets} {processorsState} />
 {:else if route === "tunnel"}
-  <Tunnel {tunnel} {wallets} />
+  <Tunnel {tunnel} {wallets} {navigate} />
 {/if}

@@ -359,6 +359,9 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       case 'tunnel.verify':
         await this.verifyTunnel(msg.suffix, msg.network, msg.walletId);
         break;
+      case 'tunnel.openRelaySetting':
+        await vscode.commands.executeCommand('workbench.action.openSettings', 'acurast.tunnelRelays');
+        break;
     }
   }
 

@@ -104,6 +104,8 @@ export interface NetworkOpenPickerMsg  { type: 'network.openPicker'; }
 export interface TunnelComputeMsg      { type: 'tunnel.compute'; suffix: string; network: AcurastNetwork; walletId?: string; }
 /** Resolve and verify the published tunnel DNS records for `suffix` on `network`, for `walletId` (defaults to active). */
 export interface TunnelVerifyMsg       { type: 'tunnel.verify'; suffix: string; network: AcurastNetwork; walletId?: string; }
+/** Open the VS Code Settings UI focused on the `acurast.tunnelRelays` override (used by the No-Relays edge state). */
+export interface TunnelOpenRelaySettingMsg { type: 'tunnel.openRelaySetting'; }
 
 export type InMsg =
   | NavigateMsg | ReadyMsg | WalletActionMsg | RefreshBalanceMsg
@@ -117,7 +119,7 @@ export type InMsg =
   | ProcessorsQueryMsg | ProcessorsAdvertiseMsg
   | HistoryLoadMsg | HistoryFetchOnlineMsg | JobDiagnoseMsg | HistoryDeregisterMsg | HistoryAssignmentsMsg | HistoryRemovePathMsg | HistoryRemoveMsg | HistoryOpenFolderMsg
   | NetworkSetTargetMsg | NetworkOpenPickerMsg
-  | TunnelComputeMsg | TunnelVerifyMsg;
+  | TunnelComputeMsg | TunnelVerifyMsg | TunnelOpenRelaySettingMsg;
 
 // ── Host → webview messages (OutMsg) ──────────────────────────────────────────
 // The reverse-direction mirror of InMsg: every message StudioPanel.post() sends
