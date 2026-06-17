@@ -227,7 +227,15 @@
     context="deploy"
     {navigate}
   />
-  <Deploy {ctx} {deploy} {navigate} {pricing} {diagnoses} symbol={wallets.symbol} />
+  <Deploy
+    {ctx}
+    {deploy}
+    {navigate}
+    {pricing}
+    {diagnoses}
+    symbol={wallets.symbol}
+    {projectNetwork}
+  />
 {:else if route === "history"}
   <History
     {historyState}

@@ -371,142 +371,17 @@ input.field-error, textarea.field-error { border-color: var(--vscode-inputValida
 
 .empty { padding: 16px 4px; color: var(--vscode-descriptionForeground); }
 
-/* Deploy */
-.dep-head {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 10px; margin: 0 0 10px;
-  background: var(--vscode-editor-background);
-  border: 1px solid var(--vscode-panel-border, transparent);
-  border-radius: 4px;
-}
-.dep-head .proj { flex: 1; min-width: 0; }
-.dep-head .proj-name { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dep-head .proj-meta { font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 2px; }
-.dep-status {
-  font-size: 10px; padding: 2px 6px; border-radius: 2px;
-  text-transform: uppercase; letter-spacing: 0.05em;
-}
-.dep-status.running { background: var(--vscode-statusBarItem-prominentBackground, var(--vscode-badge-background)); color: var(--vscode-badge-foreground); }
-.dep-status.ok      { background: var(--vscode-testing-iconPassed, var(--vscode-charts-green)); color: var(--vscode-editor-background); }
-.dep-status.err     { background: var(--vscode-errorForeground); color: var(--vscode-editor-background); }
-.dep-status.idle    { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
-
-.stages { list-style: none; padding: 0; margin: 0 0 12px; }
-.stage {
-  display: flex; align-items: flex-start; gap: 8px;
-  padding: 8px 10px;
-  border-left: 2px solid var(--vscode-panel-border, transparent);
-  position: relative;
-}
-.stage + .stage { margin-top: 2px; }
-.stage .dot {
-  width: 14px; height: 14px; border-radius: 50%;
-  flex-shrink: 0; margin-top: 2px;
-  border: 2px solid var(--vscode-descriptionForeground);
-  background: transparent;
-  display: inline-flex; align-items: center; justify-content: center;
-  font-size: 9px; color: var(--vscode-editor-background);
-}
-.stage.pending .dot { opacity: 0.5; }
-.stage.active  .dot {
-  border-color: var(--vscode-progressBar-background, var(--vscode-focusBorder));
-  background: var(--vscode-progressBar-background, var(--vscode-focusBorder));
-  animation: pulse 1.2s ease-in-out infinite;
-}
-.stage.done .dot {
-  border-color: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
-  background: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
-}
-.stage.done .dot::after { content: '✓'; font-weight: 700; }
-.stage.error .dot {
-  border-color: var(--vscode-errorForeground);
-  background: var(--vscode-errorForeground);
-}
-.stage.error .dot::after { content: '!'; font-weight: 700; }
-.stage .body { flex: 1; min-width: 0; }
-.stage .label { font-size: 12px; font-weight: 500; }
-.stage.pending .label { color: var(--vscode-descriptionForeground); }
-.stage .detail {
-  font-family: var(--vscode-editor-font-family, monospace);
-  font-size: 10px; color: var(--vscode-descriptionForeground);
-  margin-top: 2px; word-break: break-all;
-}
-
-/* Per-stage captured output, color-coded by log level. */
-.stage .logdetails { margin-top: 4px; }
-.stage .logdetails > summary {
-  cursor: pointer; user-select: none;
-  font-size: 10px; color: var(--vscode-textLink-foreground);
-}
-.stage .logbox {
-  margin-top: 4px;
-  max-height: 220px; overflow: auto;
-  background: var(--vscode-editor-background, var(--vscode-textCodeBlock-background));
-  border: 1px solid var(--vscode-panel-border);
-  border-radius: 4px;
-  padding: 4px 6px;
-}
-.stage .logline {
-  font-family: var(--vscode-editor-font-family, monospace);
-  font-size: 11px; line-height: 1.4;
-  white-space: pre-wrap; word-break: break-word;
-}
-.stage .log-info  { color: var(--vscode-foreground); }
-.stage .log-debug { color: var(--vscode-descriptionForeground); }
-.stage .log-warn  { color: var(--vscode-editorWarning-foreground, #cca700); }
-.stage .log-error { color: var(--vscode-errorForeground, #f48771); }
+/* Deploy — see the "Deploy panel (redesign — Figma 166:5)" section at the end
+   of this file for the current styles. `@keyframes pulse` below is kept because
+   the redesigned `.dpl-live-dot` reuses it. */
 @keyframes pulse {
   0%, 100% { box-shadow: 0 0 0 0 var(--vscode-progressBar-background, var(--vscode-focusBorder)); opacity: 1; }
   50%      { box-shadow: 0 0 0 4px transparent; opacity: 0.6; }
 }
 
-/* Deployment ID card */
-.dep-id {
-  padding: 10px 12px; margin: 0 0 10px;
-  background: var(--vscode-textBlockQuote-background);
-  border: 1px solid var(--vscode-focusBorder);
-  border-radius: 4px;
-}
-.dep-id .label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
-.dep-id .id-row { display: flex; align-items: baseline; gap: 8px; }
-.dep-id .id-num {
-  font-family: var(--vscode-editor-font-family, monospace);
-  font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums;
-  color: var(--vscode-foreground);
-}
-.dep-id .id-origin {
-  font-family: var(--vscode-editor-font-family, monospace);
-  font-size: 10px; color: var(--vscode-descriptionForeground);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  flex: 1; min-width: 0;
-}
-.dep-id .id-actions { display: flex; gap: 4px; margin-top: 8px; }
-.dep-id .id-actions button { padding: 3px 8px; font-size: 11px; background: transparent; color: var(--vscode-foreground); border: 1px solid var(--vscode-panel-border, transparent); }
-.dep-id .id-actions button:hover { background: var(--vscode-toolbar-hoverBackground); }
-.dep-id + .dep-id { margin-top: -6px; }
-.dep-id.deregistered { opacity: 0.7; border-color: var(--vscode-panel-border, transparent); background: var(--vscode-editor-background); }
-.dep-id .dereg-badge {
-  display: inline-block; margin-left: 8px;
-  font-size: 9px; padding: 1px 6px; border-radius: 2px;
-  background: var(--vscode-errorForeground); color: var(--vscode-editor-background);
-  text-transform: uppercase; letter-spacing: 0.05em;
-  vertical-align: middle;
-}
-.dep-id .id-actions button.danger { color: var(--vscode-errorForeground); border-color: var(--vscode-errorForeground); }
-.dep-id .id-actions button.danger:hover { background: var(--vscode-inputValidation-errorBackground); }
-.dep-id .dereg-error {
-  margin-top: 6px;
-  font-size: 10.5px; color: var(--vscode-errorForeground);
-  word-break: break-word;
-}
-.dep-id .dereg-tx {
-  margin-top: 6px;
-  font-family: var(--vscode-editor-font-family, monospace);
-  font-size: 10px; color: var(--vscode-descriptionForeground);
-  word-break: break-all;
-}
-
-/* Processors list */
+/* Processors list (shared by Processors / History / DiagnosisPanel views;
+   the redesigned Deploy panel reuses .proc-start / .proc-window / .proc-keys
+   / .pk-* from here). */
 .proc-section { margin-top: 10px; }
 .proc-head {
   display: flex; align-items: center; gap: 6px;
@@ -571,56 +446,6 @@ input.field-error, textarea.field-error { border-color: var(--vscode-inputValida
   border: 1px solid var(--vscode-panel-border, transparent);
 }
 .pk-copy:hover { background: var(--vscode-toolbar-hoverBackground); }
-
-/* Lifecycle (chain events) */
-.devtools-section { margin-top: 10px; }
-.devtools-head {
-  display: flex; align-items: center; gap: 6px;
-  margin: 0 0 6px;
-}
-.devtools-head h3 { margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--vscode-descriptionForeground); flex: 1; }
-.devtools-head button { padding: 2px 8px; font-size: 11px; background: transparent; color: var(--vscode-foreground); border: 1px solid var(--vscode-panel-border, transparent); }
-.devtools-head button:hover { background: var(--vscode-toolbar-hoverBackground); }
-.devtools-url-row { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
-.devtools-url { flex: 1; font-size: 10px; font-family: var(--vscode-editor-font-family, monospace); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.85; }
-.devtools-hint { font-size: 10px; color: var(--vscode-descriptionForeground); margin-top: 2px; }
-.lc-section { margin-top: 10px; }
-.lc-head {
-  display: flex; align-items: center; gap: 6px;
-  margin: 0 0 6px;
-}
-.lc-head h3 { margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--vscode-descriptionForeground); flex: 1; }
-.lc-dot {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
-  box-shadow: 0 0 0 0 currentColor;
-  animation: pulse 1.4s ease-in-out infinite;
-}
-.lc-dot.off { background: var(--vscode-descriptionForeground); animation: none; }
-.lc-list { list-style: none; padding: 0; margin: 0; }
-.lc-row {
-  display: flex; gap: 8px; align-items: baseline;
-  padding: 6px 10px;
-  border-left: 2px solid var(--vscode-panel-border, transparent);
-  font-size: 11px;
-}
-.lc-row + .lc-row { margin-top: 2px; }
-.lc-row .ts {
-  font-family: var(--vscode-editor-font-family, monospace);
-  font-size: 10.5px; color: var(--vscode-descriptionForeground);
-  flex-shrink: 0;
-}
-.lc-row .meth { font-weight: 600; }
-.lc-row .sec { font-size: 10px; color: var(--vscode-descriptionForeground); margin-left: 4px; }
-.lc-row .payload {
-  font-family: var(--vscode-editor-font-family, monospace);
-  font-size: 10px; color: var(--vscode-descriptionForeground);
-  word-break: break-all; margin-top: 2px;
-}
-.lc-row.started   { border-left-color: var(--vscode-progressBar-background, var(--vscode-focusBorder)); }
-.lc-row.reported  { border-left-color: var(--vscode-charts-blue, var(--vscode-focusBorder)); }
-.lc-row.finalized { border-left-color: var(--vscode-testing-iconPassed, var(--vscode-charts-green)); }
-.lc-empty { padding: 8px 10px; color: var(--vscode-descriptionForeground); font-size: 11px; font-style: italic; }
 
 /* Pricing widget */
 .pricing-box {
@@ -704,15 +529,6 @@ input.field-error, textarea.field-error { border-color: var(--vscode-inputValida
 .dist-marker {
   font-size: 9px; color: var(--vscode-descriptionForeground);
   min-width: 28px;
-}
-
-.dep-error {
-  padding: 8px 10px; margin: 0 0 10px;
-  background: var(--vscode-inputValidation-errorBackground);
-  border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-errorForeground));
-  border-radius: 4px;
-  font-size: 11px; color: var(--vscode-errorForeground);
-  word-break: break-word;
 }
 
 /* Diagnose button — shared by Deploy job cards and History
@@ -1170,3 +986,246 @@ input.field-error, textarea.field-error { border-color: var(--vscode-inputValida
 .success-card-info { flex: 1; min-width: 0; text-align: left; }
 .success-card-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .success-card-addr { font-family: var(--vscode-editor-font-family, monospace); font-size: 10.5px; color: var(--vscode-descriptionForeground); margin-top: 2px; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Deploy panel (redesign — Figma board 166:5 "DEPLOY FLOW"). One panel that
+   shifts through the deployment lifecycle. Status-color grammar, consistent
+   everywhere: green = go / sufficient / success · blue = in-progress · red =
+   blocked / error · amber = warn (underpriced / awaiting) · grey = neutral
+   (no-project / ended). Brand green rides the shared --acu-* tokens; every
+   status tone + neutral rides --vscode-* so the panel tracks the VS Code theme
+   (dark + light). Reuses the shared .proc-start/.proc-window/.proc-keys/.pk-*,
+   .pricing-*, and .diag-btn rules above.
+   ════════════════════════════════════════════════════════════════════════════ */
+.dpl { display: flex; flex-direction: column; }
+
+/* Header — project identity (left) + lifecycle status pill (right). */
+.dpl-head { display: flex; align-items: flex-start; gap: 10px; margin: 2px 0 13px; }
+.dpl-head-main { flex: 1; min-width: 0; }
+.dpl-title {
+  font-size: 14px; font-weight: 600; letter-spacing: -0.01em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dpl-sub { font-size: 11.5px; color: var(--vscode-descriptionForeground); margin-top: 2px; }
+
+/* Status pill — tone via modifier class. Soft surface + matching text. */
+.dpl-pill {
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px;
+  height: 22px; padding: 0 10px; border-radius: 999px;
+  font-size: 11px; font-weight: 500; line-height: 1;
+}
+.dpl-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.dpl-pill svg { width: 12px; height: 12px; }
+.dpl-pill.green { background: var(--acu-accent-soft-bg); color: var(--acu-accent-soft-fg); }
+.dpl-pill.blue  { background: var(--vscode-inputValidation-infoBackground, rgba(88, 166, 255, 0.13)); color: var(--vscode-charts-blue, var(--vscode-textLink-foreground)); }
+.dpl-pill.amber { background: var(--vscode-inputValidation-warningBackground, rgba(204, 167, 0, 0.14)); color: var(--vscode-editorWarning-foreground, #cca700); }
+.dpl-pill.red   { background: var(--vscode-inputValidation-errorBackground, rgba(244, 135, 113, 0.14)); color: var(--vscode-errorForeground); }
+.dpl-pill.grey  { background: var(--vscode-badge-background); color: var(--vscode-descriptionForeground); }
+
+/* Card — the elevated container used for cost / steps / stages / id / processors
+   / devtools / lifecycle. Sits on the panel (--vscode-sideBar-background) body. */
+.dpl-card {
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border, transparent);
+  border-radius: 10px; padding: 13px; margin: 0 0 10px;
+}
+.dpl-card.amber { border-color: var(--vscode-editorWarning-foreground, #cca700); }
+.dpl-card.red   { border-color: var(--vscode-errorForeground); }
+.dpl-card.ended { opacity: 0.82; }
+.dpl-eyebrow {
+  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--vscode-descriptionForeground);
+}
+.dpl-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 11px; }
+.dpl-card-head .dpl-eyebrow { flex: 1; min-width: 0; }
+.dpl-ghost-btn {
+  padding: 2px 9px; font-size: 11px; border-radius: 6px;
+  background: transparent; color: var(--vscode-foreground);
+  border: 1px solid var(--vscode-panel-border, transparent);
+}
+.dpl-ghost-btn:hover:not(:disabled) { background: var(--vscode-toolbar-hoverBackground); border-color: var(--vscode-focusBorder); }
+.dpl-ghost-btn.danger { color: var(--vscode-errorForeground); }
+.dpl-ghost-btn.danger:hover:not(:disabled) { background: var(--vscode-inputValidation-errorBackground); border-color: var(--vscode-errorForeground); }
+
+/* Count chip in a card head (PROCESSORS · 3/3 acknowledged). */
+.dpl-count { font-size: 11px; font-weight: 500; }
+.dpl-count.green { color: var(--acu-accent-soft-fg); }
+.dpl-count.amber { color: var(--vscode-editorWarning-foreground, #cca700); }
+.dpl-count.grey  { color: var(--vscode-descriptionForeground); }
+
+/* Project header card (ready + post-submit). Name + network/meta chips. */
+.dpl-proj { display: flex; align-items: center; gap: 11px; }
+.dpl-proj-avatar {
+  flex-shrink: 0; width: 32px; height: 32px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--acu-accent-soft-bg); color: var(--acu-accent-soft-fg);
+}
+.dpl-proj-avatar svg { width: 17px; height: 17px; }
+.dpl-proj-main { flex: 1; min-width: 0; }
+.dpl-proj-name { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dpl-proj-meta { font-size: 11.5px; color: var(--vscode-descriptionForeground); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dpl-net {
+  font-size: 10.5px; font-weight: 500; padding: 2px 8px; border-radius: 6px;
+  text-transform: capitalize;
+  background: var(--acu-accent-soft-bg); color: var(--acu-accent-soft-fg);
+}
+
+/* Estimated-cost card. */
+.dpl-cost-amount { display: flex; align-items: baseline; gap: 7px; margin: 2px 0 5px; }
+.dpl-cost-num { font-size: 30px; font-weight: 700; letter-spacing: -0.015em; font-variant-numeric: tabular-nums; line-height: 1; }
+.dpl-cost-unit { font-size: 13px; font-weight: 500; color: var(--vscode-descriptionForeground); }
+.dpl-cost-fiat { margin-left: auto; align-self: center; font-size: 13px; color: var(--vscode-descriptionForeground); font-variant-numeric: tabular-nums; }
+.dpl-cost-note { font-size: 11px; color: var(--vscode-descriptionForeground); }
+.dpl-div { height: 1px; background: var(--vscode-panel-border, transparent); margin: 11px 0; }
+.dpl-status-row { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; }
+.dpl-status-row svg { width: 14px; height: 14px; flex-shrink: 0; }
+.dpl-status-row .rest { font-weight: 400; color: var(--vscode-descriptionForeground); }
+.dpl-status-row.green { color: var(--acu-accent-soft-fg); }
+.dpl-status-row.amber { color: var(--vscode-editorWarning-foreground, #cca700); }
+.dpl-status-row.red   { color: var(--vscode-errorForeground); }
+
+/* Numbered "what happens next" steps. */
+.dpl-step { display: flex; gap: 11px; align-items: flex-start; padding: 6px 0; }
+.dpl-step-num {
+  flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
+  color: var(--vscode-descriptionForeground);
+  border: 1px solid var(--vscode-panel-border, transparent);
+}
+.dpl-step-body { flex: 1; min-width: 0; }
+.dpl-step-label { font-size: 12.5px; font-weight: 600; }
+.dpl-step-detail { font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 1px; }
+
+/* Stage list (build → bundle → upload → submit …) with status discs. */
+.dpl-stage { display: flex; align-items: flex-start; gap: 11px; padding: 7px 0; }
+.dpl-disc {
+  flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; margin-top: 1px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; color: var(--vscode-button-foreground, #fff); box-sizing: border-box;
+}
+.dpl-stage.done .dpl-disc { background: var(--vscode-testing-iconPassed, var(--vscode-charts-green, #3fb950)); }
+.dpl-stage.done .dpl-disc::after { content: '✓'; font-weight: 700; }
+.dpl-stage.error .dpl-disc { background: var(--vscode-errorForeground); }
+.dpl-stage.error .dpl-disc::after { content: '✕'; font-weight: 700; font-size: 12px; }
+.dpl-stage.active .dpl-disc { color: var(--vscode-charts-blue, var(--vscode-progressBar-background, var(--vscode-focusBorder))); }
+.dpl-stage.pending .dpl-disc { border: 2px solid var(--vscode-descriptionForeground); opacity: 0.4; }
+.dpl-stage-body { flex: 1; min-width: 0; }
+.dpl-stage-label { font-size: 12.5px; font-weight: 600; }
+.dpl-stage.pending .dpl-stage-label { color: var(--vscode-descriptionForeground); font-weight: 500; }
+.dpl-stage-detail {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 10.5px; color: var(--vscode-descriptionForeground); margin-top: 2px; word-break: break-word;
+}
+.dpl-stage.error .dpl-stage-detail { color: var(--vscode-errorForeground); font-family: inherit; }
+
+/* Captured per-stage output (kept class names + log levels for tests). */
+.dpl-logbox {
+  margin-top: 6px; max-height: 220px; overflow: auto;
+  background: var(--vscode-textCodeBlock-background, var(--vscode-editor-background));
+  border: 1px solid var(--vscode-panel-border, transparent); border-radius: 6px; padding: 5px 7px;
+}
+.logdetails { margin-top: 6px; }
+.logdetails > summary { cursor: pointer; user-select: none; font-size: 10.5px; color: var(--vscode-textLink-foreground); }
+.logline { font-family: var(--vscode-editor-font-family, monospace); font-size: 11px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+.log-info  { color: var(--vscode-foreground); }
+.log-debug { color: var(--vscode-descriptionForeground); }
+.log-warn  { color: var(--vscode-editorWarning-foreground, #cca700); }
+.log-error { color: var(--vscode-errorForeground, #f48771); }
+
+/* Slim progress bar shown while submitting / on failure. */
+.dpl-progress { height: 6px; border-radius: 3px; background: var(--vscode-input-background); overflow: hidden; margin: 2px 0 11px; }
+.dpl-progress-fill { height: 100%; border-radius: 3px; background: var(--vscode-charts-blue, var(--vscode-progressBar-background, var(--vscode-focusBorder))); transition: width 0.3s ease; }
+.dpl-progress.error .dpl-progress-fill { background: var(--vscode-errorForeground); }
+
+/* Failure explanation. */
+.dpl-errmsg { font-size: 12px; line-height: 1.45; color: var(--vscode-errorForeground); margin: 0 0 12px; word-break: break-word; }
+
+/* Deployment ID card. */
+.dpl-id-num { display: flex; align-items: baseline; gap: 8px; margin-top: 2px; }
+.dpl-id-num .num { font-family: var(--vscode-editor-font-family, monospace); font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.dpl-id-num .origin { flex: 1; min-width: 0; font-family: var(--vscode-editor-font-family, monospace); font-size: 11px; color: var(--vscode-descriptionForeground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dpl-id-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 11px; }
+.dpl-dereg-badge {
+  margin-left: auto; flex-shrink: 0; align-self: center;
+  font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+  padding: 2px 7px; border-radius: 5px;
+  background: var(--vscode-inputValidation-errorBackground, rgba(244, 135, 113, 0.18)); color: var(--vscode-errorForeground);
+}
+.dpl-dereg-tx { margin-top: 7px; font-family: var(--vscode-editor-font-family, monospace); font-size: 10px; color: var(--vscode-descriptionForeground); word-break: break-all; }
+.dpl-dereg-err { margin-top: 7px; font-size: 10.5px; color: var(--vscode-errorForeground); word-break: break-word; }
+
+/* Processor rows inside the processors card. */
+.dpl-proc { padding: 9px 0; }
+.dpl-proc + .dpl-proc { border-top: 1px solid var(--vscode-panel-border, transparent); }
+.dpl-proc-top { display: flex; align-items: center; gap: 8px; }
+.dpl-proc-top .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.dpl-proc-top .dot.ack { background: var(--vscode-testing-iconPassed, var(--vscode-charts-green, #3fb950)); }
+.dpl-proc-top .dot.noack { background: var(--vscode-descriptionForeground); }
+.dpl-proc-addr { flex: 1; min-width: 0; font-family: var(--vscode-editor-font-family, monospace); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dpl-proc-ack { font-size: 10px; color: var(--vscode-testing-iconPassed, var(--vscode-charts-green, #3fb950)); flex-shrink: 0; }
+.dpl-proc-pending { font-size: 10px; color: var(--vscode-descriptionForeground); flex-shrink: 0; }
+.dpl-proc-meta { font-size: 10.5px; color: var(--vscode-descriptionForeground); margin-top: 4px; }
+.dpl-proc-meta b { color: var(--vscode-foreground); font-weight: 500; }
+.dpl-card-note { font-size: 11.5px; line-height: 1.45; color: var(--vscode-descriptionForeground); }
+
+/* Lifecycle (chain events) card. */
+.dpl-live-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  background: var(--vscode-testing-iconPassed, var(--vscode-charts-green, #3fb950));
+  box-shadow: 0 0 0 0 currentColor; animation: pulse 1.4s ease-in-out infinite;
+}
+.dpl-live-dot.off { background: var(--vscode-descriptionForeground); animation: none; }
+.dpl-lc-row { display: flex; gap: 10px; align-items: baseline; padding: 4px 0; font-size: 11.5px; }
+.dpl-lc-ts { flex-shrink: 0; font-family: var(--vscode-editor-font-family, monospace); font-size: 10.5px; color: var(--vscode-descriptionForeground); }
+.dpl-lc-body { flex: 1; min-width: 0; }
+.dpl-lc-label { font-weight: 500; }
+.dpl-lc-row.started .dpl-lc-label, .dpl-lc-row.reported .dpl-lc-label { color: var(--vscode-charts-blue, var(--vscode-textLink-foreground)); }
+.dpl-lc-row.finalized .dpl-lc-label { color: var(--acu-accent-soft-fg); }
+.dpl-lc-raw { font-size: 10px; color: var(--vscode-descriptionForeground); margin-left: 4px; }
+.dpl-lc-payload { font-family: var(--vscode-editor-font-family, monospace); font-size: 10px; color: var(--vscode-descriptionForeground); word-break: break-all; margin-top: 2px; }
+
+/* DevTools URL row. */
+.dpl-url-row { display: flex; align-items: center; gap: 6px; }
+.dpl-url { flex: 1; min-width: 0; font-family: var(--vscode-editor-font-family, monospace); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.85; }
+.dpl-hint { font-size: 10.5px; color: var(--vscode-descriptionForeground); margin-top: 7px; }
+
+/* Primary CTA + ghost secondary + side-by-side action row. The CTA reuses the
+   shared .primary-green brand button for its green fill / text / hover / disabled
+   (always `class="primary-green dpl-cta"`); .dpl-cta only adds the Deploy layout
+   (full-width, centered, icon, 8px radius). */
+.dpl-cta {
+  width: 100%; box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 11px; border-radius: 8px; font-size: 13px;
+}
+.dpl-cta svg { width: 15px; height: 15px; }
+.dpl-btn {
+  width: 100%; box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 9px; margin-top: 8px; border-radius: 8px;
+  background: transparent; color: var(--vscode-foreground);
+  border: 1px solid var(--vscode-panel-border, transparent); font-size: 12.5px;
+}
+.dpl-btn:hover:not(:disabled) { background: var(--vscode-toolbar-hoverBackground); border-color: var(--vscode-focusBorder); }
+.dpl-btn:disabled { opacity: 0.55; cursor: default; }
+.dpl-btn svg { width: 13px; height: 13px; }
+.dpl-actions { display: flex; gap: 8px; margin-top: 4px; }
+.dpl-actions .dpl-cta { flex: 1; margin-top: 0; }
+.dpl-actions .dpl-btn { flex: 0 0 auto; width: auto; padding: 11px 16px; margin-top: 0; }
+
+/* Footer note. */
+.dpl-foot { display: flex; align-items: center; gap: 7px; margin-top: 12px; font-size: 10.5px; color: var(--vscode-descriptionForeground); opacity: 0.9; }
+.dpl-foot svg { width: 13px; height: 13px; flex-shrink: 0; }
+
+/* No-project empty state. */
+.dpl-empty { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 18px 14px 6px; }
+.dpl-empty-icon {
+  width: 56px; height: 56px; border-radius: 50%; margin-bottom: 14px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--vscode-input-background); color: var(--vscode-descriptionForeground);
+}
+.dpl-empty-icon svg { width: 26px; height: 26px; }
+.dpl-empty-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+.dpl-empty-sub { font-size: 12px; color: var(--vscode-descriptionForeground); line-height: 1.5; margin-bottom: 18px; max-width: 280px; }
+.dpl-empty .dpl-cta, .dpl-empty .dpl-btn { max-width: 300px; }
