@@ -37,7 +37,6 @@ export const RELAY_NODES: Record<AcurastNetwork, TunnelRelay[]> = {
   canary: [
     { host: 'relay-2.canary.acurast.com', ip: '57.129.64.128' },
     { host: 'canary-relay.5elementsnodes.com', ip: '176.9.45.137' },
-    { host: 'acurast-canary-relay.dishich.com', ip: '82.154.208.246' },
     { host: 'relay.el9-acurast.com', ip: '213.136.88.18' },
     { host: 'canary-relay.vincent-acurast.xyz', ip: '213.136.90.239' },
     { host: 'canary-relay.acurast.online', ip: '107.172.233.226' },
