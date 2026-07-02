@@ -258,7 +258,7 @@
         "acurast.tunnelRelays": {
           "type": "object",
           "default": {},
-          "description": "Optional tunnel relay node IP overrides per network for the Tunnel DNS wizard. When set for a network, replaces the built-in defaults (Canary ships with defaults; Mainnet has none yet). Example: { \"canary\": [\"57.129.64.128\", \"176.9.45.137\"] }",
+          "description": "Optional tunnel relay node IP overrides per network for the Tunnel DNS wizard. When set for a network, replaces the built-in defaults (both Mainnet and Canary ship with defaults). Example: { \"canary\": [\"57.129.64.128\", \"176.9.45.137\"] }",
           "properties": {
             "mainnet": {
               "type": "array",

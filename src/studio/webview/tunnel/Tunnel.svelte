@@ -24,7 +24,7 @@
   // normalizes the suffix and resolves the default wallet) never fights the caret.
   // The derived tunnel data (relays, record, verify) still flows reactively.
   let suffix = $state("");
-  let network = $state<AcurastNetwork>("canary");
+  let network = $state<AcurastNetwork>("mainnet");
   let selectedWalletId = $state("");
   let seeded = $state(false);
 

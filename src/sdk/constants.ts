@@ -28,12 +28,12 @@ export interface TunnelRelay {
 
 /**
  * Tunnel relay nodes per network — the IPs a `*.<suffix>` wildcard A record must
- * point at (see the quickstart-tunnel DNS guide). Mainnet relays are not yet
- * published; users can supply IPs for either network via the `acurast.tunnelRelays`
+ * point at (see the quickstart-tunnel DNS guide). Both networks are supported;
+ * users can supply extra IPs for either network via the `acurast.tunnelRelays`
  * setting, which overrides these defaults.
  */
 export const RELAY_NODES: Record<AcurastNetwork, TunnelRelay[]> = {
-  mainnet: [],
+  mainnet: [{ host: 'relay-1.mainnet.acurast.com', ip: '82.220.91.110' }],
   canary: [
     { host: 'relay-2.canary.acurast.com', ip: '57.129.64.128' },
     { host: 'canary-relay.5elementsnodes.com', ip: '176.9.45.137' },

@@ -66,8 +66,9 @@ describe('relaysFor', () => {
     expect(relaysFor('canary').length).toBeGreaterThan(0);
   });
 
-  it('returns no relays for mainnet by default', () => {
-    expect(relaysFor('mainnet')).toEqual([]);
+  it('returns the built-in mainnet relay by default', () => {
+    expect(relaysFor('mainnet')).toEqual(RELAY_NODES.mainnet);
+    expect(relaysFor('mainnet').length).toBeGreaterThan(0);
   });
 
   it('ignores an empty override and keeps defaults', () => {
