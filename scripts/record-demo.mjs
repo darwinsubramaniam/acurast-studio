@@ -264,6 +264,7 @@ async function main() {
       { label: "Wallets" },
       { label: "Deployments" },
       { label: "History" },
+      { label: "Tunnel DNS" },
     ];
     for (const { label, holdMs } of routes) {
       try {
