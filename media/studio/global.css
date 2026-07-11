@@ -195,13 +195,24 @@ body {
   vertical-align: middle;
 }
 
-/* Home view fills the panel so the donation footer sticks to the bottom. */
+/* Home view fills the panel so the donation footer sticks to the bottom.
+   container-type makes it a query container so the cards can collapse on a very
+   narrow panel (see the @container block below). */
 .home-view {
   display: flex;
   flex-direction: column;
   min-height: calc(100vh - 12px); /* 12px = body bottom padding */
+  container-type: inline-size;
 }
 .home-view .donate-card { margin-top: auto; }
+
+/* Very narrow Home panel: primary labels only — drop nav descriptions and the
+   active wallet's address + balance, leaving the wallet name. */
+@container (max-width: 280px) {
+  .nav-card .sub { display: none; }             /* all nav descriptions incl. live-card */
+  .active-wallet .aw-addr { display: none; }    /* address line */
+  .active-wallet .aw-balance { display: none; } /* whole balance block */
+}
 
 /* Donation footer (Home) */
 .donate-card {
@@ -655,8 +666,15 @@ input.field-error, textarea.field-error { border-color: var(--vscode-inputValida
    share one 28px height and 6px radius so the row reads as a single set:
    refresh = ghost icon (the same idiom as the ⋮ trigger / wizard back button),
    Import = outline, New = green primary. */
-.wallet-toolbar { display: flex; align-items: center; gap: 6px; margin: 2px 0 12px; }
+.wallet-toolbar { display: flex; align-items: center; gap: 6px; margin: 2px 0 12px; container-type: inline-size; }
 .wallet-toolbar-spacer { flex: 1; }
+/* Responsive actions: individual buttons when the panel is wide enough,
+   collapse into the kebab (.tb-menu) once the toolbar is ≤ 300px wide. */
+.wallet-toolbar > .tb-menu { display: none; }
+@container (max-width: 300px) {
+  .wallet-toolbar > .tb-full { display: none; }
+  .wallet-toolbar > .tb-menu { display: block; }
+}
 .wallet-net-chip {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 0 10px 0 8px; height: 28px; border-radius: 999px;
@@ -745,16 +763,6 @@ input.field-error, textarea.field-error { border-color: var(--vscode-inputValida
 .wc-nofunds a { color: var(--vscode-textLink-foreground); text-decoration: none; display: inline-flex; align-items: center; gap: 3px; }
 .wc-nofunds a:hover { text-decoration: underline; }
 .wc-nofunds a svg { width: 11px; height: 11px; }
-.wc-actions { display: flex; gap: 6px; margin-top: 12px; }
-.wc-actions button {
-  flex: 1; padding: 6px 8px; font-size: 11.5px; border-radius: 6px;
-  background: transparent; color: var(--vscode-foreground);
-  border: 1px solid var(--vscode-panel-border, transparent);
-}
-.wc-actions button:hover { background: var(--vscode-toolbar-hoverBackground); }
-.wc-actions button svg { width: 13px; height: 13px; }
-.wc-actions button.danger { color: var(--vscode-errorForeground); }
-.wc-actions button.danger:hover { background: var(--vscode-inputValidation-errorBackground); }
 
 /* "ALL WALLETS · N" rows */
 .wallet-section-label {

@@ -6,6 +6,7 @@
   import Spinner from '../shared/Spinner.svelte';
   import WalletAvatar from './WalletAvatar.svelte';
   import WalletMenu from './WalletMenu.svelte';
+  import ToolbarMenu from './ToolbarMenu.svelte';
   import type { WalletMenuAction } from './WalletMenu.svelte';
 
   interface Props {
@@ -80,9 +81,12 @@
   <div class="wallet-toolbar">
     <span class="wallet-net-chip"><span class="dot"></span>{netLabel}</span>
     <span class="wallet-toolbar-spacer"></span>
-    <button class="tb-icon" onclick={onRefresh} title="Refresh balances" aria-label="Refresh balances">{@html ICONS.refresh}</button>
-    <button class="primary-green with-icon" onclick={onCreate}>{@html ICONS.plus} New</button>
-    <button class="tb-btn with-icon" onclick={onImport}>{@html ICONS.importIcon} Import</button>
+    <!-- Wide panel: individual buttons. Narrow panel (container ≤ 300px): the
+         three collapse into the kebab below. Toggled purely by CSS @container. -->
+    <button class="tb-icon tb-full" onclick={onRefresh} title="Refresh balances" aria-label="Refresh balances">{@html ICONS.refresh}</button>
+    <button class="primary-green with-icon tb-full" onclick={onCreate}>{@html ICONS.plus} New</button>
+    <button class="tb-btn with-icon tb-full" onclick={onImport}>{@html ICONS.importIcon} Import</button>
+    <div class="tb-menu"><ToolbarMenu {onCreate} {onImport} {onRefresh} /></div>
   </div>
 
   {#if activeWallet}
@@ -129,12 +133,6 @@
           </div>
         {/if}
       {/if}
-
-      <div class="wc-actions">
-        <button class="with-icon" onclick={() => onAction('reveal', w.id)}>{@html ICONS.eye} Reveal</button>
-        <button class="with-icon" onclick={() => onAction('rename', w.id)}>{@html ICONS.pencil} Rename</button>
-        <button class="with-icon danger" onclick={() => onAction('delete', w.id)}>{@html ICONS.trash} Delete</button>
-      </div>
     </div>
   {/if}
 
