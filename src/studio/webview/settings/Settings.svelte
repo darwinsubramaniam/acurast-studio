@@ -393,27 +393,37 @@
           )}
         </div>
         {#if execType === 'interval'}
-          <div class="pst-row2">
-            <div class="pst-field">
-              <label class="dpl-eyebrow pst-cap" for="f_intervalMs">Interval (ms)</label>
-              <input id="f_intervalMs" type="number" class="pst-input"
-                value={rd('execution.intervalInMs', getExec(p, 'intervalInMs')) ?? ''}
-                class:pst-input-error={'execution.intervalInMs' in errors}
-                oninput={(e) => { const n = Number((e.target as HTMLInputElement).value); patchField('execution.intervalInMs', isNaN(n) ? null : n); }} />
-              {#if errors['execution.intervalInMs']}
-                <div class="pst-err">{errors['execution.intervalInMs']}</div>
-              {:else}
-                <div class="pst-hint">Time between each execution start</div>
-              {/if}
-              {@render durEcho(rd('execution.intervalInMs', getExec(p, 'intervalInMs')))}
-            </div>
-            <div class="pst-field">
-              <label class="dpl-eyebrow pst-cap" for="f_numExec">Number of Executions</label>
-              <input id="f_numExec" type="number" class="pst-input"
-                value={rd('execution.numberOfExecutions', getExec(p, 'numberOfExecutions')) ?? ''}
-                class:pst-input-error={'execution.numberOfExecutions' in errors}
-                oninput={(e) => { const n = Number((e.target as HTMLInputElement).value); patchField('execution.numberOfExecutions', isNaN(n) ? null : n); }} />
-              {#if errors['execution.numberOfExecutions']}<div class="pst-err">{errors['execution.numberOfExecutions']}</div>{/if}
+          <!-- Interval + count belong together: they only exist for the interval
+               schedule and are meaningless apart, so they get their own bordered
+               sub-group rather than sitting loose among the other fields. -->
+          <div class="pst-group" role="group" aria-labelledby="grp-schedule">
+            <div id="grp-schedule" class="pst-group-head">Interval Schedule</div>
+            <div class="pst-row2">
+              <div class="pst-field">
+                <label class="dpl-eyebrow pst-cap" for="f_intervalMs">Interval (ms)</label>
+                <input id="f_intervalMs" type="number" class="pst-input"
+                  value={rd('execution.intervalInMs', getExec(p, 'intervalInMs')) ?? ''}
+                  class:pst-input-error={'execution.intervalInMs' in errors}
+                  oninput={(e) => { const n = Number((e.target as HTMLInputElement).value); patchField('execution.intervalInMs', isNaN(n) ? null : n); }} />
+                {#if errors['execution.intervalInMs']}
+                  <div class="pst-err">{errors['execution.intervalInMs']}</div>
+                {:else}
+                  <div class="pst-hint">Time between each execution start</div>
+                {/if}
+                {@render durEcho(rd('execution.intervalInMs', getExec(p, 'intervalInMs')))}
+              </div>
+              <div class="pst-field">
+                <label class="dpl-eyebrow pst-cap" for="f_numExec">Number of Executions</label>
+                <input id="f_numExec" type="number" class="pst-input"
+                  value={rd('execution.numberOfExecutions', getExec(p, 'numberOfExecutions')) ?? ''}
+                  class:pst-input-error={'execution.numberOfExecutions' in errors}
+                  oninput={(e) => { const n = Number((e.target as HTMLInputElement).value); patchField('execution.numberOfExecutions', isNaN(n) ? null : n); }} />
+                {#if errors['execution.numberOfExecutions']}
+                  <div class="pst-err">{errors['execution.numberOfExecutions']}</div>
+                {:else}
+                  <div class="pst-hint">How many times it runs in total</div>
+                {/if}
+              </div>
             </div>
           </div>
         {/if}
@@ -461,29 +471,33 @@
           {@render acuEcho(rd('maxCostPerExecution', p.maxCostPerExecution) ?? 0)}
         </div>
 
-        <div class="dpl-eyebrow pst-subhead">Usage Limits</div>
-        <div class="pst-row2">
-          <div class="pst-field">
-            <label class="dpl-eyebrow pst-cap" for="f_maxMem">Max memory (bytes)</label>
-            <input id="f_maxMem" type="number" class="pst-input"
-              value={rd('usageLimit.maxMemory', getNested(p, 'usageLimit', 'maxMemory')) ?? 0}
-              oninput={(e) => { const n = Number((e.target as HTMLInputElement).value); patchField('usageLimit.maxMemory', isNaN(n) ? null : n); }} />
-            <div class="pst-hint">0 = unlimited</div>
+        <!-- All three fields write to usageLimit.* — group them so the pair and
+             the storage field below it stay one unit once the columns stack. -->
+        <div class="pst-group" role="group" aria-labelledby="grp-usage">
+          <div id="grp-usage" class="pst-group-head">Usage Limits</div>
+          <div class="pst-row2">
+            <div class="pst-field">
+              <label class="dpl-eyebrow pst-cap" for="f_maxMem">Max memory (bytes)</label>
+              <input id="f_maxMem" type="number" class="pst-input"
+                value={rd('usageLimit.maxMemory', getNested(p, 'usageLimit', 'maxMemory')) ?? 0}
+                oninput={(e) => { const n = Number((e.target as HTMLInputElement).value); patchField('usageLimit.maxMemory', isNaN(n) ? null : n); }} />
+              <div class="pst-hint">0 = unlimited</div>
+            </div>
+            <div class="pst-field">
+              <label class="dpl-eyebrow pst-cap" for="f_maxNet">Max network requests</label>
+              <input id="f_maxNet" type="number" class="pst-input"
+                value={rd('usageLimit.maxNetworkRequests', getNested(p, 'usageLimit', 'maxNetworkRequests')) ?? 0}
+                oninput={(e) => { const n = Number((e.target as HTMLInputElement).value); patchField('usageLimit.maxNetworkRequests', isNaN(n) ? null : n); }} />
+              <div class="pst-hint">0 = unlimited</div>
+            </div>
           </div>
           <div class="pst-field">
-            <label class="dpl-eyebrow pst-cap" for="f_maxNet">Max network requests</label>
-            <input id="f_maxNet" type="number" class="pst-input"
-              value={rd('usageLimit.maxNetworkRequests', getNested(p, 'usageLimit', 'maxNetworkRequests')) ?? 0}
-              oninput={(e) => { const n = Number((e.target as HTMLInputElement).value); patchField('usageLimit.maxNetworkRequests', isNaN(n) ? null : n); }} />
+            <label class="dpl-eyebrow pst-cap" for="f_maxStorage">Max storage (bytes)</label>
+            <input id="f_maxStorage" type="number" class="pst-input"
+              value={rd('usageLimit.maxStorage', getNested(p, 'usageLimit', 'maxStorage')) ?? 0}
+              oninput={(e) => { const n = Number((e.target as HTMLInputElement).value); patchField('usageLimit.maxStorage', isNaN(n) ? null : n); }} />
             <div class="pst-hint">0 = unlimited</div>
           </div>
-        </div>
-        <div class="pst-field">
-          <label class="dpl-eyebrow pst-cap" for="f_maxStorage">Max storage (bytes)</label>
-          <input id="f_maxStorage" type="number" class="pst-input"
-            value={rd('usageLimit.maxStorage', getNested(p, 'usageLimit', 'maxStorage')) ?? 0}
-            oninput={(e) => { const n = Number((e.target as HTMLInputElement).value); patchField('usageLimit.maxStorage', isNaN(n) ? null : n); }} />
-          <div class="pst-hint">0 = unlimited</div>
         </div>
 
         <div class="pricing-box">

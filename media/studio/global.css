@@ -1207,7 +1207,10 @@ select:focus, input:focus, textarea:focus { outline: 1px solid var(--vscode-focu
 /*
    Project Settings panel 
 */
-.pst { display: flex; flex-direction: column; }
+/* container-type makes the panel a query container so the paired fields in
+   .pst-row2 can drop to one column on a narrow sidebar (see the @container
+   block below). */
+.pst { display: flex; flex-direction: column; container-type: inline-size; }
 
 .pst-head { display: flex; align-items: center; justify-content: space-between; margin: 2px 0 12px; }
 .pst-head-left { display: flex; align-items: center; gap: 8px; }
@@ -1227,9 +1230,38 @@ select:focus, input:focus, textarea:focus { outline: 1px solid var(--vscode-focu
 .pst-field:last-child { margin-bottom: 0; }
 .pst-cap { display: block; margin-bottom: 6px; }
 .pst-subhead { display: block; margin: 4px 0 10px; }
-.pst-row2 { display: flex; gap: 12px; }
-.pst-row2 > .pst-field { flex: 1; min-width: 0; }
+/* Two fields side by side. The row owns the bottom spacing (not its children) so
+   it reads the same whether the fields sit in one row or stack. */
+.pst-row2 { display: flex; gap: 12px; margin-bottom: 14px; }
+.pst-row2:last-child { margin-bottom: 0; }
+.pst-row2 > .pst-field { flex: 1; min-width: 0; margin-bottom: 0; }
 .pst-divider { height: 1px; background: var(--vscode-panel-border, transparent); margin: 14px 0; }
+
+/* Sub-group of fields that only make sense together (e.g. Interval + Number of
+   Executions). The border + eyebrow keep them legible as one unit once the two
+   columns stack and the pair would otherwise read as unrelated stray fields. */
+.pst-group {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--vscode-panel-border, transparent);
+  border-left: 2px solid var(--acu-green);
+  border-radius: 7px;
+  background: var(--vscode-editorWidget-background, transparent);
+}
+.pst-group:last-child { margin-bottom: 0; }
+.pst-group > :last-child { margin-bottom: 0; }
+.pst-group-head {
+  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--vscode-descriptionForeground);
+  margin-bottom: 10px;
+}
+
+/* Narrow sidebar: two columns leave no room for a label like "Number of
+   Executions", which wraps to two lines and knocks its input out of alignment
+   with its neighbour. Stack the pair instead — one field per line, full width. */
+@container (max-width: 460px) {
+  .pst-row2 { flex-direction: column; gap: 14px; }
+}
 
 /* Inputs — rounder + roomier than the base global `input` rule, scoped to this
    panel so Wallets/Tunnel/other forms are unaffected. */
