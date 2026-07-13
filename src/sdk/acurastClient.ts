@@ -1,7 +1,7 @@
 import { AcurastService, getBalance, getHumanReadableVersion, fetchDeviceVersions } from '@acurast/sdk/chain';
 import type { KeyringPair } from '@polkadot/keyring/types';
 import { RPC_ENDPOINTS, type AcurastNetwork } from './constants';
-import type { ManagedProcessor, ManagedProcessorsResult, JobDiagnosis } from '../studio/types';
+import type { ManagedProcessor, ManagedProcessorsResult, JobDiagnosis, NewAdvertisementParams } from '../studio/types';
 import { deriveJobRequirements, isExpired, buildJobChecks, buildProcessorChecks, computeSummary } from '../lib/diagnosis';
 
 type RpcOverrides = Partial<Record<AcurastNetwork, string>>;
@@ -192,7 +192,78 @@ export class AcurastClient {
       availableModules: modules,
     };
 
-    const tx = (api.tx as any).acurastProcessorManager.advertiseFor(processor, advertisement);
+    return this.buildAdvertiseFor(api, processor, advertisement);
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  }
+
+  /**
+   * Prepares an `advertiseFor` extrinsic that publishes a brand-new
+   * advertisement for a processor that has never advertised (the Studio
+   * "Start advertising" flow). All values come from the caller since there is
+   * no chain state to copy; the advertisement is public (allowedConsumers =
+   * null). Refuses to run when an advertisement already exists so stale form
+   * values can never clobber pricing the device itself published meanwhile.
+   */
+  async prepareStartAdvertising(
+    network: AcurastNetwork,
+    processor: string,
+    modules: string[],
+    params: NewAdvertisementParams,
+  ): Promise<{
+    preview: { section: string; method: string; args: unknown };
+    submit: (signer: KeyringPair) => Promise<string>;
+  }> {
+    const svc = await this.service(network);
+    const api = svc.api;
+    if (!api) throw new Error('SDK service has no api after connect');
+
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const mp = (api.query as any).acurastMarketplace;
+    const restrOpt: any = await mp.storedAdvertisementRestriction(processor);
+    const priceOpt: any = await mp.storedAdvertisementPricing(processor);
+
+    const hasRestr = restrOpt && (restrOpt.isSome ?? restrOpt.toJSON() != null);
+    const hasPrice = priceOpt && (priceOpt.isSome ?? priceOpt.toJSON() != null);
+    if (hasRestr || hasPrice) {
+      throw new Error(
+        'This processor is already advertising. Refresh the Processors view and edit its modules instead.',
+      );
+    }
+
+    const advertisement = {
+      pricing: {
+        feePerMillisecond: params.feePerMillisecond,
+        feePerStorageByte: params.feePerStorageByte,
+        baseFeePerExecution: params.baseFeePerExecution,
+        schedulingWindow: { end: params.schedulingWindowEnd },
+      },
+      maxMemory: params.maxMemory,
+      networkRequestQuota: params.networkRequestQuota,
+      storageCapacity: params.storageCapacity,
+      allowedConsumers: null,
+      availableModules: modules,
+    };
+
+    return this.buildAdvertiseFor(api, processor, advertisement);
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  }
+
+  /**
+   * Wraps an `advertiseFor` call as a human-readable preview (toHuman() of the
+   * exact call that gets signed) plus a `submit(signer)` closure that signs and
+   * sends that SAME tx, resolving with the tx hash once in a block and
+   * rejecting with the decoded module error on failure.
+   */
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  private buildAdvertiseFor(
+    api: any,
+    processor: string,
+    advertisement: unknown,
+  ): {
+    preview: { section: string; method: string; args: unknown };
+    submit: (signer: KeyringPair) => Promise<string>;
+  } {
+    const tx = api.tx.acurastProcessorManager.advertiseFor(processor, advertisement);
     // toHuman() of the call is exactly what gets signed — the faithful preview.
     const human = tx.method.toHuman() as { section: string; method: string; args: unknown };
 
@@ -221,8 +292,8 @@ export class AcurastClient {
       });
 
     return { preview: { section: human.section, method: human.method, args: human.args }, submit };
-    /* eslint-enable @typescript-eslint/no-explicit-any */
   }
+  /* eslint-enable @typescript-eslint/no-explicit-any */
 
   /**
    * Explains why an on-chain job is / isn't matching by evaluating every gate the

@@ -37,6 +37,7 @@
     void processorsState;
     edits = {};
     applying = null;
+    adFormFor = null;
   });
 
   function walletName(addr: string): string {
@@ -79,6 +80,86 @@
       // Snapshot to a plain array — a $state proxy can't be structured-cloned by postMessage.
       modules: $state.snapshot(modulesOf(p)),
       network: wallets.network,
+    });
+  }
+
+  // ── Start-advertising form (processors with no on-chain advertisement) ──
+  // Address of the processor whose form is open; null = closed. Only one form
+  // can be open at a time, so a single draft object is enough.
+  let adFormFor = $state<string | null>(null);
+  let adForm = $state({
+    modules: [] as string[],
+    feePerMillisecond: "1",
+    feePerStorageByte: "1",
+    baseFeePerExecution: "0",
+    availableDays: 30,
+    maxMemory: 100_000_000,
+    storageCapacity: 100_000_000,
+    networkRequestQuota: 100,
+  });
+
+  function openAdForm(p: ManagedProcessor) {
+    // Prefill from a sibling that already advertises — same fleet, so its
+    // pricing/capacities are the best available guess; else modest defaults.
+    const t = processors.find((x) => x.advertising && x.ad && x.pricing);
+    adForm = {
+      modules: ALL_MODULES.filter((m) => t?.ad?.availableModules?.includes(m)),
+      feePerMillisecond: t?.pricing?.feePerMillisecond ?? "1",
+      feePerStorageByte: t?.pricing?.feePerStorageByte ?? "1",
+      baseFeePerExecution: t?.pricing?.baseFeePerExecution ?? "0",
+      availableDays: 30,
+      maxMemory: t?.ad?.maxMemory ?? 100_000_000,
+      storageCapacity: t?.ad?.storageCapacity ?? 100_000_000,
+      networkRequestQuota: t?.ad?.networkRequestQuota ?? 100,
+    };
+    adFormFor = p.address;
+  }
+
+  function toggleFormModule(m: string) {
+    const set = new Set(adForm.modules);
+    if (set.has(m)) set.delete(m);
+    else set.add(m);
+    adForm.modules = ALL_MODULES.filter((x) => set.has(x));
+  }
+
+  // Fees are u128 on chain — validate as unsigned-integer planck strings.
+  function uintStr(v: string): boolean {
+    return /^\d+$/.test(v.trim());
+  }
+
+  let adFormValid = $derived(
+    uintStr(adForm.feePerMillisecond) &&
+      uintStr(adForm.feePerStorageByte) &&
+      uintStr(adForm.baseFeePerExecution) &&
+      Number.isInteger(adForm.availableDays) &&
+      adForm.availableDays > 0 &&
+      Number.isInteger(adForm.maxMemory) &&
+      adForm.maxMemory >= 0 &&
+      Number.isInteger(adForm.storageCapacity) &&
+      adForm.storageCapacity >= 0 &&
+      Number.isInteger(adForm.networkRequestQuota) &&
+      adForm.networkRequestQuota >= 0 &&
+      adForm.networkRequestQuota <= 255,
+  );
+
+  function startAdvertising(p: ManagedProcessor) {
+    const walletId = walletIdFor(selected);
+    if (!walletId || !adFormValid) return;
+    applying = p.address;
+    send("processors.advertise", {
+      walletId,
+      processor: p.address,
+      modules: $state.snapshot(adForm.modules),
+      network: wallets.network,
+      newAd: {
+        feePerMillisecond: adForm.feePerMillisecond.trim(),
+        feePerStorageByte: adForm.feePerStorageByte.trim(),
+        baseFeePerExecution: adForm.baseFeePerExecution.trim(),
+        schedulingWindowEnd: Date.now() + adForm.availableDays * 86_400_000,
+        maxMemory: adForm.maxMemory,
+        storageCapacity: adForm.storageCapacity,
+        networkRequestQuota: adForm.networkRequestQuota,
+      },
     });
   }
 
@@ -358,6 +439,129 @@
                 <div class="not-advertising">
                   Not currently advertising on the marketplace.
                 </div>
+                {#if adFormFor === p.address}
+                  <div class="section ad-form">
+                    <div class="modules-edit">
+                      <span class="me-label">Modules</span>
+                      <div class="chips">
+                        {#each ALL_MODULES as m}
+                          {@const on = adForm.modules.includes(m)}
+                          <button
+                            type="button"
+                            class="chip toggle"
+                            class:on
+                            disabled={applying === p.address}
+                            title={on
+                              ? `Click to stop advertising ${m}`
+                              : `Click to advertise ${m}`}
+                            onclick={() => toggleFormModule(m)}
+                          >
+                            {#if on}<span class="tick">✓</span>{/if}{m}
+                          </button>
+                        {/each}
+                      </div>
+                    </div>
+
+                    <div class="form-grid">
+                      <label class="cell">
+                        <span class="k">Fee / ms (planck)</span>
+                        <input
+                          type="text"
+                          bind:value={adForm.feePerMillisecond}
+                          disabled={applying === p.address}
+                        />
+                      </label>
+                      <label class="cell">
+                        <span class="k">Fee / byte (planck)</span>
+                        <input
+                          type="text"
+                          bind:value={adForm.feePerStorageByte}
+                          disabled={applying === p.address}
+                        />
+                      </label>
+                      <label class="cell">
+                        <span class="k">Base fee / run (planck)</span>
+                        <input
+                          type="text"
+                          bind:value={adForm.baseFeePerExecution}
+                          disabled={applying === p.address}
+                        />
+                      </label>
+                      <label class="cell">
+                        <span class="k">Available for (days)</span>
+                        <input
+                          type="number"
+                          min="1"
+                          bind:value={adForm.availableDays}
+                          disabled={applying === p.address}
+                        />
+                      </label>
+                      <label class="cell">
+                        <span class="k">Max memory (bytes)</span>
+                        <input
+                          type="number"
+                          min="0"
+                          bind:value={adForm.maxMemory}
+                          disabled={applying === p.address}
+                        />
+                      </label>
+                      <label class="cell">
+                        <span class="k">Storage (bytes)</span>
+                        <input
+                          type="number"
+                          min="0"
+                          bind:value={adForm.storageCapacity}
+                          disabled={applying === p.address}
+                        />
+                      </label>
+                      <label class="cell">
+                        <span class="k">Net quota</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="255"
+                          bind:value={adForm.networkRequestQuota}
+                          disabled={applying === p.address}
+                        />
+                      </label>
+                    </div>
+
+                    <div class="apply-row">
+                      <span class="hint">Published as a public advertisement.</span>
+                      <button
+                        type="button"
+                        class="link"
+                        disabled={applying === p.address}
+                        onclick={() => (adFormFor = null)}>Cancel</button
+                      >
+                      <button
+                        type="button"
+                        class="apply"
+                        disabled={applying === p.address ||
+                          !adFormValid ||
+                          !walletIdFor(selected)}
+                        onclick={() => startAdvertising(p)}
+                      >
+                        {#if applying === p.address}
+                          <Spinner size={10} label="Publishing…" />
+                        {:else}
+                          Advertise on-chain
+                        {/if}
+                      </button>
+                    </div>
+                  </div>
+                {:else}
+                  <div class="apply-row">
+                    <button
+                      type="button"
+                      class="apply"
+                      disabled={applying === p.address || !walletIdFor(selected)}
+                      onclick={() => openAdForm(p)}
+                    >
+                      Start advertising
+                    </button>
+                  </div>
+                {/if}
               {/if}
 
               <div class="foot">
@@ -664,6 +868,21 @@
     font-size: 11px;
     color: var(--vscode-descriptionForeground);
     font-style: italic;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px 12px;
+  }
+  .form-grid .cell {
+    gap: 2px;
+  }
+  .form-grid input {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 12px;
+    padding: 3px 6px;
   }
 
   .foot {

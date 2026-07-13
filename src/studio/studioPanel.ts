@@ -323,6 +323,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
           processor: msg.processor,
           modules: msg.modules,
           network: msg.network,
+          newAd: msg.newAd,
         });
         break;
       case 'history.load':

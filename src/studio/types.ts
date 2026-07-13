@@ -85,6 +85,27 @@ export interface ProcessorsAdvertiseMsg {
   /** Full replacement set of available modules to advertise. */
   modules: string[];
   network: string;
+  /**
+   * Present only for the "Start advertising" flow: full advertisement values
+   * for a processor with no existing on-chain advertisement to copy from.
+   */
+  newAd?: NewAdvertisementParams;
+}
+/**
+ * Everything (besides the module set) needed to publish a brand-new
+ * marketplace advertisement via `advertiseFor`. New advertisements are always
+ * public (allowedConsumers = null); consumer restrictions stay app-managed.
+ */
+export interface NewAdvertisementParams {
+  /** Pricing in planck. Strings because fees are u128. */
+  feePerMillisecond: string;
+  feePerStorageByte: string;
+  baseFeePerExecution: string;
+  /** SchedulingWindow::End — ms epoch the processor stops accepting matches. */
+  schedulingWindowEnd: number;
+  maxMemory: number;
+  networkRequestQuota: number;
+  storageCapacity: number;
 }
 export interface HistoryLoadMsg        { type: 'history.load'; offset?: number; }
 export interface HistoryFetchOnlineMsg { type: 'history.fetchOnline'; address: string; network: string; }

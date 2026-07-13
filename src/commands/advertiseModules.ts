@@ -5,6 +5,7 @@ import { WalletService, ACURAST_SS58_PREFIX } from '../wallet/walletService';
 import { StudioPanel } from '../studio/studioPanel';
 import { acurastClient } from '../sdk/acurastClient';
 import { type AcurastNetwork } from '../sdk/constants';
+import type { NewAdvertisementParams } from '../studio/types';
 
 interface AdvertiseModulesArgs {
   /** Vault id of the manager wallet that signs the extrinsic. */
@@ -14,6 +15,11 @@ interface AdvertiseModulesArgs {
   /** Full replacement set of advertised modules. */
   modules: string[];
   network: string;
+  /**
+   * Present for the "Start advertising" flow: full advertisement values for a
+   * processor that has never advertised (nothing on chain to copy from).
+   */
+  newAd?: NewAdvertisementParams;
 }
 
 interface Deps {
@@ -33,7 +39,7 @@ export async function advertiseModules(
   args?: AdvertiseModulesArgs,
 ) {
   if (!args) return;
-  const { walletId, processor, modules, network } = args;
+  const { walletId, processor, modules, network, newAd } = args;
 
   const info = (await wallet.list()).find((w) => w.id === walletId);
   if (!info) {
@@ -46,11 +52,18 @@ export async function advertiseModules(
     // args. Reading the current advertisement can fail (e.g. not advertising).
     let prepared: Awaited<ReturnType<typeof acurastClient.prepareAdvertiseModules>>;
     try {
-      prepared = await acurastClient.prepareAdvertiseModules(
-        network as AcurastNetwork,
-        processor,
-        modules
-      );
+      prepared = newAd
+        ? await acurastClient.prepareStartAdvertising(
+            network as AcurastNetwork,
+            processor,
+            modules,
+            newAd
+          )
+        : await acurastClient.prepareAdvertiseModules(
+            network as AcurastNetwork,
+            processor,
+            modules
+          );
     } catch (err: unknown) {
       vscode.window.showErrorMessage(`Could not prepare transaction: ${(err as Error).message}`);
       return;
@@ -60,6 +73,9 @@ export async function advertiseModules(
     const payload = JSON.stringify(prepared.preview.args, null, 2);
     output.appendLine(`[advertise] preview ${call} ${JSON.stringify(prepared.preview.args)}`);
 
+    const caution = newAd
+      ? `This publishes a new public advertisement on the marketplace. Make sure the pricing and capacity values match what the device can actually deliver — matched jobs it can't execute will fail.`
+      : `Only advertise modules this processor can actually run — matched jobs it can't execute will fail.`;
     const confirm = await vscode.window.showWarningMessage(
       `Sign and submit ${call} from "${info.name}"?`,
       {
@@ -67,7 +83,7 @@ export async function advertiseModules(
         detail:
           `Network: ${network}\n\n` +
           `${call}\n${payload}\n\n` +
-          `Only advertise modules this processor can actually run — matched jobs it can't execute will fail.`,
+          caution,
       },
       'Sign & Submit'
     );
@@ -95,7 +111,9 @@ export async function advertiseModules(
     await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: `Advertising modules for ${processor.slice(0, 10)}…`,
+        title: newAd
+          ? `Publishing advertisement for ${processor.slice(0, 10)}…`
+          : `Advertising modules for ${processor.slice(0, 10)}…`,
         cancellable: false,
       },
       async () => {
@@ -103,7 +121,9 @@ export async function advertiseModules(
           const hash = await prepared.submit(signer);
           output.appendLine(`[advertise] ${processor} modules=[${modules.join(', ')}] tx=${hash}`);
           vscode.window.showInformationMessage(
-            `Updated advertised modules to: ${modules.join(', ') || '(none)'}.`
+            newAd
+              ? `Advertisement published with modules: ${modules.join(', ') || '(none)'}.`
+              : `Updated advertised modules to: ${modules.join(', ') || '(none)'}.`
           );
         } catch (err: unknown) {
           const msg = (err as Error).message;
