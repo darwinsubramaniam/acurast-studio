@@ -41,7 +41,7 @@ function managed(address: string): ManagedProcessor {
 }
 
 describe('InstantMatchProcessors — rendering chosen entries', () => {
-  it('renders a table row per entry with its own delay value', () => {
+  it('renders a card per entry with its own delay value', () => {
     renderIM([
       { processor: A, maxAllowedStartDelayInMs: 5000 },
       { processor: B, maxAllowedStartDelayInMs: 30000 },
@@ -54,19 +54,19 @@ describe('InstantMatchProcessors — rendering chosen entries', () => {
     expect(screen.getByDisplayValue('30000')).toBeInTheDocument();
   });
 
-  it('renders no table when the list is empty', () => {
+  it('renders no entries when the list is empty', () => {
     renderIM([]);
     expect(screen.queryByTitle(A)).not.toBeInTheDocument();
-    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0);
   });
 
-  it('renders Processor / Max Delay (ms) / Remove headers with a tooltip on each delay input', () => {
+  it('gives each entry a labelled Max delay input, an explanatory tooltip, and a Remove button', () => {
     renderIM([{ processor: A, maxAllowedStartDelayInMs: 5000 }]);
-    expect(screen.getByRole('columnheader', { name: 'Processor' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: /Max Delay \(ms\)/i })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'Remove' })).toBeInTheDocument();
-    const input = screen.getByLabelText(`Max Delay for ${A}`);
+
+    const input = screen.getByLabelText('Max delay (ms)');
+    expect(input).toHaveValue(5000);
     expect(input).toHaveAttribute('title', 'Maximum allowed start delay for this processor (ms)');
+    expect(screen.getByRole('button', { name: `Remove ${A}` })).toBeInTheDocument();
   });
 });
 

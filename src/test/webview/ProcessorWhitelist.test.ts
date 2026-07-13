@@ -40,23 +40,25 @@ function managed(address: string): ManagedProcessor {
   return { address, managerId: '1', lastSeen: 0, advertising: false };
 }
 
-describe('ProcessorWhitelist — table rendering', () => {
-  it('renders a row per whitelisted address', () => {
+describe('ProcessorWhitelist — list rendering', () => {
+  it('renders a card per whitelisted address', () => {
     renderWL(`${A}\n${B}`);
     expect(screen.getByTitle(A)).toBeInTheDocument();
     expect(screen.getByTitle(B)).toBeInTheDocument();
   });
 
-  it('has exactly two columns (Processor, Remove) and no Max Delay column', () => {
+  it('gives each entry an address and a Remove button, and no delay field', () => {
     renderWL(A);
-    expect(screen.getByRole('columnheader', { name: 'Processor' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'Remove' })).toBeInTheDocument();
-    expect(screen.queryByRole('columnheader', { name: /Max Delay/i })).not.toBeInTheDocument();
+    expect(screen.getByTitle(A)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: `Remove ${A}` })).toBeInTheDocument();
+    // The whitelist is address-only: a start delay is an instant-match concept,
+    // and a stray delay input here would silently go nowhere on save.
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
   });
 
-  it('renders no table when the whitelist is empty', () => {
+  it('renders no entries when the whitelist is empty', () => {
     renderWL('');
-    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0);
   });
 });
 
