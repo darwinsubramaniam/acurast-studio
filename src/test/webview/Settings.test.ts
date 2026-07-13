@@ -9,6 +9,7 @@ vi.mock('../../studio/webview/lib/vscode', () => ({
 
 import Settings from '../../studio/webview/settings/Settings.svelte';
 import { send } from '../../studio/webview/lib/vscode';
+import { BUNDLED_DISTROS } from '../../sdk/distros';
 
 afterEach(() => cleanup());
 beforeEach(() => vi.mocked(send).mockReset());
@@ -25,6 +26,7 @@ function propsFor(project: Record<string, unknown>) {
     fiatSelection: null,
     wallets: { list: [], activeId: null, network: 'mainnet' },
     processorsState: null,
+    distroCatalog: null,
   };
 }
 
@@ -189,5 +191,116 @@ describe('Settings — processor whitelist', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     expect(patchFromLastSave().processorWhitelist).toEqual(['5wnew']);
+  });
+});
+
+// ── Shell runtime image picker ───────────────────────────────────────────────
+// The dropdown fills image.url + image.sha256 together from the proot-distro
+// catalog. The invariant worth protecting: the two always move as a pair (a URL
+// whose hash doesn't match fails on the processor), and a URL we don't recognise
+// is never silently rewritten.
+
+const SHELL = { ...VALID, runtime: 'Shell' };
+const CURRENT = BUNDLED_DISTROS.groups[0];
+const GITHUB = BUNDLED_DISTROS.groups[1];
+const UBUNTU = CURRENT.distros.find((d) => d.id === 'ubuntu')!;
+
+const imageUrlInput = () => screen.getByLabelText('URL') as HTMLInputElement;
+const imageShaInput = () => screen.getByLabelText('SHA256') as HTMLInputElement;
+const distroSelect = () => screen.getByLabelText('Distro') as HTMLSelectElement;
+
+describe('Settings — Shell image picker', () => {
+  it('groups the catalog by download host and offers a Custom escape hatch', () => {
+    render(Settings, { props: propsFor(SHELL) });
+    const groups = Array.from(distroSelect().querySelectorAll('optgroup'));
+
+    expect(groups.map((g) => g.label)).toEqual([CURRENT.label, GITHUB.label]);
+    expect(groups[0].querySelectorAll('option')).toHaveLength(CURRENT.distros.length);
+    expect(screen.getByRole('option', { name: 'Custom…' })).toBeTruthy();
+  });
+
+  it('fills URL and SHA256 together when a distro is picked', async () => {
+    render(Settings, { props: propsFor(SHELL) });
+
+    await fireEvent.change(distroSelect(), { target: { value: UBUNTU.url } });
+
+    expect(imageUrlInput().value).toBe(UBUNTU.url);
+    expect(imageShaInput().value).toBe(UBUNTU.sha256);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+    expect(patchFromLastSave().image).toEqual({ url: UBUNTU.url, sha256: UBUNTU.sha256 });
+  });
+
+  it('preselects the stored image and locks the fields against hand-editing', () => {
+    render(Settings, { props: propsFor({ ...SHELL, image: { url: UBUNTU.url, sha256: UBUNTU.sha256 } }) });
+
+    expect(distroSelect().value).toBe(UBUNTU.url);
+    expect(imageUrlInput().readOnly).toBe(true);
+    expect(imageShaInput().readOnly).toBe(true);
+    expect(screen.getByText(new RegExp(`Downloads from ${CURRENT.host}`))).toBeTruthy();
+  });
+
+  it('reads an unrecognised URL as Custom, leaving it editable and untouched', () => {
+    const own = { url: 'https://mine.test/rootfs.tar.xz', sha256: 'f'.repeat(64) };
+    render(Settings, { props: propsFor({ ...SHELL, image: own }) });
+
+    expect(distroSelect().value).toBe('__custom__');
+    expect(imageUrlInput().value).toBe(own.url);
+    expect(imageUrlInput().readOnly).toBe(false);
+    expect(imageShaInput().readOnly).toBe(false);
+  });
+
+  it('unlocks both fields when the user switches to Custom', async () => {
+    render(Settings, { props: propsFor({ ...SHELL, image: { url: UBUNTU.url, sha256: UBUNTU.sha256 } }) });
+    expect(imageUrlInput().readOnly).toBe(true);
+
+    await fireEvent.change(distroSelect(), { target: { value: '__custom__' } });
+
+    expect(imageUrlInput().readOnly).toBe(false);
+    expect(imageShaInput().readOnly).toBe(false);
+  });
+
+  it('asks the host to refresh the catalog', async () => {
+    render(Settings, { props: propsFor(SHELL) });
+    await fireEvent.click(screen.getByRole('button', { name: /Refresh/ }));
+    expect(vi.mocked(send)).toHaveBeenCalledWith('distro.refresh');
+  });
+
+  it('prefers a refreshed catalog from the host over the bundled one', () => {
+    const fresh = {
+      type: 'distro.catalog' as const,
+      status: 'idle' as const,
+      catalog: {
+        fetchedAt: '2026-07-13T00:00:00.000Z',
+        groups: [{
+          label: 'Current (v9.9.9)', tag: 'v9.9.9', host: 'elsewhere.test',
+          distros: [{ id: 'newdist', name: 'New Distro', url: 'https://elsewhere.test/n.tar.xz', sha256: 'a'.repeat(64) }],
+        }],
+      },
+    };
+    render(Settings, { props: { ...propsFor(SHELL), distroCatalog: fresh } });
+
+    expect(screen.getByRole('option', { name: 'New Distro' })).toBeTruthy();
+    expect(screen.queryByRole('option', { name: UBUNTU.name })).toBeNull();
+  });
+
+  it('surfaces a failed refresh without emptying the dropdown', () => {
+    const failed = {
+      type: 'distro.catalog' as const,
+      status: 'error' as const,
+      error: 'GitHub 403 rate limited',
+      catalog: BUNDLED_DISTROS,
+    };
+    render(Settings, { props: { ...propsFor(SHELL), distroCatalog: failed } });
+
+    expect(screen.getByText(/Refresh failed: GitHub 403 rate limited/)).toBeTruthy();
+    // One Ubuntu per host group — the catalog survives the failed refresh intact.
+    expect(screen.getAllByRole('option', { name: UBUNTU.name })).toHaveLength(2);
+  });
+
+  it('hides the image fields entirely for non-Shell runtimes', () => {
+    render(Settings, { props: propsFor({ ...VALID, runtime: 'NodeJSWithBundle' }) });
+    expect(screen.queryByLabelText('Distro')).toBeNull();
+    expect(screen.queryByLabelText('URL')).toBeNull();
   });
 });

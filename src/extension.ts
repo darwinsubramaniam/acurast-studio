@@ -53,7 +53,7 @@ export async function activate(extensionContext: vscode.ExtensionContext) {
     await seedDemoData(wallet, deploymentStore);
   }
 
-  const studioPanel = new StudioPanel(extensionContext.extensionUri, ctx, wallet, extensionContext.secrets, deploymentStore, extensionContext.workspaceState);
+  const studioPanel = new StudioPanel(extensionContext.extensionUri, ctx, wallet, extensionContext.secrets, deploymentStore, extensionContext.workspaceState, extensionContext.globalState);
   const statusBar = new AcurastStatusBar(wallet, ctx);
   const output = vscode.window.createOutputChannel('Acurast');
 

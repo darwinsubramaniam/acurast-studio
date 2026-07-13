@@ -357,6 +357,7 @@
   "scripts": {
     "vscode:prepublish": "npm run build",
     "build:font": "fantasticon",
+    "build:distros": "node scripts/build-distros.mjs",
     "build:ext": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --main-fields=module,main --define:__ACURAST_DEV_SEED__=false --minify",
     "build:ext:dev": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --main-fields=module,main --define:__ACURAST_DEV_SEED__=false --minify-syntax --sourcemap",
     "build:ext:record": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --main-fields=module,main --define:__ACURAST_DEV_SEED__=true --sourcemap",

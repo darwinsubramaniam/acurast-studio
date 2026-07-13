@@ -14,6 +14,7 @@
     AssignmentsStateMsg,
     TunnelStateMsg,
     WalletOpResultMsg,
+    DistroCatalogStateMsg,
     OutMsg,
   } from "../types";
   import { send } from "./lib/vscode";
@@ -73,6 +74,8 @@
   let fiatSelection = $state<FiatSelectionStateMsg | null>(null);
   let historyState = $state<HistoryStateMsg | null>(null);
   let processorsState = $state<ProcessorsStateMsg | null>(null);
+  // Null until the host posts one; Settings falls back to the bundled catalog.
+  let distroCatalog = $state<DistroCatalogStateMsg | null>(null);
   let tunnel = $state<TunnelStateMsg | null>(null);
   // Project (acurast.json) vs Studio target network — set from the host so the
   // Deploy/Settings views can warn when they diverge. The banner self-suppresses
@@ -149,6 +152,9 @@
         case "processors.state":
           processorsState = msg;
           break;
+        case "distro.catalog":
+          distroCatalog = msg;
+          break;
         case "tunnel.state":
           tunnel = msg;
           break;
@@ -219,6 +225,7 @@
     {fiatSelection}
     {wallets}
     {processorsState}
+    {distroCatalog}
   />
 {:else if route === "deploy"}
   <NetworkMismatchBanner

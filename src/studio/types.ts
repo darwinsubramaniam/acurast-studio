@@ -106,6 +106,54 @@ export interface TunnelComputeMsg      { type: 'tunnel.compute'; suffix: string;
 export interface TunnelVerifyMsg       { type: 'tunnel.verify'; suffix: string; network: AcurastNetwork; walletId?: string; }
 /** Open the VS Code Settings UI focused on the `acurast.tunnelRelays` override (used by the No-Relays edge state). */
 export interface TunnelOpenRelaySettingMsg { type: 'tunnel.openRelaySetting'; }
+/** Re-read the proot-distro image catalog from GitHub (see DistroCatalog). */
+export interface DistroRefreshMsg { type: 'distro.refresh'; }
+
+// ── proot-distro image catalog ────────────────────────────────────────────────
+// The Shell runtime needs a `.tar.xz` rootfs URL plus its SHA256. Both live in
+// termux/proot-distro's `distro-plugins/<id>.sh` files, which pin one tarball
+// per distro (each distro points at whatever release last rebuilt its rootfs,
+// so there is no single "latest release" to read). Only the v4 line still ships
+// a catalog at all: the v5 rewrite dropped the bundled distro list, and while
+// the maintainer mirrors v5 rootfs tarballs, none of them publish a SHA256 —
+// which the Shell runtime requires. So the catalog is read from the newest v4.x
+// tag. See src/sdk/distroFetch.ts.
+
+/** One selectable rootfs image: an aarch64 entry from a distro-plugin file. */
+export interface DistroImage {
+  /** Plugin basename, e.g. `ubuntu`. */
+  id: string;
+  /** DISTRO_NAME, e.g. `Ubuntu (25.10)`. */
+  name: string;
+  /** DISTRO_COMMENT, e.g. `Regular release (questing).` */
+  comment?: string;
+  /** Download URL — also the dropdown's option value, since it is unique. */
+  url: string;
+  sha256: string;
+}
+/**
+ * One `<optgroup>` in the image dropdown: every aarch64 image at a single tag.
+ * There are normally two — upstream migrated tarball hosting off GitHub releases
+ * to the maintainer's own host at v4.37.0, so we offer both the newest images and
+ * the newest still-on-GitHub ones and let the user pick their availability
+ * tradeoff. (Integrity doesn't enter into it: the processor verifies the pinned
+ * SHA256 on download, whatever the host.)
+ */
+export interface DistroGroup {
+  /** Dropdown group label, e.g. `Current (v4.38.0)`. */
+  label: string;
+  /** proot-distro tag the plugin files were read from. */
+  tag: string;
+  /** Host the tarballs download from, e.g. `easycli.sh` — shown as a hint. */
+  host: string;
+  /** aarch64 images only — Acurast processors are Android ARM64 devices. */
+  distros: DistroImage[];
+}
+export interface DistroCatalog {
+  /** ISO timestamp of the generate/refresh that produced this catalog. */
+  fetchedAt: string;
+  groups: DistroGroup[];
+}
 
 export type InMsg =
   | NavigateMsg | ReadyMsg | WalletActionMsg | RefreshBalanceMsg
@@ -119,7 +167,8 @@ export type InMsg =
   | ProcessorsQueryMsg | ProcessorsAdvertiseMsg
   | HistoryLoadMsg | HistoryFetchOnlineMsg | JobDiagnoseMsg | HistoryDeregisterMsg | HistoryAssignmentsMsg | HistoryRemovePathMsg | HistoryRemoveMsg | HistoryOpenFolderMsg
   | NetworkSetTargetMsg | NetworkOpenPickerMsg
-  | TunnelComputeMsg | TunnelVerifyMsg | TunnelOpenRelaySettingMsg;
+  | TunnelComputeMsg | TunnelVerifyMsg | TunnelOpenRelaySettingMsg
+  | DistroRefreshMsg;
 
 // ── Host → webview messages (OutMsg) ──────────────────────────────────────────
 // The reverse-direction mirror of InMsg: every message StudioPanel.post() sends
@@ -181,13 +230,26 @@ export interface NetworkMismatchMsg {
   targetNetwork: string;
 }
 
+/**
+ * The distro dropdown's backing catalog. `catalog` always carries a usable list
+ * (the refreshed one when a refresh succeeded, otherwise whatever was showing),
+ * so a failed refresh degrades to an inline error without emptying the dropdown.
+ */
+export interface DistroCatalogStateMsg {
+  type: 'distro.catalog';
+  catalog: DistroCatalog;
+  status: 'idle' | 'loading' | 'error';
+  error?: string;
+}
+
 export type OutMsg =
   | RouteMsg | ContextMsg | WalletsStateMsg | BalanceStateMsg
   | WalletsBalancesMsg | WalletOpResultMsg
   | ConfigStateMsg | DeployStateMsg | NetworkMismatchMsg
   | PricingStateMsg | FiatListStateMsg | FiatSelectionStateMsg
   | HistoryStateMsg | ProcessorsStateMsg | TunnelStateMsg
-  | DiagnosisStateMsg | DeregisterStateMsg | AssignmentsStateMsg;
+  | DiagnosisStateMsg | DeregisterStateMsg | AssignmentsStateMsg
+  | DistroCatalogStateMsg;
 
 export interface SerializedFees {
   numberOfExecutions: string;

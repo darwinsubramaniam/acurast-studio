@@ -1,5 +1,6 @@
 <script lang="ts">
-  import type { Route, PricingStateMsg, FiatListStateMsg, FiatSelectionStateMsg, WalletInfo, ProcessorsStateMsg, InstantMatchEntry } from '../../types';
+  import type { Route, PricingStateMsg, FiatListStateMsg, FiatSelectionStateMsg, WalletInfo, ProcessorsStateMsg, InstantMatchEntry, DistroCatalogStateMsg, DistroCatalog } from '../../types';
+  import { BUNDLED_DISTROS } from '../../../sdk/distros';
   import { send } from '../lib/vscode';
   import { ICONS } from '../lib/icons';
   import Spinner from '../shared/Spinner.svelte';
@@ -20,8 +21,9 @@
     fiatSelection: FiatSelectionStateMsg | null;
     wallets: { list: WalletInfo[]; activeId: string | null; network: string };
     processorsState: ProcessorsStateMsg | null;
+    distroCatalog: DistroCatalogStateMsg | null;
   }
-  let { ctx, config, pricing, fiatList, fiatSelection, wallets, processorsState }: Props = $props();
+  let { ctx, config, pricing, fiatList, fiatSelection, wallets, processorsState, distroCatalog }: Props = $props();
 
   let draft = $state<Record<string, unknown>>({});
   let dirty = $derived(Object.keys(draft).length > 0);
@@ -43,6 +45,7 @@
     config.data;
     draft = {};
     projectKey = null;
+    customImage = false;
   });
 
   function projects(): Record<string, Record<string, unknown>> {
@@ -172,6 +175,40 @@
   }
 
   const pricingDirty = $derived('maxCostPerExecution' in draft || 'numberOfReplicas' in draft);
+
+  // ── Shell runtime image picker ─────────────────────────────────────────────
+  // The Shell runtime needs a rootfs URL and its SHA256, which users otherwise
+  // had to hand-copy out of termux/proot-distro. The dropdown fills both at once
+  // from the catalog (bundled at build time, refreshable from GitHub); "Custom…"
+  // unlocks the raw fields for a URL we don't ship. A URL that matches no catalog
+  // entry — a hand-written one, or one from an older catalog — reads as Custom,
+  // so opening Settings can never silently rewrite an existing config.
+  const CUSTOM_IMAGE = '__custom__';
+
+  let customImage = $state(false);
+
+  const distros = $derived<DistroCatalog>(distroCatalog?.catalog ?? BUNDLED_DISTROS);
+  const distroBusy = $derived(distroCatalog?.status === 'loading');
+  const distroError = $derived(distroCatalog?.status === 'error' ? distroCatalog.error : undefined);
+
+  /** The catalog entry (and its group, for the host/tag hint) matching a URL. */
+  function findImage(cat: DistroCatalog, url: string) {
+    for (const group of cat.groups) {
+      const image = group.distros.find((d) => d.url === url);
+      if (image) return { group, image };
+    }
+    return null;
+  }
+
+  function pickImage(cat: DistroCatalog, value: string) {
+    customImage = value === CUSTOM_IMAGE;
+    if (customImage) return;
+    const hit = findImage(cat, value);
+    if (!hit) return;
+    // Both fields move together — a URL/hash mismatch fails on the processor.
+    patchField('image.url', hit.image.url);
+    patchField('image.sha256', hit.image.sha256);
+  }
 </script>
 
 {#if !config.data}
@@ -319,31 +356,86 @@
               oninput={(e) => patchField('entrypoint', (e.target as HTMLInputElement).value)} />
             <div class="pst-hint">Script or binary the processor runs inside the image</div>
           </div>
-          <div class="pst-field">
-            <label class="dpl-eyebrow pst-cap" for="f_imageUrl">Image URL</label>
-            <input id="f_imageUrl" type="text" class="pst-input pst-mono"
-              value={rd('image.url', getNested(p, 'image', 'url')) ?? ''}
-              class:pst-input-error={'image.url' in errors}
-              placeholder="https://github.com/termux/proot-distro/releases/..."
-              oninput={(e) => patchField('image.url', (e.target as HTMLInputElement).value)} />
-            {#if errors['image.url']}
-              <div class="pst-err">{errors['image.url']}</div>
-            {:else}
-              <div class="pst-hint">HTTPS URL to .tar.xz distro image</div>
-            {/if}
-          </div>
-          <div class="pst-field">
-            <label class="dpl-eyebrow pst-cap" for="f_imageSha">Image SHA256</label>
-            <input id="f_imageSha" type="text" class="pst-input pst-mono"
-              value={rd('image.sha256', getNested(p, 'image', 'sha256')) ?? ''}
-              class:pst-input-error={'image.sha256' in errors}
-              placeholder="64-character hex"
-              oninput={(e) => patchField('image.sha256', (e.target as HTMLInputElement).value)} />
-            {#if errors['image.sha256']}
-              <div class="pst-err">{errors['image.sha256']}</div>
-            {:else}
-              <div class="pst-hint">SHA256 of the image for verification</div>
-            {/if}
+          {@const imgUrl = String(rd('image.url', getNested(p, 'image', 'url')) ?? '')}
+          {@const imgHit = findImage(distros, imgUrl)}
+          {@const isCustom = customImage || (!imgHit && imgUrl !== '')}
+          {@const imgSel = isCustom ? CUSTOM_IMAGE : (imgHit?.image.url ?? '')}
+
+          <!-- Distro + URL + SHA256 are one unit: the dropdown fills the other two,
+               and a URL without its matching hash is useless (the processor rejects
+               it). Same bordered sub-group as Interval Schedule — it also drops the
+               "Image / Image URL / Image SHA256" label stutter, since the group head
+               already says Image. -->
+          <div class="pst-group" role="group" aria-labelledby="grp-image">
+            <div class="pst-group-head-row">
+              <div id="grp-image" class="pst-group-head">Image</div>
+              <button type="button" class="pst-mini" disabled={distroBusy}
+                title="Re-read the image list from termux/proot-distro"
+                onclick={() => send('distro.refresh')}>
+                {#if distroBusy}<Spinner />{:else}<span class="pst-mini-icon">{@html ICONS.refresh}</span>{/if}
+                Refresh
+              </button>
+            </div>
+
+            <div class="pst-field">
+              <label class="dpl-eyebrow pst-cap" for="f_distro">Distro</label>
+              <select id="f_distro" class="pst-input" value={imgSel}
+                onchange={(e) => pickImage(distros, (e.target as HTMLSelectElement).value)}>
+                <option value="" disabled>Select a distro…</option>
+                {#each distros.groups as g (g.tag)}
+                  <optgroup label={g.label}>
+                    {#each g.distros as d (d.url)}
+                      <option value={d.url}>{d.name}</option>
+                    {/each}
+                  </optgroup>
+                {/each}
+                <option value={CUSTOM_IMAGE}>Custom…</option>
+              </select>
+              {#if distroError}
+                <div class="pst-err">Refresh failed: {distroError}</div>
+              {:else if imgHit}
+                <div class="pst-hint">
+                  {imgHit.image.comment ?? ''}
+                  Downloads from {imgHit.group.host} · proot-distro {imgHit.group.tag} · aarch64
+                </div>
+              {:else if isCustom}
+                <div class="pst-hint">Enter the image URL and its SHA256 yourself</div>
+              {:else}
+                <div class="pst-hint">Pick a proot-distro rootfs — its URL and SHA256 fill in below</div>
+              {/if}
+            </div>
+
+            <div class="pst-field">
+              <label class="dpl-eyebrow pst-cap" for="f_imageUrl">URL</label>
+              <input id="f_imageUrl" type="text" class="pst-input pst-mono"
+                value={imgUrl}
+                readonly={!isCustom}
+                class:pst-input-locked={!isCustom}
+                class:pst-input-error={'image.url' in errors}
+                placeholder="https://example.com/rootfs.tar.xz"
+                oninput={(e) => patchField('image.url', (e.target as HTMLInputElement).value)} />
+              {#if errors['image.url']}
+                <div class="pst-err">{errors['image.url']}</div>
+              {:else if isCustom}
+                <div class="pst-hint">HTTPS URL to .tar.xz distro image</div>
+              {/if}
+            </div>
+
+            <div class="pst-field">
+              <label class="dpl-eyebrow pst-cap" for="f_imageSha">SHA256</label>
+              <input id="f_imageSha" type="text" class="pst-input pst-mono"
+                value={rd('image.sha256', getNested(p, 'image', 'sha256')) ?? ''}
+                readonly={!isCustom}
+                class:pst-input-locked={!isCustom}
+                class:pst-input-error={'image.sha256' in errors}
+                placeholder="64-character hex"
+                oninput={(e) => patchField('image.sha256', (e.target as HTMLInputElement).value)} />
+              {#if errors['image.sha256']}
+                <div class="pst-err">{errors['image.sha256']}</div>
+              {:else if isCustom}
+                <div class="pst-hint">The processor verifies it on download</div>
+              {/if}
+            </div>
           </div>
           <div class="pst-field">
             <span class="dpl-eyebrow pst-cap">Restart Policy</span>
