@@ -879,15 +879,17 @@
               <label class="dpl-eyebrow pst-cap" for="f_minAndroid">Min Android version <span class="label-optional">(optional)</span></label>
               <input id="f_minAndroid" type="text" class="pst-input"
                 value={rd('minProcessorVersions.android', getNested(p, 'minProcessorVersions', 'android')) ?? ''}
-                placeholder="e.g. 9"
+                placeholder="e.g. 128 or 1.26.0"
                 oninput={(e) => patchField('minProcessorVersions.android', (e.target as HTMLInputElement).value || null)} />
+              <div class="pst-hint">Acurast Processor app build or version — not the Android OS version</div>
             </div>
             <div class="pst-field">
               <label class="dpl-eyebrow pst-cap" for="f_minIos">Min iOS version <span class="label-optional">(optional)</span></label>
               <input id="f_minIos" type="text" class="pst-input"
                 value={rd('minProcessorVersions.ios', getNested(p, 'minProcessorVersions', 'ios')) ?? ''}
-                placeholder="e.g. 14"
+                placeholder="e.g. 63376 or 1.8.1"
                 oninput={(e) => patchField('minProcessorVersions.ios', (e.target as HTMLInputElement).value || null)} />
+              <div class="pst-hint">Processor app build or version — not the iOS version</div>
             </div>
           </div>
           <div class="pst-divider"></div>
