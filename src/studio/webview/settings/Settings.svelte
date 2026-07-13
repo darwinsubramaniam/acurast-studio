@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Route, PricingStateMsg, FiatListStateMsg, FiatSelectionStateMsg, WalletInfo, ProcessorsStateMsg, InstantMatchEntry, DistroCatalogStateMsg, DistroCatalog } from '../../types';
+  import type { Route, PricingStateMsg, FiatListStateMsg, FiatSelectionStateMsg, WalletInfo, ProcessorsStateMsg, InstantMatchEntry, DistroCatalogStateMsg, DistroCatalog, DurationConvertedMsg } from '../../types';
   import { BUNDLED_DISTROS } from '../../../sdk/distros';
   import { send } from '../lib/vscode';
   import { ICONS } from '../lib/icons';
@@ -22,8 +22,9 @@
     wallets: { list: WalletInfo[]; activeId: string | null; network: string };
     processorsState: ProcessorsStateMsg | null;
     distroCatalog: DistroCatalogStateMsg | null;
+    durationResult: DurationConvertedMsg | null;
   }
-  let { ctx, config, pricing, fiatList, fiatSelection, wallets, processorsState, distroCatalog }: Props = $props();
+  let { ctx, config, pricing, fiatList, fiatSelection, wallets, processorsState, distroCatalog, durationResult }: Props = $props();
 
   let draft = $state<Record<string, unknown>>({});
   let dirty = $derived(Object.keys(draft).length > 0);
@@ -78,6 +79,38 @@
     const n = Number(v);
     return Number.isFinite(n) && n > 0 ? fmtDuration(n) : '';
   }
+
+  // ── Human-duration → ms converter ──────────────────────────────────────────
+  // The clock button beside each ms field asks the host to run the
+  // `acurast.convertDuration` input box ("1d 12h" → 131400000); the result
+  // comes back as duration.converted, routed here via the durationResult prop.
+  // `field` is a draft key, or 'im:<index>' for an instant-match delay row.
+  let durationSeqApplied = 0;
+
+  function convertField(field: string, label: string, current: unknown) {
+    const n = Number(current);
+    send('duration.convert', {
+      field,
+      label,
+      currentMs: Number.isFinite(n) && n > 0 ? n : undefined,
+    });
+  }
+
+  $effect(() => {
+    const r = durationResult;
+    if (!r || r.seq === durationSeqApplied) return;
+    durationSeqApplied = r.seq;
+    if (r.field.startsWith('im:')) {
+      const i = Number(r.field.slice(3));
+      const entries = (rd('assignmentStrategy.instantMatch', instantMatchEntries(currentProject())) ?? []) as InstantMatchEntry[];
+      if (Number.isInteger(i) && i >= 0 && i < entries.length) {
+        patchField('assignmentStrategy.instantMatch',
+          entries.map((e, idx) => (idx === i ? { ...e, maxAllowedStartDelayInMs: r.ms } : e)));
+      }
+    } else {
+      patchField(r.field, r.ms);
+    }
+  });
 
   const errors = $derived.by(() => validateConfig(draft, currentProject()));
 
@@ -243,6 +276,17 @@
     {#snippet durEcho(v: unknown)}
       {@const h = msHuman(v)}
       {#if h}<div class="pst-hint pst-echo">≈ {h}</div>{/if}
+    {/snippet}
+
+    <!-- Label row for a ms field, with the human-duration → ms converter trigger. -->
+    {#snippet capClock(id: string, text: string, field: string, label: string, current: unknown)}
+      <div class="pst-cap-row">
+        <label class="dpl-eyebrow pst-cap" for={id}>{text}</label>
+        <button type="button" class="dur-clock"
+          title={`Set from a human-readable duration, e.g. "1d 12h"`}
+          aria-label="Set {label} from a human-readable duration"
+          onclick={() => convertField(field, label, current)}>{@html ICONS.clock}</button>
+      </div>
     {/snippet}
 
     {#snippet acuEcho(v: unknown)}
@@ -467,6 +511,7 @@
           <InstantMatchProcessors
             value={imEntries}
             onChange={(v) => patchField('assignmentStrategy.instantMatch', v)}
+            onConvertDelay={(i) => convertField(`im:${i}`, 'Max start delay', imEntries[i]?.maxAllowedStartDelayInMs)}
             {activeWallet}
             {processorsState}
             network={projectNetwork()}
@@ -492,7 +537,8 @@
             <div id="grp-schedule" class="pst-group-head">Interval Schedule</div>
             <div class="pst-row2">
               <div class="pst-field">
-                <label class="dpl-eyebrow pst-cap" for="f_intervalMs">Interval (ms)</label>
+                {@render capClock('f_intervalMs', 'Interval (ms)', 'execution.intervalInMs', 'Interval',
+                  rd('execution.intervalInMs', getExec(p, 'intervalInMs')))}
                 <input id="f_intervalMs" type="number" class="pst-input"
                   value={rd('execution.intervalInMs', getExec(p, 'intervalInMs')) ?? ''}
                   class:pst-input-error={'execution.intervalInMs' in errors}
@@ -520,7 +566,8 @@
           </div>
         {/if}
         <div class="pst-field">
-          <label class="dpl-eyebrow pst-cap" for="f_execTime">Max execution time (ms)</label>
+          {@render capClock('f_execTime', 'Max execution time (ms)', 'execution.maxExecutionTimeInMs', 'Max execution time',
+            rd('execution.maxExecutionTimeInMs', getExec(p, 'maxExecutionTimeInMs')) ?? 10000)}
           <input id="f_execTime" type="number" class="pst-input"
             value={rd('execution.maxExecutionTimeInMs', getExec(p, 'maxExecutionTimeInMs')) ?? 10000}
             oninput={(e) => { const n = Number((e.target as HTMLInputElement).value); patchField('execution.maxExecutionTimeInMs', isNaN(n) ? null : n); }} />
@@ -530,7 +577,8 @@
           {@render durEcho(rd('execution.maxExecutionTimeInMs', getExec(p, 'maxExecutionTimeInMs')) ?? 10000)}
         </div>
         <div class="pst-field">
-          <label class="dpl-eyebrow pst-cap" for="f_startDelay">Max start delay (ms)</label>
+          {@render capClock('f_startDelay', 'Max start delay (ms)', 'maxAllowedStartDelayInMs', 'Max start delay',
+            rd('maxAllowedStartDelayInMs', p.maxAllowedStartDelayInMs) ?? 10000)}
           <input id="f_startDelay" type="number" class="pst-input"
             value={rd('maxAllowedStartDelayInMs', p.maxAllowedStartDelayInMs) ?? 10000}
             oninput={(e) => { const n = Number((e.target as HTMLInputElement).value); patchField('maxAllowedStartDelayInMs', isNaN(n) ? null : n); }} />

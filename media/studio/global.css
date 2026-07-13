@@ -1229,6 +1229,22 @@ select:focus, input:focus, textarea:focus { outline: 1px solid var(--vscode-focu
 .pst-field { margin-bottom: 14px; }
 .pst-field:last-child { margin-bottom: 0; }
 .pst-cap { display: block; margin-bottom: 6px; }
+/* Label row for a ms field: caption left, human-duration converter clock right.
+   The row takes over the caption's bottom spacing. */
+.pst-cap-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 6px; }
+.pst-cap-row .pst-cap { margin-bottom: 0; }
+/* Human-duration → ms converter trigger (Settings + InstantMatchProcessors). */
+.dur-clock {
+  padding: 1px 3px;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  color: var(--vscode-descriptionForeground);
+  display: inline-flex; align-items: center;
+  cursor: pointer;
+}
+.dur-clock:hover { background: var(--vscode-toolbar-hoverBackground); color: var(--vscode-foreground); }
+.dur-clock svg { width: 13px; height: 13px; }
 .pst-subhead { display: block; margin: 4px 0 10px; }
 /* Two fields side by side. The row owns the bottom spacing (not its children) so
    it reads the same whether the fields sit in one row or stack. */

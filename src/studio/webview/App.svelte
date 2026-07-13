@@ -15,6 +15,7 @@
     TunnelStateMsg,
     WalletOpResultMsg,
     DistroCatalogStateMsg,
+    DurationConvertedMsg,
     OutMsg,
   } from "../types";
   import { send } from "./lib/vscode";
@@ -76,6 +77,9 @@
   let processorsState = $state<ProcessorsStateMsg | null>(null);
   // Null until the host posts one; Settings falls back to the bundled catalog.
   let distroCatalog = $state<DistroCatalogStateMsg | null>(null);
+  // Latest human-duration → ms converter result; Settings reacts to it via
+  // $effect keyed on its host-incremented `seq`.
+  let durationResult = $state<DurationConvertedMsg | null>(null);
   let tunnel = $state<TunnelStateMsg | null>(null);
   // Project (acurast.json) vs Studio target network — set from the host so the
   // Deploy/Settings views can warn when they diverge. The banner self-suppresses
@@ -155,6 +159,9 @@
         case "distro.catalog":
           distroCatalog = msg;
           break;
+        case "duration.converted":
+          durationResult = msg;
+          break;
         case "tunnel.state":
           tunnel = msg;
           break;
@@ -226,6 +233,7 @@
     {wallets}
     {processorsState}
     {distroCatalog}
+    {durationResult}
   />
 {:else if route === "deploy"}
   <NetworkMismatchBanner

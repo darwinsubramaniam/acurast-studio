@@ -59,6 +59,12 @@
         "icon": "$(symbol-numeric)"
       },
       {
+        "command": "acurast.convertDuration",
+        "title": "Convert Duration to Milliseconds",
+        "category": "Acurast",
+        "icon": "$(clock)"
+      },
+      {
         "command": "acurast.openDashboard",
         "title": "Open Dashboard",
         "category": "Acurast",

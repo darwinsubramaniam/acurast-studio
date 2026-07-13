@@ -17,12 +17,14 @@
     /** Current instant-match entries (processor + its own start delay). */
     value: InstantMatchEntry[];
     onChange: (entries: InstantMatchEntry[]) => void;
+    /** Open the human-duration → ms converter for entry `index`'s max delay. */
+    onConvertDelay?: (index: number) => void;
     activeWallet: WalletInfo | null;
     processorsState: ProcessorsStateMsg | null;
     /** Project network to query processors under. */
     network: string;
   }
-  let { value, onChange, activeWallet, processorsState, network }: Props = $props();
+  let { value, onChange, onConvertDelay, activeWallet, processorsState, network }: Props = $props();
 
   let newAddr = $state('');
 
@@ -80,6 +82,12 @@
               title="Maximum allowed start delay for this processor (ms)"
               value={entry.maxAllowedStartDelayInMs}
               oninput={(e) => onDelayInput(i, (e.currentTarget as HTMLInputElement).value)} />
+            {#if onConvertDelay}
+              <button type="button" class="dur-clock"
+                title={`Set from a human-readable duration, e.g. "1d 12h"`}
+                aria-label="Set max delay for {entry.processor} from a human-readable duration"
+                onclick={() => onConvertDelay(i)}>{@html ICONS.clock}</button>
+            {/if}
             {#if humanDelay(entry.maxAllowedStartDelayInMs)}
               <span class="im-echo">≈ {humanDelay(entry.maxAllowedStartDelayInMs)}</span>
             {/if}

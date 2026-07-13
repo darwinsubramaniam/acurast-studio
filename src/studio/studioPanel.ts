@@ -59,6 +59,8 @@ export class StudioPanel implements vscode.WebviewViewProvider {
   // Monotonic stamp on every wallet.opResult so the webview's $effect re-fires
   // even when two results carry identical payloads (e.g. same wrong-password error).
   private _walletOpSeq = 0;
+  // Same idea for duration.converted (converting a field to its current value twice).
+  private _durationSeq = 0;
   private _deploy: DeployState | null = null;
   // Coalesces frequent log-driven state pushes (see scheduleDeployPush).
   private _deployPushTimer: NodeJS.Timeout | undefined;
@@ -373,6 +375,17 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       case 'distro.refresh':
         await this.refreshDistros();
         break;
+      case 'duration.convert': {
+        const ms = await vscode.commands.executeCommand<number | undefined>('acurast.convertDuration', {
+          title: msg.label,
+          currentMs: msg.currentMs,
+          quiet: true,
+        });
+        if (typeof ms === 'number') {
+          this.post({ type: 'duration.converted', field: msg.field, ms, seq: ++this._durationSeq });
+        }
+        break;
+      }
     }
   }
 

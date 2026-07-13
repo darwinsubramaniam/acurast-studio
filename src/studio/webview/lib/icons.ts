@@ -1,3 +1,8 @@
+// Clock glyph shared by two entries: `history` (the History route) and `clock`
+// (the human-duration → ms converter trigger next to every ms field).
+const clock =
+  '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 15.375C12.5208 15.375 15.375 12.5208 15.375 9C15.375 5.47918 12.5208 2.625 9 2.625C5.47918 2.625 2.625 5.47918 2.625 9C2.625 12.5208 5.47918 15.375 9 15.375Z"/><path d="M9 5.625V9.375L11.4 10.875"/></svg>';
+
 export const ICONS = {
   // ── Outline icons lifted from the Figma mock (Lucide-style strokes) ──────────
   wallet: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.25 6C2.25 5.60218 2.40804 5.22064 2.68934 4.93934C2.97064 4.65804 3.35218 4.5 3.75 4.5H12.75C13.1478 4.5 13.5294 4.65804 13.8107 4.93934C14.092 5.22064 14.25 5.60218 14.25 6"/><path d="M14.25 6H3.75C2.92157 6 2.25 6.67157 2.25 7.5V12.75C2.25 13.5784 2.92157 14.25 3.75 14.25H14.25C15.0784 14.25 15.75 13.5784 15.75 12.75V7.5C15.75 6.67157 15.0784 6 14.25 6Z"/><path d="M12.375 11.175C12.9549 11.175 13.425 10.7049 13.425 10.125C13.425 9.5451 12.9549 9.075 12.375 9.075C11.7951 9.075 11.325 9.5451 11.325 10.125C11.325 10.7049 11.7951 11.175 12.375 11.175Z" fill="currentColor" stroke="none"/></svg>',
@@ -14,7 +19,9 @@ export const ICONS = {
   // Processors — CPU/chip.
   processor: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.5H6C5.17157 4.5 4.5 5.17157 4.5 6V12C4.5 12.8284 5.17157 13.5 6 13.5H12C12.8284 13.5 13.5 12.8284 13.5 12V6C13.5 5.17157 12.8284 4.5 12 4.5Z"/><path d="M10.125 7.125H7.875C7.46079 7.125 7.125 7.46079 7.125 7.875V10.125C7.125 10.5392 7.46079 10.875 7.875 10.875H10.125C10.5392 10.875 10.875 10.5392 10.875 10.125V7.875C10.875 7.46079 10.5392 7.125 10.125 7.125Z"/><path d="M6.75 1.875V3.375M11.25 1.875V3.375M6.75 14.625V16.125M11.25 14.625V16.125M1.875 6.75H3.375M1.875 11.25H3.375M14.625 6.75H16.125M14.625 11.25H16.125"/></svg>',
   // History — clock.
-  history: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 15.375C12.5208 15.375 15.375 12.5208 15.375 9C15.375 5.47918 12.5208 2.625 9 2.625C5.47918 2.625 2.625 5.47918 2.625 9C2.625 12.5208 5.47918 15.375 9 15.375Z"/><path d="M9 5.625V9.375L11.4 10.875"/></svg>',
+  history: clock,
+  // Duration-converter trigger (Settings ms fields) — same glyph as History.
+  clock,
   // Live Monitoring (placeholder card icon).
   monitoring: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.25 15.75V3.75C2.25 3.35218 2.40804 2.97064 2.68934 2.68934C2.97064 2.40804 3.35218 2.25 3.75 2.25H8.25C8.64782 2.25 9.02936 2.40804 9.31066 2.68934C9.59196 2.97064 9.75 3.35218 9.75 3.75V15.75M1.5 15.75H11.25M3.75 8.25H8.25"/><path d="M9.75 6H11.625C12.0228 6 12.4044 6.15804 12.6857 6.43934C12.967 6.72064 13.125 7.10218 13.125 7.5V12C13.125 12.2984 13.2435 12.5845 13.4545 12.7955C13.6655 13.0065 13.9516 13.125 14.25 13.125C14.5484 13.125 14.8345 13.0065 15.0455 12.7955C15.2565 12.5845 15.375 12.2984 15.375 12V6.75L13.425 4.8"/></svg>',
   // Globe — Tunnel DNS / external link.

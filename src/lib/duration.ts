@@ -53,6 +53,45 @@ export function fmtDuration(ms: string | number): string {
   return parts.slice(0, 2).join(' ') || '0s';
 }
 
+// Unit spellings accepted by parseDuration → their size in ms. Every
+// fmtDuration abbreviation is here, so fmtDuration output always parses back.
+const byAbbr = Object.fromEntries(UNITS.map((u) => [u.abbr, u.ms]));
+const PARSE_UNITS: Record<string, number> = {
+  ms: 1, msec: 1, msecs: 1, millisecond: 1, milliseconds: 1,
+  s: byAbbr.s, sec: byAbbr.s, secs: byAbbr.s, second: byAbbr.s, seconds: byAbbr.s,
+  m: byAbbr.m, min: byAbbr.m, mins: byAbbr.m, minute: byAbbr.m, minutes: byAbbr.m,
+  h: byAbbr.h, hr: byAbbr.h, hrs: byAbbr.h, hour: byAbbr.h, hours: byAbbr.h,
+  d: byAbbr.d, day: byAbbr.d, days: byAbbr.d,
+  w: byAbbr.w, wk: byAbbr.w, wks: byAbbr.w, week: byAbbr.w, weeks: byAbbr.w,
+  mo: byAbbr.mo, mos: byAbbr.mo, month: byAbbr.mo, months: byAbbr.mo,
+  y: byAbbr.y, yr: byAbbr.y, yrs: byAbbr.y, year: byAbbr.y, years: byAbbr.y,
+};
+
+/**
+ * The reverse of {@link fmtDuration}: human-readable duration → milliseconds.
+ * Accepts unit tokens in any casing, with or without spaces/commas between them
+ * (`1d 12h`, `1D12h`, `2 hours, 30 minutes`, `1.5h`, `500ms`) plus a bare
+ * number, which is taken as already-milliseconds. Returns `null` when any part
+ * of the input fails to parse — no silent partial results.
+ */
+export function parseDuration(input: string): number | null {
+  const text = input.trim().toLowerCase();
+  if (!text) return null;
+  // A bare number is already ms.
+  if (/^\d+(\.\d+)?$/.test(text)) return Math.round(Number(text));
+  const token = /^(\d+(?:\.\d+)?)\s*([a-z]+)[\s,]*/;
+  let total = 0;
+  let rest = text;
+  while (rest) {
+    const m = token.exec(rest);
+    const unit = m ? PARSE_UNITS[m[2]] : undefined;
+    if (!m || unit === undefined) return null;
+    total += Number(m[1]) * unit;
+    rest = rest.slice(m[0].length);
+  }
+  return Math.round(total);
+}
+
 const RTF = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
 
 /**

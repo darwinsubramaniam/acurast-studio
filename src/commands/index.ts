@@ -7,6 +7,7 @@ import { deploy } from './deploy';
 import { acurastBuild } from './build';
 import { estimateCost } from './estimateCost';
 import { advertiseModules } from './advertiseModules';
+import { convertDuration, type ConvertDurationArgs } from './convertDuration';
 import { setActiveConfig, chooseConfig, clearActiveConfig } from './projectConfig';
 
 export interface CommandDeps {
@@ -23,6 +24,9 @@ export function registerCommands(deps: CommandDeps): vscode.Disposable[] {
     vscode.commands.registerCommand('acurast.deploy', () => deploy({ ctx, wallet, output, studioPanel })),
     vscode.commands.registerCommand('acurast.build', (projectKey?: string) => acurastBuild({ ctx, output }, projectKey)),
     vscode.commands.registerCommand('acurast.estimateCost', () => estimateCost({ ctx, wallet, output })),
+    vscode.commands.registerCommand('acurast.convertDuration', (args?: ConvertDurationArgs) =>
+      convertDuration(args)
+    ),
     vscode.commands.registerCommand('acurast.processor.advertiseModules', (args) =>
       advertiseModules({ wallet, output, studioPanel }, args)
     ),

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { tick } from 'svelte';
 import { render, screen, fireEvent, cleanup } from '@testing-library/svelte';
 
 vi.mock('../../studio/webview/lib/vscode', () => ({
@@ -27,6 +28,7 @@ function propsFor(project: Record<string, unknown>) {
     wallets: { list: [], activeId: null, network: 'mainnet' },
     processorsState: null,
     distroCatalog: null,
+    durationResult: null,
   };
 }
 
@@ -302,5 +304,53 @@ describe('Settings — Shell image picker', () => {
     render(Settings, { props: propsFor({ ...VALID, runtime: 'NodeJSWithBundle' }) });
     expect(screen.queryByLabelText('Distro')).toBeNull();
     expect(screen.queryByLabelText('URL')).toBeNull();
+  });
+});
+
+describe('Settings — human-duration → ms converter (clock buttons)', () => {
+  it('asks the host to convert, passing the field key, label and current ms', async () => {
+    render(Settings, { props: propsFor({
+      ...VALID,
+      execution: { type: 'onetime', maxExecutionTimeInMs: 86_400_000 },
+    }) });
+    await fireEvent.click(screen.getByLabelText('Set Max execution time from a human-readable duration'));
+    expect(send).toHaveBeenCalledWith('duration.convert', {
+      field: 'execution.maxExecutionTimeInMs',
+      label: 'Max execution time',
+      currentMs: 86_400_000,
+    });
+  });
+
+  it('shows the clock on all three ms fields when the interval schedule is open', () => {
+    render(Settings, { props: propsFor({
+      ...VALID,
+      execution: { type: 'interval', intervalInMs: 60_000 },
+    }) });
+    expect(screen.getByLabelText('Set Interval from a human-readable duration')).toBeTruthy();
+    expect(screen.getByLabelText('Set Max execution time from a human-readable duration')).toBeTruthy();
+    expect(screen.getByLabelText('Set Max start delay from a human-readable duration')).toBeTruthy();
+  });
+
+  it('fills the field when the host answers with duration.converted', async () => {
+    render(Settings, { props: {
+      ...propsFor({ ...VALID, execution: { type: 'onetime', maxExecutionTimeInMs: 10_000 } }),
+      durationResult: { type: 'duration.converted', field: 'execution.maxExecutionTimeInMs', ms: 86_400_000, seq: 1 },
+    } });
+    await tick();
+    const input = screen.getByLabelText('Max execution time (ms)') as HTMLInputElement;
+    expect(input.value).toBe('86400000');
+  });
+
+  it('routes an im:<index> result into that instant-match entry\'s delay', async () => {
+    render(Settings, { props: {
+      ...propsFor({
+        ...VALID,
+        assignmentStrategy: { type: 'Single', instantMatch: [{ processor: '5CiPseudoAddr', maxAllowedStartDelayInMs: 10_000 }] },
+      }),
+      durationResult: { type: 'duration.converted', field: 'im:0', ms: 30_000, seq: 1 },
+    } });
+    await tick();
+    const input = screen.getByLabelText('Max delay (ms)') as HTMLInputElement;
+    expect(input.value).toBe('30000');
   });
 });

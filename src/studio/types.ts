@@ -129,6 +129,19 @@ export interface TunnelVerifyMsg       { type: 'tunnel.verify'; suffix: string; 
 export interface TunnelOpenRelaySettingMsg { type: 'tunnel.openRelaySetting'; }
 /** Re-read the proot-distro image catalog from GitHub (see DistroCatalog). */
 export interface DistroRefreshMsg { type: 'distro.refresh'; }
+/**
+ * Run the human-duration → ms converter (`acurast.convertDuration` input box)
+ * for one ms field. `field` is an opaque webview-side key ('execution.intervalInMs',
+ * 'im:<index>', …) the host round-trips untouched in the DurationConvertedMsg reply.
+ */
+export interface DurationConvertMsg {
+  type: 'duration.convert';
+  field: string;
+  /** Field label for the input box title, e.g. "Max execution time". */
+  label?: string;
+  /** Current value in ms — prefills the converter when it round-trips losslessly. */
+  currentMs?: number;
+}
 
 // ── proot-distro image catalog ────────────────────────────────────────────────
 // The Shell runtime needs a `.tar.xz` rootfs URL plus its SHA256. Both live in
@@ -189,7 +202,7 @@ export type InMsg =
   | HistoryLoadMsg | HistoryFetchOnlineMsg | JobDiagnoseMsg | HistoryDeregisterMsg | HistoryAssignmentsMsg | HistoryRemovePathMsg | HistoryRemoveMsg | HistoryOpenFolderMsg
   | NetworkSetTargetMsg | NetworkOpenPickerMsg
   | TunnelComputeMsg | TunnelVerifyMsg | TunnelOpenRelaySettingMsg
-  | DistroRefreshMsg;
+  | DistroRefreshMsg | DurationConvertMsg;
 
 // ── Host → webview messages (OutMsg) ──────────────────────────────────────────
 // The reverse-direction mirror of InMsg: every message StudioPanel.post() sends
@@ -263,6 +276,18 @@ export interface DistroCatalogStateMsg {
   error?: string;
 }
 
+/**
+ * Answer to a DurationConvertMsg — fill `field` with `ms`. `seq` is
+ * host-incremented so the webview's `$effect` fires on every result even when
+ * the same field converts to the same value twice.
+ */
+export interface DurationConvertedMsg {
+  type: 'duration.converted';
+  field: string;
+  ms: number;
+  seq: number;
+}
+
 export type OutMsg =
   | RouteMsg | ContextMsg | WalletsStateMsg | BalanceStateMsg
   | WalletsBalancesMsg | WalletOpResultMsg
@@ -270,7 +295,7 @@ export type OutMsg =
   | PricingStateMsg | FiatListStateMsg | FiatSelectionStateMsg
   | HistoryStateMsg | ProcessorsStateMsg | TunnelStateMsg
   | DiagnosisStateMsg | DeregisterStateMsg | AssignmentsStateMsg
-  | DistroCatalogStateMsg;
+  | DistroCatalogStateMsg | DurationConvertedMsg;
 
 export interface SerializedFees {
   numberOfExecutions: string;
