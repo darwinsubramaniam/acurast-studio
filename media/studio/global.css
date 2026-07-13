@@ -306,7 +306,10 @@ select:focus, input:focus, textarea:focus { outline: 1px solid var(--vscode-focu
 .icon-btn { padding: 2px 4px !important; display: inline-flex; align-items: center; }
 .icon-btn svg { width: 12px; height: 12px; }
 
-/* Settings form */
+/* Shared form primitives — now only consumed by FiatPricingSettings.svelte,
+   ProcessorWhitelist.svelte and InstantMatchProcessors.svelte (the redesigned
+   Settings.svelte panel below uses its own `.pst-*` rules) plus Processors.svelte
+   (`.section`) and History.svelte (`.section-title`, locally overridden there). */
 .field { margin-bottom: 10px; }
 .field label { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--vscode-descriptionForeground); margin-bottom: 3px; }
 .field .hint { font-size: 10px; color: var(--vscode-descriptionForeground); margin-top: 2px; }
@@ -314,55 +317,17 @@ select:focus, input:focus, textarea:focus { outline: 1px solid var(--vscode-focu
 .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--vscode-descriptionForeground); font-weight: 600; border-bottom: 1px solid var(--vscode-panel-border, transparent); padding-bottom: 4px; margin-bottom: 8px; }
 .section-title.dirty::after { content: '●'; color: var(--vscode-charts-yellow, orange); margin-left: 6px; }
 
-/* Accordion sections (Bits UI Accordion primitives) */
-.acc-item { margin: 6px 0; }
-.acc-trigger {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid var(--vscode-panel-border, transparent);
-  padding: 4px 0;
-  margin: 0 0 0 0;
-  color: var(--vscode-descriptionForeground);
-  text-align: left;
-  cursor: pointer;
-  font: inherit;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-weight: 600;
-}
-.acc-trigger:hover { color: var(--vscode-foreground); }
-.acc-trigger:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
-.acc-trigger::before {
-  content: '▸';
-  display: inline-block;
-  margin-right: 6px;
-  font-size: 9px;
-  opacity: 0.7;
-  transition: transform 0.15s ease;
-}
-.acc-trigger[data-state="open"]::before { transform: rotate(90deg); }
-.acc-content { overflow: hidden; padding-top: 8px; }
-.acc-content[data-state="closed"] { display: none; }
-.subsection-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--vscode-descriptionForeground); font-weight: 600; margin: 12px 0 6px; opacity: 0.8; }
-.checkbox-field { display: flex; align-items: center; gap: 6px; }
-.checkbox-field input { width: auto; }
 .label-optional { font-size: 9px; font-weight: normal; text-transform: none; letter-spacing: 0; opacity: 0.7; }
-.group-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--vscode-descriptionForeground); margin-bottom: 3px; }
-input.field-error, textarea.field-error { border-color: var(--vscode-inputValidation-errorBorder, var(--vscode-errorForeground)) !important; }
 .error-hint { font-size: 10px; color: var(--vscode-errorForeground); margin-top: 2px; }
 .save-bar { position: sticky; bottom: 0; background: var(--vscode-sideBar-background); padding: 8px 0; border-top: 1px solid var(--vscode-panel-border, transparent); display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .save-bar button { flex: 1; }
 .save-error { flex-basis: 100%; font-size: 10.5px; color: var(--vscode-errorForeground); }
 .active-config {
   display: flex; align-items: center; gap: 6px;
-  padding: 6px 8px;
+  padding: 8px 10px;
   margin: 4px 0 8px;
   background: var(--vscode-input-background);
-  border-radius: 2px;
+  border-radius: 8px;
   font-size: 11px;
 }
 .active-config-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--vscode-descriptionForeground); flex-shrink: 0; }
@@ -561,45 +526,46 @@ input.field-error, textarea.field-error { border-color: var(--vscode-inputValida
   cursor: default;
 }
 
-/* Processor tables — shared look between ProcessorWhitelist (Processor · Remove)
-   and InstantMatchProcessors (Processor · Max Delay · Remove). Only the column
-   count differs; the table, address cell, remove button and "add" row are the
-   same in both. */
-.proc-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 6px;
+/* Processor lists — shared look between ProcessorWhitelist (address · remove)
+   and InstantMatchProcessors (address · remove, plus its own max-delay row).
+   Each processor is a bordered card that stacks its rows rather than a fixed
+   table: on a narrow sidebar a table pushed the Remove column out of view, so
+   the card keeps the address and the remove button on one row and lets the rest
+   wrap underneath. The card border is what segregates one processor from the
+   next. */
+.proc-list {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.proc-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  background: var(--vscode-editorWidget-background, transparent);
+}
+.proc-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.proc-item-addr {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--vscode-editor-font-family, monospace);
   font-size: 11px;
-}
-.proc-table th {
-  text-align: left;
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--vscode-descriptionForeground);
-  padding: 2px 6px;
-  border-bottom: 1px solid var(--vscode-panel-border);
-}
-.proc-th-remove {
-  width: 1%;
-  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
-.proc-table td {
-  padding: 4px 6px;
-  border-bottom: 1px solid var(--vscode-panel-border);
-  vertical-align: middle;
-}
-.proc-cell-addr {
-  font-family: var(--vscode-editor-font-family, monospace);
-  word-break: break-all;
-}
-.proc-remove-cell {
-  width: 1%;
-  text-align: center;
-}
 .proc-remove {
+  flex: none;
   padding: 3px 6px;
   background: transparent;
   color: var(--vscode-errorForeground);
@@ -1237,3 +1203,93 @@ input.field-error, textarea.field-error { border-color: var(--vscode-inputValida
 .dpl-empty-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
 .dpl-empty-sub { font-size: 12px; color: var(--vscode-descriptionForeground); line-height: 1.5; margin-bottom: 18px; max-width: 280px; }
 .dpl-empty .dpl-cta, .dpl-empty .dpl-btn { max-width: 300px; }
+
+/*
+   Project Settings panel 
+*/
+.pst { display: flex; flex-direction: column; }
+
+.pst-head { display: flex; align-items: center; justify-content: space-between; margin: 2px 0 12px; }
+.pst-head-left { display: flex; align-items: center; gap: 8px; }
+.pst-head-icon { display: inline-flex; color: var(--vscode-descriptionForeground); }
+.pst-head-icon svg { width: 16px; height: 16px; }
+
+/* Transient "saved" confirmation (local UI state only, no new host message). */
+.pst-toast {
+  display: flex; align-items: center; gap: 7px;
+  padding: 9px 12px; margin: 0 0 12px; border-radius: 8px;
+  background: var(--acu-accent-soft-bg); color: var(--acu-accent-soft-fg);
+  font-size: 12.5px; font-weight: 600;
+}
+.pst-toast svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+.pst-field { margin-bottom: 14px; }
+.pst-field:last-child { margin-bottom: 0; }
+.pst-cap { display: block; margin-bottom: 6px; }
+.pst-subhead { display: block; margin: 4px 0 10px; }
+.pst-row2 { display: flex; gap: 12px; }
+.pst-row2 > .pst-field { flex: 1; min-width: 0; }
+.pst-divider { height: 1px; background: var(--vscode-panel-border, transparent); margin: 14px 0; }
+
+/* Inputs — rounder + roomier than the base global `input` rule, scoped to this
+   panel so Wallets/Tunnel/other forms are unaffected. */
+.pst-input {
+  width: 100%; box-sizing: border-box; padding: 9px 10px;
+  background: var(--vscode-input-background); color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, transparent); border-radius: 7px;
+  font-family: inherit; font-size: 13px;
+}
+.pst-input:focus { outline: 1px solid var(--vscode-focusBorder); border-color: var(--vscode-focusBorder); }
+.pst-input-error { border-color: var(--vscode-inputValidation-errorBorder, var(--vscode-errorForeground)) !important; }
+.pst-mono { font-family: var(--vscode-editor-font-family, monospace); font-size: 12.5px; }
+.pst-cost-input { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pst-err { font-size: 10.5px; color: var(--vscode-errorForeground); margin-top: 5px; }
+.pst-hint { font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 5px; }
+.pst-warn-text { color: var(--vscode-editorWarning-foreground, #cca700); }
+
+/* Segmented control — replaces plain <select> for enum-like fields (network,
+   source, runtime, restart policy, assignment strategy, execution type,
+   mutability). */
+.pst-seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.pst-seg-btn {
+  padding: 7px 12px; font-size: 11.5px; font-weight: 500; border-radius: 7px;
+  background: var(--vscode-badge-background); color: var(--vscode-descriptionForeground);
+  border: none; cursor: pointer; font-family: inherit;
+}
+.pst-seg-btn:hover { background: var(--vscode-toolbar-hoverBackground); }
+.pst-seg-btn.active { background: var(--acu-accent-soft-bg); color: var(--acu-accent-soft-fg); font-weight: 600; }
+
+/* Custom checkboxes (Only attested devices / DevTools / Required Modules). */
+.pst-checks { display: flex; flex-direction: column; gap: 9px; }
+.pst-check { display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer; }
+.pst-check input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none; position: relative;
+  width: 16px; height: 16px; margin: 0; flex-shrink: 0;
+  border-radius: 4px; border: 1px solid var(--vscode-panel-border, var(--vscode-descriptionForeground));
+  background: var(--vscode-input-background); cursor: pointer;
+}
+.pst-check input[type="checkbox"]:checked { background: var(--acu-green); border-color: var(--acu-green); }
+.pst-check input[type="checkbox"]:checked::after {
+  content: '✓'; position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: var(--acu-on-accent);
+}
+.pst-check input[type="checkbox"]:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
+
+/* Build / Advanced disclosure trigger — the only two sections still collapsed
+   by default. Chevron reuses ICONS.chev, rotated open via the .open modifier. */
+.pst-disclosure {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  width: 100%; box-sizing: border-box;
+  padding: 13px; margin: 0 0 10px;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border, transparent);
+  border-radius: 10px; cursor: pointer; text-align: left; font: inherit; color: inherit;
+}
+.pst-disclosure:hover { border-color: var(--vscode-focusBorder); }
+.pst-disc-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pst-disc-title { font-size: 13px; font-weight: 600; }
+.pst-disc-sub { font-size: 11px; color: var(--vscode-descriptionForeground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pst-disc-chev { flex-shrink: 0; display: inline-flex; color: var(--vscode-descriptionForeground); transition: transform 0.15s ease; }
+.pst-disc-chev svg { width: 13px; height: 13px; }
+.pst-disclosure.open .pst-disc-chev { transform: rotate(90deg); }

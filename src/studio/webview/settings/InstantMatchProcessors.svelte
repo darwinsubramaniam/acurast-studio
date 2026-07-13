@@ -1,11 +1,11 @@
 <script lang="ts">
   // Instant-match processor editor. instantMatch is an array that can hold zero
   // (open matching), one, or many processors — each pinned with its OWN max
-  // start delay. The chosen processors render as a 3-column table (processor ·
-  // max delay · remove); below it a manual address add and the shared
-  // ProcessorPicker. Shares its table/add/remove look with ProcessorWhitelist
-  // via the .proc-* classes in global.css — only the extra Max Delay column and
-  // its input are instant-match-specific.
+  // start delay. Each chosen processor renders as its own card (address + remove
+  // on top, max delay underneath); below the list a manual address add and the
+  // shared ProcessorPicker. Shares its card/add/remove look with
+  // ProcessorWhitelist via the .proc-* classes in global.css — only the max
+  // delay row is instant-match-specific.
   import type { WalletInfo, ProcessorsStateMsg, InstantMatchEntry } from '../../types';
   import ProcessorPicker from './ProcessorPicker.svelte';
   import { truncate, fmtDuration } from '../lib/format';
@@ -64,38 +64,29 @@
   <label for="f_imAdd">Instant Match Processors <span class="label-optional">(optional)</span></label>
 
   {#if value.length}
-    <table class="proc-table">
-      <thead>
-        <tr>
-          <th>Processor</th>
-          <th title="Maximum allowed start delay for this processor (ms)">Max Delay (ms)</th>
-          <th class="proc-th-remove">Remove</th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each value as entry, i (entry.processor)}
-          <tr>
-            <td class="proc-cell-addr" title={entry.processor}>{truncate(entry.processor)}</td>
-            <td class="im-delay-cell">
-              <input type="number" min="0" class="im-delay-input"
-                aria-label="Max Delay for {entry.processor}"
-                title="Maximum allowed start delay for this processor (ms)"
-                value={entry.maxAllowedStartDelayInMs}
-                oninput={(e) => onDelayInput(i, (e.currentTarget as HTMLInputElement).value)} />
-              {#if humanDelay(entry.maxAllowedStartDelayInMs)}
-                <span class="im-echo">≈ {humanDelay(entry.maxAllowedStartDelayInMs)}</span>
-              {/if}
-            </td>
-            <td class="proc-remove-cell">
-              <button type="button" class="proc-remove" title="Remove processor"
-                aria-label="Remove {entry.processor}" onclick={() => removeAt(i)}>
-                {@html ICONS.trash}
-              </button>
-            </td>
-          </tr>
-        {/each}
-      </tbody>
-    </table>
+    <ul class="proc-list">
+      {#each value as entry, i (entry.processor)}
+        <li class="proc-item">
+          <div class="proc-item-head">
+            <span class="proc-item-addr" title={entry.processor}>{truncate(entry.processor)}</span>
+            <button type="button" class="proc-remove" title="Remove processor"
+              aria-label="Remove {entry.processor}" onclick={() => removeAt(i)}>
+              {@html ICONS.trash}
+            </button>
+          </div>
+          <div class="im-delay">
+            <label class="im-delay-label" for="im_delay_{i}">Max delay (ms)</label>
+            <input id="im_delay_{i}" type="number" min="0" class="im-delay-input"
+              title="Maximum allowed start delay for this processor (ms)"
+              value={entry.maxAllowedStartDelayInMs}
+              oninput={(e) => onDelayInput(i, (e.currentTarget as HTMLInputElement).value)} />
+            {#if humanDelay(entry.maxAllowedStartDelayInMs)}
+              <span class="im-echo">≈ {humanDelay(entry.maxAllowedStartDelayInMs)}</span>
+            {/if}
+          </div>
+        </li>
+      {/each}
+    </ul>
   {/if}
 
   <div class="proc-add">
@@ -123,15 +114,28 @@
 </div>
 
 <style>
-  /* Max Delay column — the one part not shared with ProcessorWhitelist. */
-  .im-delay-cell {
-    white-space: nowrap;
+  /* Max delay row — the one part not shared with ProcessorWhitelist. Wraps so a
+     narrow sidebar drops the value below its label instead of overflowing. */
+  .im-delay {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+  }
+  .im-delay-label {
+    flex: none;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--vscode-descriptionForeground);
   }
   .im-delay-input {
+    flex: none;
     width: 90px;
   }
   .im-echo {
-    margin-left: 6px;
+    font-size: 11px;
     color: var(--vscode-descriptionForeground);
   }
 </style>

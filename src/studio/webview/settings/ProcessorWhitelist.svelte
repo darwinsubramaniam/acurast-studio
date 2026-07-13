@@ -1,10 +1,10 @@
 <script lang="ts">
-  // Processor whitelist editor: a 2-column table (processor · remove) of the
-  // current list, a manual address add, and the shared ProcessorPicker for
-  // one-click add from the wallet's managed processors. Shares its table/add/
-  // remove look with InstantMatchProcessors via the .proc-* classes in
-  // global.css — the whitelist simply has no Max Delay column. The whitelist is
-  // a newline-joined string; edits flow up via `onChange`.
+  // Processor whitelist editor: one card per whitelisted processor (address ·
+  // remove), a manual address add, and the shared ProcessorPicker for one-click
+  // add from the wallet's managed processors. Shares its card/add/remove look
+  // with InstantMatchProcessors via the .proc-* classes in global.css — the
+  // whitelist simply has no max delay row. The whitelist is a newline-joined
+  // string; edits flow up via `onChange`.
   import type { WalletInfo, ProcessorsStateMsg } from '../../types';
   import ProcessorPicker from './ProcessorPicker.svelte';
   import { truncate } from '../lib/format';
@@ -49,27 +49,19 @@
   <label for="f_whitelistAdd">Processor Whitelist <span class="label-optional">(optional)</span></label>
 
   {#if whitelist.length}
-    <table class="proc-table">
-      <thead>
-        <tr>
-          <th>Processor</th>
-          <th class="proc-th-remove">Remove</th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each whitelist as addr (addr)}
-          <tr>
-            <td class="proc-cell-addr" title={addr}>{truncate(addr)}</td>
-            <td class="proc-remove-cell">
-              <button type="button" class="proc-remove" title="Remove processor"
-                aria-label="Remove {addr}" onclick={() => removeFromWhitelist(addr)}>
-                {@html ICONS.trash}
-              </button>
-            </td>
-          </tr>
-        {/each}
-      </tbody>
-    </table>
+    <ul class="proc-list">
+      {#each whitelist as addr (addr)}
+        <li class="proc-item">
+          <div class="proc-item-head">
+            <span class="proc-item-addr" title={addr}>{truncate(addr)}</span>
+            <button type="button" class="proc-remove" title="Remove processor"
+              aria-label="Remove {addr}" onclick={() => removeFromWhitelist(addr)}>
+              {@html ICONS.trash}
+            </button>
+          </div>
+        </li>
+      {/each}
+    </ul>
   {/if}
 
   <div class="proc-add">
