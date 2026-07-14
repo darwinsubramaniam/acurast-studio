@@ -131,6 +131,10 @@
     const key = activeKey();
     if (!key || !dirty || hasErrors) return;
     send('config.save', { projectKey: key, patch: buildPatch(draft, currentProject()) });
+    // Saving moves the draft into the file: an estimate fetched against this
+    // exact draft is still accurate, so carry the "priced" marker over to the
+    // now-empty draft instead of flagging the estimate stale.
+    if (lastPricedSig === draftSig) lastPricedSig = '[]';
     // Optimistic clear — the host writes straight to disk (no onDidSaveTextDocument
     // round-trip refreshes `config.data`), so nothing else would reset the draft.
     draft = {};
@@ -207,7 +211,33 @@
     patchField('maxCostPerExecution', Math.ceil(parseFloat(suggested)));
   }
 
-  const pricingDirty = $derived('maxCostPerExecution' in draft || 'numberOfReplicas' in draft);
+  // ── Pricing vs. draft ──────────────────────────────────────────────────────
+  // The estimate is computed host-side from the config we *send*: fetchPricing
+  // ships the selected project + the unsaved draft patch, so the numbers always
+  // reflect what's on screen — not what's in acurast.json. To know when the
+  // shown numbers have fallen behind (field edited, draft discarded, project
+  // switched), remember which draft signature/project the last fetch priced.
+  const draftSig = $derived(
+    JSON.stringify(Object.entries(draft).sort((a, b) => a[0].localeCompare(b[0]))),
+  );
+  let lastPricedSig = $state('[]');
+  // null = nothing fetched from this view yet; skip the project check then, so
+  // a pre-existing estimate (e.g. pushed while on Deploy) doesn't read as stale.
+  let lastPricedKey = $state<string | null>(null);
+  const pricingStale = $derived(
+    pricing?.status === 'ok' &&
+      (draftSig !== lastPricedSig || (lastPricedKey !== null && lastPricedKey !== activeKey())),
+  );
+
+  function fetchPricing() {
+    const key = activeKey();
+    send('pricing.fetch', {
+      projectKey: key ?? undefined,
+      patch: dirty ? buildPatch(draft, currentProject()) : undefined,
+    });
+    lastPricedSig = draftSig;
+    lastPricedKey = key;
+  }
 
   // ── Shell runtime image picker ─────────────────────────────────────────────
   // The Shell runtime needs a rootfs URL and its SHA256, which users otherwise
@@ -643,13 +673,13 @@
         <div class="pricing-box">
           <div class="pricing-box-header">
             <span class="pricing-box-title">Market Pricing</span>
-            <button class="secondary" style="font-size:10px;padding:2px 8px;" disabled={pricing?.status === 'loading'} onclick={() => send('pricing.fetch')}>
+            <button class="secondary" style="font-size:10px;padding:2px 8px;" disabled={pricing?.status === 'loading'} onclick={fetchPricing}>
               {pricing?.status === 'loading' ? 'Checking…' : pricing?.status === 'ok' ? '⟳ Refresh' : 'Check market price'}
             </button>
           </div>
 
-          {#if pricingDirty && pricing?.status === 'ok'}
-            <div class="pricing-stale-note">Save changes first — pricing reflects the saved config.</div>
+          {#if pricingStale}
+            <div class="pricing-stale-note">Config changed since last check — Refresh to reprice your current values.</div>
           {/if}
 
           {#if pricing?.status === 'loading'}

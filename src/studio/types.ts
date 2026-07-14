@@ -61,7 +61,14 @@ export interface DevtoolsOpenUrlMsg { type: 'devtools.openUrl'; url: string; }
 export interface OpenExternalMsg { type: 'openExternal'; url: string; }
 export type CoinGeckoPlan = 'demo' | 'pro';
 
-export interface PricingFetchMsg { type: 'pricing.fetch'; }
+export interface PricingFetchMsg {
+  type: 'pricing.fetch';
+  /** Settings sends its selected project + unsaved draft patch so the estimate
+   * reflects the UI state, not the file on disk. Absent (Deploy, route pushes)
+   * the host prices the saved acurast.json — the actual deploy target. */
+  projectKey?: string;
+  patch?: Record<string, unknown>;
+}
 export interface FiatFetchListMsg {
   type: 'fiat.fetchList';
   exchangerId: number;

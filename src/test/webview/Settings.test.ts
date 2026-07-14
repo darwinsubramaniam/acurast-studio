@@ -354,3 +354,52 @@ describe('Settings — human-duration → ms converter (clock buttons)', () => {
     expect(input.value).toBe('30000');
   });
 });
+
+describe('Settings — pricing prices the unsaved draft', () => {
+  // Status is all the stale-note logic reads; the card body needs fees, which
+  // these tests don't assert on.
+  const PRICING_OK = { type: 'pricing.state', status: 'ok' } as unknown as import('../../studio/types').PricingStateMsg;
+
+  it('sends projectKey and no patch when the draft is clean', async () => {
+    render(Settings, { props: propsFor(VALID) });
+    await fireEvent.click(screen.getByRole('button', { name: 'Check market price' }));
+    expect(send).toHaveBeenCalledWith('pricing.fetch', { projectKey: 'demo', patch: undefined });
+  });
+
+  it('sends the drafted values as a patch so the estimate reflects the UI, not the file', async () => {
+    render(Settings, { props: propsFor({ ...VALID, maxCostPerExecution: 100 }) });
+    await fireEvent.input(screen.getByLabelText('Max cost per execution'), { target: { value: '250' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Check market price' }));
+
+    const call = vi.mocked(send).mock.calls.find((c) => c[0] === 'pricing.fetch');
+    if (!call) throw new Error('pricing.fetch was not sent');
+    const msg = call[1] as { projectKey: string; patch: Record<string, unknown> };
+    expect(msg.projectKey).toBe('demo');
+    expect(msg.patch).toMatchObject({ maxCostPerExecution: 250 });
+  });
+
+  it('flags the shown estimate stale after an edit and clears the flag on refresh', async () => {
+    render(Settings, { props: { ...propsFor({ ...VALID, maxCostPerExecution: 100 }), pricing: PRICING_OK } });
+    const note = () => screen.queryByText(/Config changed since last check/);
+    expect(note()).toBeNull();
+
+    await fireEvent.input(screen.getByLabelText('Max cost per execution'), { target: { value: '250' } });
+    await tick();
+    expect(note()).not.toBeNull();
+
+    await fireEvent.click(screen.getByRole('button', { name: /Refresh/ }));
+    await tick();
+    expect(note()).toBeNull();
+  });
+
+  it('keeps a draft-priced estimate fresh across Save (draft merges into the file)', async () => {
+    render(Settings, { props: { ...propsFor({ ...VALID, maxCostPerExecution: 100 }), pricing: PRICING_OK } });
+    const note = () => screen.queryByText(/Config changed since last check/);
+
+    await fireEvent.input(screen.getByLabelText('Max cost per execution'), { target: { value: '250' } });
+    await fireEvent.click(screen.getByRole('button', { name: /Refresh/ }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+    await tick();
+    expect(note()).toBeNull();
+  });
+});

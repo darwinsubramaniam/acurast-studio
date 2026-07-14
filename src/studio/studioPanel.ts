@@ -298,7 +298,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
         await this.deregisterDeployment(msg.origin, msg.localId);
         break;
       case 'pricing.fetch':
-        void this.pushPricing();
+        void this.pushPricing(msg.projectKey, msg.patch);
         break;
       case 'fiat.fetchList':
         void this.pushFiatList(msg.exchangerId, msg.apiKey, msg.coingeckoPlan);
@@ -767,7 +767,13 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     }
   }
 
-  async pushPricing() {
+  /**
+   * `projectKey`/`patch` come from Settings' `pricing.fetch`: the estimate must
+   * reflect the unsaved draft the user is editing, so the draft patch is
+   * overlaid on the loaded config the same way `saveConfigPatch` would merge it
+   * into acurast.json on Save. Callers that omit them price the file on disk.
+   */
+  async pushPricing(projectKey?: string, patch?: Record<string, unknown>) {
     this.post({ type: 'pricing.state', status: 'loading' });
 
     if (!this.ctx.configPath) {
@@ -777,7 +783,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
 
     let config;
     try {
-      config = loadAcurastConfig({ filePath: this.ctx.configPath });
+      config = loadAcurastConfig({ filePath: this.ctx.configPath, project: projectKey });
     } catch (err: unknown) {
       this.post({ type: 'pricing.state', status: 'error', error: (err as Error).message });
       return;
@@ -786,6 +792,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       this.post({ type: 'pricing.state', status: 'error', error: 'No project found in acurast.json' });
       return;
     }
+    if (patch) config = { ...config, ...patch } as typeof config;
 
     const network = (config.network ?? 'mainnet') as AcurastNetwork;
     const matcherOverrides = vscode.workspace.getConfiguration('acurast').get<Record<string, string>>('matcherUrls', {});
