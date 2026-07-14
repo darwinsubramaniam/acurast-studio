@@ -21,7 +21,7 @@ import { CoinGecko, type CoinGeckoPlan } from '../sdk/exchanger/coingecko';
 import { DeploymentStore } from '../deployments/deploymentStore';
 import { fetchDistroCatalog } from '../sdk/distroFetch';
 import { BUNDLED_DISTROS } from '../sdk/distros';
-import type { Route, InMsg, WalletActionMsg, WalletCreateMsg, WalletImportMsg, WalletOpResultMsg, BalanceMsg, DeployState, DeployStage, DeployStageId, StageStatus, LogLevel, DeployJobId, ProcessorPubKey, ProcessorInfo, ChainEvent, PricingFiatInfo, FiatListItem, StoredDeploymentWithMeta, HistoryStateMsg, OnlineJobRegistration, LocalJobStatus, ProcessorsStateMsg, DiagnosisStateMsg, DeregisterStateMsg, AssignmentsStateMsg, TunnelStateMsg, TunnelTxtRecord, TunnelVerifyState, WalletInfo, DistroCatalog } from './types';
+import type { Route, InMsg, WalletActionMsg, WalletCreateMsg, WalletImportMsg, WalletOpResultMsg, BalanceMsg, DeployState, DeployStage, DeployStageId, StageStatus, LogLevel, DeployJobId, ProcessorPubKey, ProcessorInfo, ChainEvent, PricingFiatInfo, FiatListItem, StoredDeploymentWithMeta, HistoryStateMsg, HistoryBulkItem, OnlineJobRegistration, LocalJobStatus, ProcessorsStateMsg, DiagnosisStateMsg, DeregisterStateMsg, AssignmentsStateMsg, TunnelStateMsg, TunnelTxtRecord, TunnelVerifyState, WalletInfo, DistroCatalog } from './types';
 
 const BALANCE_POLL_MS = 30_000;
 const FIAT_PRICE_TTL_MS = 60_000;
@@ -337,18 +337,17 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       case 'history.diagnose':
         await this.diagnoseJob(msg.origin, msg.localId, msg.network);
         break;
-      case 'history.deregister':
-        await this.deregisterHistoryJob(msg.origin, msg.localId, msg.network);
+      case 'history.delete':
+        await this.deleteHistoryRecord(msg.id, msg.origin, msg.localId, msg.network);
+        break;
+      case 'history.bulkDelete':
+        await this.bulkDeleteHistory(msg.items ?? []);
         break;
       case 'history.fetchAssignments':
         await this.fetchJobAssignments(msg.origin, msg.localId, msg.network);
         break;
       case 'history.removePathInfo':
         await this.deploymentStore.removePathInfo(msg.id);
-        await this.pushHistory();
-        break;
-      case 'history.remove':
-        await this.deploymentStore.remove(msg.id);
         await this.pushHistory();
         break;
       case 'history.openFolder':
@@ -1488,12 +1487,9 @@ export class StudioPanel implements vscode.WebviewViewProvider {
   }
 
   /**
-   * Shared deregister flow: confirm, resolve + unlock the active (signing)
-   * wallet, then sign and submit `acurast.deregister(localId)`. `onSubmitting`
-   * fires exactly once — right before the extrinsic is sent — so callers can
-   * flip into a "submitting" UI only when prompts are cleared and a tx is
-   * actually going out. Resolves with the tx hash, `null` if the user cancelled
-   * any prompt (no `onSubmitting` was fired), and rejects if the submit fails.
+   * Deregister flow for the Deploy view: confirm, then unlock + submit via
+   * `unlockAndDeregister`. Resolves with the tx hash, `null` if the user
+   * cancelled any prompt, and rejects if the submit fails.
    */
   private async confirmAndDeregister(
     origin: string,
@@ -1507,7 +1503,23 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       'Deregister'
     );
     if (confirm !== 'Deregister') return null;
+    return this.unlockAndDeregister(origin, localId, network, onSubmitting);
+  }
 
+  /**
+   * Resolve + unlock the active (signing) wallet, then sign and submit
+   * `acurast.deregister(localId)`. `onSubmitting` fires exactly once — right
+   * before the extrinsic is sent — so callers can flip into a "submitting" UI
+   * only when prompts are cleared and a tx is actually going out. Resolves
+   * with the tx hash, `null` if the user cancelled any prompt (no
+   * `onSubmitting` was fired), and rejects if the submit fails.
+   */
+  private async unlockAndDeregister(
+    origin: string,
+    localId: number,
+    network: AcurastNetwork,
+    onSubmitting?: () => void,
+  ): Promise<string | null> {
     const activeWallet = await this.wallet.getActive();
     if (!activeWallet) {
       vscode.window.showErrorMessage('No active wallet. Set one as active to sign the deregister tx.');
@@ -1522,8 +1534,23 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       if (proceed !== 'Try anyway') return null;
     }
 
+    const keypair = await this.promptKeypair(activeWallet, 'sign deregister');
+    if (!keypair) return null;
+
+    onSubmitting?.();
+    const svc = await acurastClient.service(network);
+    const hash = await svc.deregisterJob(keypair, localId);
+    return hash.toHex();
+  }
+
+  /**
+   * Password-prompt for `wallet` and derive its signing keypair. Returns null
+   * if the user cancels the prompt; shows the error and returns null when the
+   * password is wrong.
+   */
+  private async promptKeypair(wallet: WalletInfo, reason: string): Promise<Awaited<ReturnType<typeof walletFromMnemonic>> | null> {
     const password = await vscode.window.showInputBox({
-      prompt: `Enter password for "${activeWallet.name}" to sign deregister`,
+      prompt: `Enter password for "${wallet.name}" to ${reason}`,
       password: true,
       ignoreFocusOut: true,
     });
@@ -1531,17 +1558,12 @@ export class StudioPanel implements vscode.WebviewViewProvider {
 
     let mnemonic: string;
     try {
-      mnemonic = await this.wallet.reveal(activeWallet.id, password);
+      mnemonic = await this.wallet.reveal(wallet.id, password);
     } catch (err: unknown) {
       vscode.window.showErrorMessage((err as Error).message);
       return null;
     }
-
-    onSubmitting?.();
-    const svc = await acurastClient.service(network);
-    const keypair = await walletFromMnemonic(mnemonic);
-    const hash = await svc.deregisterJob(keypair, localId);
-    return hash.toHex();
+    return walletFromMnemonic(mnemonic);
   }
 
   private async deregisterDeployment(origin: string, localId: number) {
@@ -1579,26 +1601,271 @@ export class StudioPanel implements vscode.WebviewViewProvider {
   }
 
   /**
-   * Deregister a job surfaced in the History view (local or on-chain section).
-   * Drives a per-job `deregister.state` message rather than the deploy state,
-   * then refreshes the local list so a now-cancelled job's status flips.
+   * Consolidated History delete — the one trash button on both sections. For
+   * a local record (`id` set) this removes the stored entry AND cancels the
+   * job on-chain first when its registration still exists; for an
+   * on-chain-only card (no `id`) it just deregisters. Progress is posted per
+   * job via `deregister.state` (keyed `${origin}:${localId}`) so the webview
+   * can spin the right card and drop it on success.
    */
-  private async deregisterHistoryJob(origin: string, localId: number, network: string) {
+  private async deleteHistoryRecord(id?: string, origin?: string, localId?: number, network?: string): Promise<void> {
+    // No on-chain job recorded → plain local removal.
+    if (origin === undefined || localId === undefined) {
+      if (id) {
+        await this.deploymentStore.remove(id);
+        await this.pushHistory();
+      }
+      return;
+    }
+
     const key = `${origin}:${localId}`;
     const net = (network || 'mainnet') as AcurastNetwork;
+
+    const confirm = await vscode.window.showWarningMessage(
+      `Delete deployment ${localId}?`,
+      {
+        modal: true,
+        detail:
+          (id
+            ? 'This removes the record from local history and cancels the job on-chain if it is still registered.'
+            : 'This cancels (deregisters) the job on-chain.') +
+          ` It cannot be undone.\n\nOrigin: ${origin}\nNetwork: ${net}`,
+      },
+      'Delete'
+    );
+    if (confirm !== 'Delete') return;
+
+    // Spin the card while we look up whether the registration still exists —
+    // a job already gone from chain storage has nothing left to deregister.
+    this.post({ type: 'deregister.state', key, status: 'loading' } satisfies DeregisterStateMsg);
+    let registered: boolean;
     try {
-      const txHash = await this.confirmAndDeregister(origin, localId, net, () => {
-        this.post({ type: 'deregister.state', key, status: 'loading' } satisfies DeregisterStateMsg);
-      });
-      if (txHash === null) return; // cancelled before submit — no state was posted
-      this.post({ type: 'deregister.state', key, status: 'ok', txHash } satisfies DeregisterStateMsg);
-      vscode.window.showInformationMessage(`Deregistered deployment ${localId}`);
-      // Re-query the local list so the deregistered job's lifecycle badge updates.
-      if (this._route === 'history') await this.pushHistory();
+      registered = (await this.registrationsByLocalId(net, origin)).has(localId);
     } catch (err: unknown) {
       const msg = (err as Error).message;
-      this.post({ type: 'deregister.state', key, status: 'error', error: msg } satisfies DeregisterStateMsg);
-      vscode.window.showErrorMessage(`Deregister failed: ${msg}`);
+      if (!id) {
+        // On-chain-only card: deregistering is all delete can do here.
+        this.post({ type: 'deregister.state', key, status: 'error', error: msg } satisfies DeregisterStateMsg);
+        return;
+      }
+      // Local record on an unreachable chain — offer the local-only removal.
+      const anyway = await vscode.window.showWarningMessage(
+        'Could not check the job on-chain. Delete the local record anyway?',
+        { modal: true, detail: msg },
+        'Delete locally'
+      );
+      if (anyway !== 'Delete locally') {
+        this.post({ type: 'deregister.state', key, status: 'idle' } satisfies DeregisterStateMsg);
+        return;
+      }
+      registered = false;
+    }
+
+    if (registered) {
+      try {
+        const txHash = await this.unlockAndDeregister(origin, localId, net);
+        if (txHash === null) {
+          // A wallet/password prompt was cancelled — abort the whole delete.
+          this.post({ type: 'deregister.state', key, status: 'idle' } satisfies DeregisterStateMsg);
+          return;
+        }
+        this.post({ type: 'deregister.state', key, status: 'ok', txHash } satisfies DeregisterStateMsg);
+      } catch (err: unknown) {
+        const msg = (err as Error).message;
+        // Keep the local record so the delete can be retried.
+        this.post({ type: 'deregister.state', key, status: 'error', error: msg } satisfies DeregisterStateMsg);
+        vscode.window.showErrorMessage(`Deregister failed: ${msg}`);
+        return;
+      }
+    } else {
+      // Nothing left on-chain; the card can go regardless.
+      this.post({ type: 'deregister.state', key, status: 'ok' } satisfies DeregisterStateMsg);
+    }
+
+    if (id) await this.deploymentStore.remove(id);
+    vscode.window.showInformationMessage(
+      registered ? `Deregistered deployment ${localId}` : `Deleted deployment ${localId}`
+    );
+    // Re-query the local list so the removed record drops out immediately.
+    if (this._route === 'history') await this.pushHistory();
+  }
+
+  /**
+   * Bulk delete for the History multi-select. One confirm and one password
+   * prompt for the whole selection, then one `utility.forceBatch` of
+   * `acurast.deregister` calls per network — forceBatch keeps going past
+   * failing items, which is what a bulk cleanup wants. Items whose
+   * registration is already gone from chain storage skip the batch and are
+   * treated as successes. Per-item outcomes go out via `deregister.state`
+   * (keyed `${origin}:${localId}`) so the existing card plumbing spins, drops
+   * and errors each card; local records are removed only for items that
+   * succeeded, so failures stay visible and retryable.
+   */
+  private async bulkDeleteHistory(items: HistoryBulkItem[]): Promise<void> {
+    if (!items.length) return;
+    const withJobs = items.filter((i) => i.origin !== undefined && i.localId !== undefined);
+    const localOnly = items.filter((i) => (i.origin === undefined || i.localId === undefined) && i.id);
+    const keyOf = (i: HistoryBulkItem) => `${i.origin}:${i.localId}`;
+    const plural = (n: number) => (n === 1 ? '' : 's');
+
+    const localCount = items.filter((i) => i.id).length;
+    const parts: string[] = [];
+    if (localCount) parts.push(`${localCount} local record${plural(localCount)} will be removed`);
+    if (withJobs.length) parts.push(`up to ${withJobs.length} job${plural(withJobs.length)} will be deregistered on-chain`);
+    const confirm = await vscode.window.showWarningMessage(
+      `Delete ${items.length} deployment${plural(items.length)}?`,
+      { modal: true, detail: `${parts.join(' and ')}. This cannot be undone.` },
+      'Delete'
+    );
+    if (confirm !== 'Delete') return;
+
+    let keypair: Awaited<ReturnType<typeof walletFromMnemonic>> | null = null;
+    if (withJobs.length) {
+      const activeWallet = await this.wallet.getActive();
+      if (!activeWallet) {
+        vscode.window.showErrorMessage('No active wallet. Set one as active to sign the deregister batch.');
+        return;
+      }
+      const foreign = withJobs.filter((i) => i.origin !== activeWallet.address).length;
+      if (foreign) {
+        const proceed = await vscode.window.showWarningMessage(
+          `${foreign} of the selected job${plural(foreign)} were not deployed by the active wallet — the chain will reject those deregistrations.`,
+          { modal: true, detail: `Active wallet: ${activeWallet.address}` },
+          'Continue'
+        );
+        if (proceed !== 'Continue') return;
+      }
+      keypair = await this.promptKeypair(activeWallet, 'sign the deregister batch');
+      if (!keypair) return;
+    }
+
+    // All prompts cleared — spin every selected card while the batches run.
+    for (const i of withJobs) {
+      this.post({ type: 'deregister.state', key: keyOf(i), status: 'loading' } satisfies DeregisterStateMsg);
+    }
+
+    const byNetwork = new Map<string, HistoryBulkItem[]>();
+    for (const i of withJobs) {
+      const net = i.network || 'mainnet';
+      (byNetwork.get(net) ?? byNetwork.set(net, []).get(net)!).push(i);
+    }
+
+    const removableIds: string[] = localOnly.map((i) => i.id!);
+    let failed = 0;
+    for (const [network, jobs] of byNetwork) {
+      const net = network as AcurastNetwork;
+
+      // Which registrations still exist on-chain? Gone ones are successes
+      // with nothing to sign.
+      const regKeys = new Set<string>();
+      try {
+        for (const origin of [...new Set(jobs.map((i) => i.origin!))]) {
+          const m = await this.registrationsByLocalId(net, origin);
+          for (const localId of m.keys()) regKeys.add(`${origin}:${localId}`);
+        }
+      } catch (err: unknown) {
+        // Chain unreachable — fail this network's items, keep their records.
+        const msg = (err as Error).message;
+        for (const i of jobs) {
+          this.post({ type: 'deregister.state', key: keyOf(i), status: 'error', error: msg } satisfies DeregisterStateMsg);
+        }
+        failed += jobs.length;
+        continue;
+      }
+
+      const registered = jobs.filter((i) => regKeys.has(keyOf(i)));
+      for (const i of jobs.filter((j) => !regKeys.has(keyOf(j)))) {
+        this.post({ type: 'deregister.state', key: keyOf(i), status: 'ok' } satisfies DeregisterStateMsg);
+        if (i.id) removableIds.push(i.id);
+      }
+      if (!registered.length) continue;
+
+      try {
+        const { txHash, itemErrors } = await this.submitDeregisterBatch(net, keypair!, registered.map((i) => i.localId!));
+        registered.forEach((i, idx) => {
+          const itemError = itemErrors[idx];
+          if (itemError) {
+            failed++;
+            this.post({ type: 'deregister.state', key: keyOf(i), status: 'error', error: itemError } satisfies DeregisterStateMsg);
+          } else {
+            this.post({ type: 'deregister.state', key: keyOf(i), status: 'ok', txHash } satisfies DeregisterStateMsg);
+            if (i.id) removableIds.push(i.id);
+          }
+        });
+      } catch (err: unknown) {
+        const msg = (err as Error).message;
+        failed += registered.length;
+        for (const i of registered) {
+          this.post({ type: 'deregister.state', key: keyOf(i), status: 'error', error: msg } satisfies DeregisterStateMsg);
+        }
+      }
+    }
+
+    for (const id of removableIds) await this.deploymentStore.remove(id);
+    const ok = items.length - failed;
+    if (failed) {
+      vscode.window.showWarningMessage(`Bulk delete finished: ${ok} of ${items.length} deployment${plural(items.length)} deleted, ${failed} failed — see the History cards for details.`);
+    } else {
+      vscode.window.showInformationMessage(`Deleted ${items.length} deployment${plural(items.length)}`);
+    }
+    if (this._route === 'history') await this.pushHistory();
+  }
+
+  /**
+   * Submit one `utility.forceBatch` of `acurast.deregister(localId)` calls and
+   * resolve with the tx hash plus per-item errors parsed from the batch's
+   * ItemCompleted/ItemFailed events (emitted in call order). Rejects only when
+   * the batch extrinsic itself fails to execute.
+   */
+  private async submitDeregisterBatch(
+    network: AcurastNetwork,
+    keypair: Awaited<ReturnType<typeof walletFromMnemonic>>,
+    localIds: number[],
+  ): Promise<{ txHash: string; itemErrors: (string | undefined)[] }> {
+    const svc = await acurastClient.service(network);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const api = (await svc.connect()) as any;
+    const calls = localIds.map((id) => api.tx['acurast']['deregister'](id));
+    const call = api.tx['utility']['forceBatch'](calls);
+    return new Promise((resolve, reject) => {
+      let unsub: (() => void) | undefined;
+      call
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .signAndSend(keypair, (result: any) => {
+          const { status, events, dispatchError } = result;
+          if (dispatchError) {
+            unsub?.();
+            reject(new Error(this.decodeDispatchError(api, dispatchError)));
+            return;
+          }
+          if (status.isInBlock) {
+            unsub?.();
+            const itemErrors: (string | undefined)[] = [];
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            for (const { event } of events as any[]) {
+              if (event.section !== 'utility') continue;
+              if (event.method === 'ItemCompleted') itemErrors.push(undefined);
+              else if (event.method === 'ItemFailed') itemErrors.push(this.decodeDispatchError(api, event.data[0]));
+            }
+            resolve({ txHash: result.txHash.toHex(), itemErrors });
+          }
+        })
+        .then((u: () => void) => { unsub = u; })
+        .catch(reject);
+    });
+  }
+
+  /** Decode a DispatchError into `section.name` (falls back to toString). */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private decodeDispatchError(api: any, err: any): string {
+    try {
+      if (err.isModule) {
+        const meta = api.registry.findMetaError(err.asModule);
+        return `${meta.section}.${meta.name}`;
+      }
+      return err.toString();
+    } catch {
+      return String(err);
     }
   }
 

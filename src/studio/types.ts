@@ -110,12 +110,28 @@ export interface NewAdvertisementParams {
 export interface HistoryLoadMsg        { type: 'history.load'; offset?: number; }
 export interface HistoryFetchOnlineMsg { type: 'history.fetchOnline'; address: string; network: string; }
 export interface JobDiagnoseMsg        { type: 'history.diagnose'; origin: string; localId: number; network: string; }
-/** Deregister (cancel on-chain) a job shown in the History view. */
-export interface HistoryDeregisterMsg  { type: 'history.deregister'; origin: string; localId: number; network: string; }
+/**
+ * Consolidated History delete — the one trash button on every card. Removes
+ * the local record when `id` is set, and cancels (deregisters) the job
+ * on-chain when its registration still exists. On-chain-only cards send the
+ * job fields without an `id`.
+ */
+export interface HistoryDeleteMsg      { type: 'history.delete'; id?: string; origin?: string; localId?: number; network?: string; }
+/** One multi-selected History card in a bulk delete. Local records carry `id`
+ * (plus the job fields when they have one); on-chain-only cards carry just the
+ * job fields. */
+export interface HistoryBulkItem       { id?: string; origin?: string; localId?: number; network?: string; }
+/**
+ * Bulk delete of the multi-selected History cards. The host confirms once,
+ * prompts for the wallet password once, and submits one `utility.forceBatch`
+ * of `acurast.deregister` calls per network (items whose registration is
+ * already gone just have their local record removed). Per-item outcomes are
+ * posted via `deregister.state`.
+ */
+export interface HistoryBulkDeleteMsg  { type: 'history.bulkDelete'; items: HistoryBulkItem[]; }
 /** Fetch the per-processor assignments (slot + startDelay) for one History job, on demand. */
 export interface HistoryAssignmentsMsg { type: 'history.fetchAssignments'; origin: string; localId: number; network: string; }
 export interface HistoryRemovePathMsg  { type: 'history.removePathInfo'; id: string; }
-export interface HistoryRemoveMsg      { type: 'history.remove'; id: string; }
 export interface HistoryOpenFolderMsg  { type: 'history.openFolder'; path: string; }
 /** Align the Studio target network (`acurast.network` setting) to `network`. */
 export interface NetworkSetTargetMsg   { type: 'network.setTarget'; network: string; }
@@ -199,7 +215,7 @@ export type InMsg =
   | FiatFetchListMsg | FiatSaveMsg
   | DevtoolsRefreshKeyMsg | DevtoolsOpenUrlMsg | OpenExternalMsg
   | ProcessorsQueryMsg | ProcessorsAdvertiseMsg
-  | HistoryLoadMsg | HistoryFetchOnlineMsg | JobDiagnoseMsg | HistoryDeregisterMsg | HistoryAssignmentsMsg | HistoryRemovePathMsg | HistoryRemoveMsg | HistoryOpenFolderMsg
+  | HistoryLoadMsg | HistoryFetchOnlineMsg | JobDiagnoseMsg | HistoryDeleteMsg | HistoryBulkDeleteMsg | HistoryAssignmentsMsg | HistoryRemovePathMsg | HistoryOpenFolderMsg
   | NetworkSetTargetMsg | NetworkOpenPickerMsg
   | TunnelComputeMsg | TunnelVerifyMsg | TunnelOpenRelaySettingMsg
   | DistroRefreshMsg | DurationConvertMsg;
@@ -619,12 +635,13 @@ export interface DiagnosisStateMsg {
   error?: string;
 }
 
-/** Progress of a History-view deregister, posted host→webview. */
+/** Progress of a History-view delete/deregister, posted host→webview. */
 export interface DeregisterStateMsg {
   type: 'deregister.state';
   /** `${origin}:${localId}` — keys the result per job in the webview. */
   key: string;
-  status: 'loading' | 'ok' | 'error';
+  /** 'idle' resets the card after a cancelled delete (spinner was showing). */
+  status: 'idle' | 'loading' | 'ok' | 'error';
   /** Submitted extrinsic hash, set once the deregister is in a block. */
   txHash?: string;
   error?: string;

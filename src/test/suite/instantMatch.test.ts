@@ -12,7 +12,7 @@ import { buildPatch } from '../../studio/webview/lib/acurastConfig';
 // whole webview-draft → on-disk acurast.json contract is covered in a live host.
 //
 // StudioPanel.saveConfigPatch can't be imported here (its @acurast/sdk graph is
-// ESM-only and this Mocha runtime is CJS — see studioPanel.deregister unit test),
+// ESM-only and this Mocha runtime is CJS — see studioPanel.historyDelete unit test),
 // so saveLikeHost mirrors its read/shallow-merge/write exactly.
 async function saveLikeHost(uri: vscode.Uri, projectKey: string, patch: Record<string, unknown>): Promise<void> {
   const data = await vscode.workspace.fs.readFile(uri);

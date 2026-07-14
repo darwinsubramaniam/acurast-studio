@@ -46,22 +46,17 @@
   const diagKey = (rec: StoredDeploymentWithMeta): string =>
     rec.jobIds[0] ? `${rec.jobIds[0].origin}:${rec.jobIds[0].localId}` : "";
 
-  // Deregister (cancel on-chain) a record's first job. The host confirms,
-  // unlocks the active wallet, signs `acurast.deregister`, and reports progress
-  // back via the `deregisters` map keyed the same as diagnoses.
-  function deregister(rec: StoredDeploymentWithMeta) {
+  // Consolidated delete — the one trash button on every card. The host
+  // confirms, removes the local record (when `isLocal`) and signs
+  // `acurast.deregister` when the job is still registered on-chain; progress
+  // comes back via the `deregisters` map keyed the same as diagnoses.
+  function deleteRecord(rec: StoredDeploymentWithMeta, isLocal: boolean) {
     const job = rec.jobIds[0];
-    if (!job) return;
-    send("history.deregister", {
-      origin: job.origin,
-      localId: job.localId,
-      network: rec.network,
+    send("history.delete", {
+      ...(isLocal ? { id: rec.id } : {}),
+      ...(job ? { origin: job.origin, localId: job.localId, network: rec.network } : {}),
     });
   }
-  // A job can be cancelled only while it's live on-chain (running or scheduled);
-  // expired/missing registrations have nothing left to deregister.
-  const canDeregister = (status: string | undefined): boolean =>
-    status === "active" || status === "scheduled";
 
   // Fetch the per-processor assignments (slot + startDelay) for a record's first
   // job; the host replies via the `assignments` map keyed like diagnoses.
@@ -222,6 +217,67 @@
     });
   });
 
+  // ── Multi-select bulk delete ─────────────────────────────────────────────────
+  // Selection is kept per section, keyed by record id. Stale ids (records that
+  // refreshed away) are harmless: everything downstream derives from the
+  // intersection with the current lists.
+  let selectedLocal = $state<Set<string>>(new Set());
+  let selectedOnline = $state<Set<string>>(new Set());
+  let selectedLocalRecs = $derived(accumulated.filter((r) => selectedLocal.has(r.id)));
+  let selectedOnlineRecs = $derived(onlineRecords.filter((r) => selectedOnline.has(r.id)));
+
+  // "Select all" covers only what's rendered: every loaded local record / the
+  // visible on-chain page.
+  let allLocalSelected = $derived(
+    accumulated.length > 0 && accumulated.every((r) => selectedLocal.has(r.id)),
+  );
+  let allOnlineSelected = $derived(
+    onlinePageRecords.length > 0 && onlinePageRecords.every((r) => selectedOnline.has(r.id)),
+  );
+
+  function toggleSelected(section: "local" | "online", id: string) {
+    const next = new Set(section === "local" ? selectedLocal : selectedOnline);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    if (section === "local") selectedLocal = next;
+    else selectedOnline = next;
+  }
+  function toggleAllLocal() {
+    selectedLocal = allLocalSelected ? new Set() : new Set(accumulated.map((r) => r.id));
+  }
+  function toggleAllOnline() {
+    const next = new Set(selectedOnline);
+    for (const r of onlinePageRecords) {
+      if (allOnlineSelected) next.delete(r.id);
+      else next.add(r.id);
+    }
+    selectedOnline = next;
+  }
+
+  // A bulk delete is in flight while any selected card's job is loading.
+  let bulkLocalBusy = $derived(
+    selectedLocalRecs.some((r) => deregisters[diagKey(r)]?.status === "loading"),
+  );
+  let bulkOnlineBusy = $derived(
+    selectedOnlineRecs.some((r) => deregisters[diagKey(r)]?.status === "loading"),
+  );
+
+  // One message for the whole selection: the host confirms once, prompts for
+  // the wallet password once, and submits one utility.forceBatch per network.
+  // Per-card progress arrives via the same `deregisters` map as single deletes.
+  function bulkDelete(recs: StoredDeploymentWithMeta[], isLocal: boolean) {
+    if (!recs.length) return;
+    send("history.bulkDelete", {
+      items: recs.map((rec) => {
+        const job = rec.jobIds[0];
+        return {
+          ...(isLocal ? { id: rec.id } : {}),
+          ...(job ? { origin: job.origin, localId: job.localId, network: rec.network } : {}),
+        };
+      }),
+    });
+  }
+
   const fmt = fmtTimestamp;
 
   type JobStatus = "active" | "scheduled" | "expired" | "unknown";
@@ -245,6 +301,28 @@
       {#if total > 0}
         <span class="section-count">{total}</span>
       {/if}
+      {#if accumulated.length > 0}
+        <span class="section-actions">
+          {#if selectedLocalRecs.length > 0}
+            <button
+              class="bulk-del"
+              onclick={() => bulkDelete(selectedLocalRecs, true)}
+              disabled={bulkLocalBusy}
+            >
+              Delete {selectedLocalRecs.length}
+            </button>
+          {/if}
+          <label class="sel-all">
+            <input
+              type="checkbox"
+              checked={allLocalSelected}
+              onchange={toggleAllLocal}
+              aria-label="Select all local deployments"
+            />
+            All
+          </label>
+        </span>
+      {/if}
     </div>
 
     {#if accumulated.length === 0}
@@ -254,8 +332,16 @@
     {:else}
       <div class="cards">
         {#each accumulated as rec (rec.id)}
+          {@const dreg = deregisters[diagKey(rec)]}
           <div class="h-card">
             <div class="h-card-header">
+              <input
+                type="checkbox"
+                class="sel-box"
+                checked={selectedLocal.has(rec.id)}
+                onchange={() => toggleSelected("local", rec.id)}
+                aria-label="Select deployment"
+              />
               <span class="h-project">{rec.project}</span>
               <span class="badge net-{rec.network.toLowerCase()}"
                 >{rec.network}</span
@@ -272,10 +358,16 @@
               {/if}
               <button
                 class="icon-btn danger"
-                title="Remove"
-                onclick={() => send("history.remove", { id: rec.id })}
+                title="Delete"
+                aria-label="Delete"
+                onclick={() => deleteRecord(rec, true)}
+                disabled={dreg?.status === "loading"}
               >
-                {@html ICONS.trash}
+                {#if dreg?.status === "loading"}
+                  <Spinner size={12} />
+                {:else}
+                  {@html ICONS.trash}
+                {/if}
               </button>
             </div>
             <div class="h-card-meta">
@@ -357,32 +449,11 @@
             {/if}
             {#if rec.jobIds[0]}
               {@const dstate = diagnoses[diagKey(rec)]}
-              {@const dreg = deregisters[diagKey(rec)]}
               <div class="h-card-actions">
                 <DiagnoseButton state={dstate} onclick={() => diagnose(rec)} />
-                {#if dreg?.status === "ok"}
-                  <span class="dereg-badge">Deregistered</span>
-                {:else if canDeregister(localStatus[rec.id])}
-                  <button
-                    class="dereg-btn"
-                    onclick={() => deregister(rec)}
-                    disabled={dreg?.status === "loading"}
-                  >
-                    {#if dreg?.status === "loading"}
-                      <Spinner size={10} label="Deregistering…" />
-                    {:else}
-                      Deregister
-                    {/if}
-                  </button>
-                {/if}
               </div>
               {#if dreg?.status === "error"}
                 <div class="dereg-error">{dreg.error}</div>
-              {/if}
-              {#if dreg?.status === "ok" && dreg.txHash}
-                <div class="dereg-tx" title={dreg.txHash}>
-                  tx {truncate(dreg.txHash)}
-                </div>
               {/if}
               <DiagnosisPanel state={dstate} />
             {/if}
@@ -441,6 +512,28 @@
               Set an active wallet to fetch on-chain deployments.
             </p>
           {/if}
+          {#if onlineRecords.length > 0 && !fetchingOnline}
+            <span class="section-actions">
+              {#if selectedOnlineRecs.length > 0}
+                <button
+                  class="bulk-del"
+                  onclick={() => bulkDelete(selectedOnlineRecs, false)}
+                  disabled={bulkOnlineBusy}
+                >
+                  Delete {selectedOnlineRecs.length}
+                </button>
+              {/if}
+              <label class="sel-all">
+                <input
+                  type="checkbox"
+                  checked={allOnlineSelected}
+                  onchange={toggleAllOnline}
+                  aria-label="Select all visible on-chain deployments"
+                />
+                All
+              </label>
+            </span>
+          {/if}
         </div>
 
         {#if fetchingOnline}
@@ -463,8 +556,16 @@
           <div class="cards">
             {#each onlinePageRecords as rec (rec.id)}
               {@const status = jobStatus(rec.registration)}
+              {@const dreg = deregisters[diagKey(rec)]}
               <div class="h-card online">
                 <div class="h-card-header">
+                  <input
+                    type="checkbox"
+                    class="sel-box"
+                    checked={selectedOnline.has(rec.id)}
+                    onchange={() => toggleSelected("online", rec.id)}
+                    aria-label="Select deployment"
+                  />
                   <span class="h-project">Job #{rec.jobIds[0]?.localId}</span>
                   <span class="badge net-{rec.network.toLowerCase()}"
                     >{rec.network}</span
@@ -475,6 +576,19 @@
                     >
                   {/if}
                   <span class="badge status-{status}">{status}</span>
+                  <button
+                    class="icon-btn danger"
+                    title="Delete"
+                    aria-label="Delete"
+                    onclick={() => deleteRecord(rec, false)}
+                    disabled={dreg?.status === "loading"}
+                  >
+                    {#if dreg?.status === "loading"}
+                      <Spinner size={12} />
+                    {:else}
+                      {@html ICONS.trash}
+                    {/if}
+                  </button>
                 </div>
                 {#if rec.registration}
                   {@const r = rec.registration}
@@ -512,7 +626,6 @@
                 {/if}
                 {#if rec.jobIds[0]}
                   {@const dstate = diagnoses[diagKey(rec)]}
-                  {@const dreg = deregisters[diagKey(rec)]}
                   {@const astate = assignments[diagKey(rec)]}
                   <div class="h-card-actions">
                     <DiagnoseButton state={dstate} onclick={() => diagnose(rec)} />
@@ -527,19 +640,6 @@
                           : astate
                             ? "Refresh start times"
                             : "Start times"}
-                      </button>
-                    {/if}
-                    {#if canDeregister(status)}
-                      <button
-                        class="dereg-btn"
-                        onclick={() => deregister(rec)}
-                        disabled={dreg?.status === "loading"}
-                      >
-                        {#if dreg?.status === "loading"}
-                          <Spinner size={10} label="Deregistering…" />
-                        {:else}
-                          Deregister
-                        {/if}
                       </button>
                     {/if}
                   </div>
@@ -680,6 +780,45 @@
   }
   .section-actions {
     margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sel-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--vscode-descriptionForeground);
+    cursor: pointer;
+    user-select: none;
+  }
+  .sel-all input,
+  .sel-box {
+    margin: 0;
+    cursor: pointer;
+    accent-color: var(--vscode-button-background);
+    flex-shrink: 0;
+  }
+  .bulk-del {
+    font-size: 11px;
+    padding: 2px 10px;
+    background: transparent;
+    color: var(--vscode-errorForeground);
+    border: 1px solid var(--vscode-errorForeground);
+    border-radius: 4px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+  }
+  .bulk-del:hover:not(:disabled) {
+    background: var(--vscode-inputValidation-errorBackground);
+  }
+  .bulk-del:disabled {
+    opacity: 0.6;
+    cursor: default;
   }
 
   .section-toggle {
@@ -766,33 +905,6 @@
     align-items: center;
     gap: 6px;
   }
-  .dereg-btn {
-    font-size: 11px;
-    padding: 2px 10px;
-    background: transparent;
-    color: var(--vscode-errorForeground);
-    border: 1px solid var(--vscode-errorForeground);
-    border-radius: 4px;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-  }
-  .dereg-btn:hover:not(:disabled) {
-    background: var(--vscode-inputValidation-errorBackground);
-  }
-  .dereg-btn:disabled {
-    opacity: 0.6;
-    cursor: default;
-  }
-  .dereg-badge {
-    font-size: 9px;
-    padding: 1px 6px;
-    border-radius: 2px;
-    background: var(--vscode-errorForeground);
-    color: var(--vscode-editor-background);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
   .dereg-error {
     margin-top: 6px;
     font-size: 10.5px;
@@ -801,13 +913,6 @@
   }
   .h-assignments {
     margin-top: 6px;
-  }
-  .dereg-tx {
-    margin-top: 6px;
-    font-family: var(--vscode-editor-font-family, monospace);
-    font-size: 10px;
-    color: var(--vscode-descriptionForeground);
-    word-break: break-all;
   }
 
   .h-card-row {
@@ -926,11 +1031,14 @@
     border-radius: 3px;
     flex-shrink: 0;
   }
-  .icon-btn:hover {
+  .icon-btn:hover:not(:disabled) {
     opacity: 1;
     background: var(--vscode-toolbar-hoverBackground);
   }
-  .icon-btn.danger:hover {
+  .icon-btn:disabled {
+    cursor: default;
+  }
+  .icon-btn.danger:hover:not(:disabled) {
     color: var(--vscode-errorForeground);
   }
   .icon-btn :global(svg) {

@@ -110,65 +110,47 @@ function baseProps(over: Partial<HistoryProps> = {}): HistoryProps {
   };
 }
 
-// ── Local section: when the Deregister action is offered ─────────────────────
-describe('History — local deregister gating', () => {
-  it('offers Deregister for a running (active) job', () => {
+// ── Local section: the consolidated Delete button ────────────────────────────
+describe('History — local delete button', () => {
+  it.each(['active', 'scheduled', 'expired', 'none', undefined] as const)(
+    'shows Delete (and never Deregister) with on-chain status %s',
+    (status) => {
+      render(History, { props: baseProps({ historyState: localState(status) }) });
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Deregister' })).not.toBeInTheDocument();
+    },
+  );
+
+  it('sends history.delete with the record id and job info on click', async () => {
     render(History, { props: baseProps({ historyState: localState('active') }) });
-    expect(screen.getByRole('button', { name: 'Deregister' })).toBeInTheDocument();
-  });
-
-  it('offers Deregister for a scheduled (not-yet-started) job', () => {
-    render(History, { props: baseProps({ historyState: localState('scheduled') }) });
-    expect(screen.getByRole('button', { name: 'Deregister' })).toBeInTheDocument();
-  });
-
-  it('hides Deregister for an expired job', () => {
-    render(History, { props: baseProps({ historyState: localState('expired') }) });
-    expect(screen.queryByRole('button', { name: 'Deregister' })).not.toBeInTheDocument();
-  });
-
-  it('hides Deregister when the job is no longer on-chain (none)', () => {
-    render(History, { props: baseProps({ historyState: localState('none') }) });
-    expect(screen.queryByRole('button', { name: 'Deregister' })).not.toBeInTheDocument();
-  });
-
-  it('hides Deregister until the on-chain status has resolved', () => {
-    // No `statuses` → the record's status stays "loading" → not deregisterable yet.
-    render(History, { props: baseProps({ historyState: localState(undefined) }) });
-    expect(screen.queryByRole('button', { name: 'Deregister' })).not.toBeInTheDocument();
-  });
-});
-
-// ── Local section: action + progress states ──────────────────────────────────
-describe('History — local deregister flow', () => {
-  it('sends history.deregister with origin, localId and network on click', async () => {
-    render(History, { props: baseProps({ historyState: localState('active') }) });
-    await fireEvent.click(screen.getByRole('button', { name: 'Deregister' }));
-    expect(send).toHaveBeenCalledWith('history.deregister', {
+    await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(send).toHaveBeenCalledWith('history.delete', {
+      id: 'rec1',
       origin: ORIGIN,
       localId: 42,
       network: 'mainnet',
     });
   });
 
-  it('disables the button and shows a spinner while deregistering', () => {
+  it('sends only the record id for a record with no job ids', async () => {
+    const state: HistoryStateMsg = {
+      type: 'history.state',
+      status: 'ok',
+      records: [localRecord({ jobIds: [] })],
+      offset: 0,
+      hasMore: false,
+      total: 1,
+    };
+    render(History, { props: baseProps({ historyState: state }) });
+    await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(send).toHaveBeenCalledWith('history.delete', { id: 'rec1' });
+  });
+
+  it('disables the button while the delete is in flight', () => {
     render(History, {
       props: baseProps({ historyState: localState('active'), deregisters: dereg('loading') }),
     });
-    const btn = screen.getByRole('button', { name: /Deregistering/ });
-    expect(btn).toBeDisabled();
-  });
-
-  it('shows a "Deregistered" badge and tx hash, and removes the button, on success', () => {
-    render(History, {
-      props: baseProps({
-        historyState: localState('active'),
-        deregisters: dereg('ok', { txHash: '0xdeadbeefcafebabe1234567890' }),
-      }),
-    });
-    expect(screen.getByText('Deregistered')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Deregister' })).not.toBeInTheDocument();
-    expect(screen.getByText(/tx 0xdeadbeef/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled();
   });
 
   it('shows the error and keeps the button for retry on failure', () => {
@@ -179,12 +161,19 @@ describe('History — local deregister flow', () => {
       }),
     });
     expect(screen.getByText('1010: Invalid Transaction')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Deregister' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled();
+  });
+
+  it('renders nothing extra for an idle reset (cancelled delete)', () => {
+    render(History, {
+      props: baseProps({ historyState: localState('active'), deregisters: dereg('idle') }),
+    });
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled();
   });
 });
 
 // ── On-chain section: action + prune ─────────────────────────────────────────
-describe('History — on-chain deregister', () => {
+describe('History — on-chain delete', () => {
   function onlineProps(
     deregisters: Record<string, DeregisterStateMsg> = {},
     assignments: Record<string, AssignmentsStateMsg> = {},
@@ -207,14 +196,15 @@ describe('History — on-chain deregister', () => {
     };
   }
 
-  it('offers Deregister on an active on-chain card and sends the right payload', async () => {
+  it('offers Delete on an on-chain card and sends the job info without an id', async () => {
     render(History, { props: onlineProps() });
     // The On-chain accordion is collapsed by default — expand it first.
     await fireEvent.click(screen.getByRole('button', { name: /On-chain/ }));
     expect(screen.getByText('Job #7')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Deregister' })).not.toBeInTheDocument();
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Deregister' }));
-    expect(send).toHaveBeenCalledWith('history.deregister', {
+    await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(send).toHaveBeenCalledWith('history.delete', {
       origin: ORIGIN,
       localId: 7,
       network: 'mainnet',
@@ -277,5 +267,103 @@ describe('History — on-chain processor start times', () => {
     expect(screen.getByText(/starts/)).toBeInTheDocument();
     // The button flips to a refresh affordance once a result is present.
     expect(screen.getByRole('button', { name: 'Refresh start times' })).toBeInTheDocument();
+  });
+});
+
+// ── Multi-select bulk delete ──────────────────────────────────────────────────
+describe('History — multi-select bulk delete', () => {
+  function twoLocalState(): HistoryStateMsg {
+    return {
+      type: 'history.state',
+      status: 'ok',
+      records: [
+        localRecord(),
+        localRecord({ id: 'rec2', jobIds: [{ origin: ORIGIN, localId: 43 }] }),
+      ],
+      offset: 0,
+      hasMore: false,
+      total: 2,
+      statuses: { rec1: 'active', rec2: 'active' },
+    };
+  }
+
+  function twoOnlineProps() {
+    return {
+      historyState: {
+        type: 'history.state',
+        status: 'ok',
+        records: [],
+        offset: 0,
+        hasMore: false,
+        total: 0,
+        onlineRecords: [
+          onlineRecord(),
+          onlineRecord({ id: `online:${ORIGIN}:8`, jobIds: [{ origin: ORIGIN, localId: 8 }] }),
+        ],
+      } as HistoryStateMsg,
+      activeWalletAddress: ORIGIN,
+      activeNetwork: 'mainnet',
+      diagnoses: {},
+      deregisters: {},
+      assignments: {},
+    };
+  }
+
+  it('select-all selects the visible local records and bulk delete sends them all', async () => {
+    render(History, { props: baseProps({ historyState: twoLocalState() }) });
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Select all local deployments' }));
+    const boxes = screen.getAllByRole('checkbox', { name: 'Select deployment' });
+    expect(boxes).toHaveLength(2);
+    for (const b of boxes) expect(b).toBeChecked();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Delete 2' }));
+    expect(send).toHaveBeenCalledWith('history.bulkDelete', {
+      items: [
+        { id: 'rec1', origin: ORIGIN, localId: 42, network: 'mainnet' },
+        { id: 'rec2', origin: ORIGIN, localId: 43, network: 'mainnet' },
+      ],
+    });
+  });
+
+  it('unchecking select-all clears the selection and hides the bulk button', async () => {
+    render(History, { props: baseProps({ historyState: twoLocalState() }) });
+    const all = screen.getByRole('checkbox', { name: 'Select all local deployments' });
+    await fireEvent.click(all);
+    expect(screen.getByRole('button', { name: 'Delete 2' })).toBeInTheDocument();
+    await fireEvent.click(all);
+    expect(screen.queryByRole('button', { name: /Delete \d/ })).not.toBeInTheDocument();
+  });
+
+  it('selecting one card bulk deletes just that record', async () => {
+    render(History, { props: baseProps({ historyState: twoLocalState() }) });
+    await fireEvent.click(screen.getAllByRole('checkbox', { name: 'Select deployment' })[0]);
+    await fireEvent.click(screen.getByRole('button', { name: 'Delete 1' }));
+    expect(send).toHaveBeenCalledWith('history.bulkDelete', {
+      items: [{ id: 'rec1', origin: ORIGIN, localId: 42, network: 'mainnet' }],
+    });
+  });
+
+  it('on-chain select-all covers the visible page and bulk deletes without ids', async () => {
+    render(History, { props: twoOnlineProps() });
+    await fireEvent.click(screen.getByRole('button', { name: /On-chain/ }));
+    await fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Select all visible on-chain deployments' }),
+    );
+    await fireEvent.click(screen.getByRole('button', { name: 'Delete 2' }));
+    expect(send).toHaveBeenCalledWith('history.bulkDelete', {
+      items: [
+        { origin: ORIGIN, localId: 7, network: 'mainnet' },
+        { origin: ORIGIN, localId: 8, network: 'mainnet' },
+      ],
+    });
+  });
+
+  it('disables the bulk button while a selected card is deregistering', async () => {
+    render(History, {
+      props: baseProps({ historyState: twoLocalState(), deregisters: dereg('loading') }),
+    });
+    // rec1 (origin:42) is loading; select it via select-all.
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Select all local deployments' }));
+    expect(screen.getByRole('button', { name: 'Delete 2' })).toBeDisabled();
   });
 });
