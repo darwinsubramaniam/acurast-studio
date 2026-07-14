@@ -24,12 +24,24 @@ import { BUNDLED_DISTROS } from '../sdk/distros';
 import type { Route, InMsg, WalletActionMsg, WalletCreateMsg, WalletImportMsg, WalletOpResultMsg, BalanceMsg, DeployState, DeployStage, DeployStageId, StageStatus, LogLevel, DeployJobId, ProcessorPubKey, ProcessorInfo, ChainEvent, PricingFiatInfo, FiatListItem, StoredDeploymentWithMeta, HistoryStateMsg, HistoryBulkItem, OnlineJobRegistration, LocalJobStatus, ProcessorsStateMsg, DiagnosisStateMsg, DeregisterStateMsg, AssignmentsStateMsg, TunnelStateMsg, TunnelTxtRecord, TunnelVerifyState, WalletInfo, DistroCatalog } from './types';
 
 const BALANCE_POLL_MS = 30_000;
-const FIAT_PRICE_TTL_MS = 60_000;
+const FIAT_PRICE_TTL_MS = 6 * 60 * 60 * 1000;
 const HISTORY_PAGE_SIZE = 15;
+/** ACU→fiat rates keyed by `exchangerId:currencyId`, served from globalState
+ * within FIAT_PRICE_TTL_MS so repeat pricing pushes skip the exchanger API. */
+const FIAT_PRICE_CACHE_KEY = 'acurast.fiatPrices.v1';
 const TUNNEL_SUFFIX_KEY = 'acurast.tunnel.suffix';
 /** Last successfully refreshed proot-distro catalog; falls back to BUNDLED_DISTROS. */
 const DISTRO_CACHE_KEY = 'acurast.distros.v1';
 const FIAT_API_KEY_SECRET = (exchangerId: number) => `acurast.fiat.apiKey.${exchangerId}`;
+
+/** One cached ACU→fiat rate. `meta` is the resolved currency metadata so a
+ * cache hit needs no getListOfFiat() round-trip either. */
+interface FiatPriceCacheEntry {
+  acuPriceFiat: number;
+  fetchedAt: number;
+  meta?: FiatListItem;
+}
+type FiatPriceCache = Record<string, FiatPriceCacheEntry>;
 
 function defaultStages(hasBuild = false): DeployStage[] {
   const stages: DeployStage[] = [
@@ -67,7 +79,6 @@ export class StudioPanel implements vscode.WebviewViewProvider {
   private _chainEventUnsub: UnsubEvent | undefined;
   private _chainWatchToken = 0;
   private _exchanger = new Exchanger();
-  private _fiatPriceCache: { key: string; value: number; fetchedAt: number } | undefined;
   // Tunnel DNS wizard state. `_tunnelSuffix === undefined` means "not loaded
   // from workspaceState yet". The last verify result is kept so a re-push (e.g.
   // navigating back, or switching the deployer wallet) doesn't discard the
@@ -834,6 +845,24 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     if (!exchanger) return undefined;
 
     const details = exchanger.exchangerDetails();
+
+    // Base is always ACU, so exchanger + quote currency identify the rate.
+    const cacheKey = `${exchangerId}:${currencyId.toLowerCase()}`;
+    const cache = this.globalState.get<FiatPriceCache>(FIAT_PRICE_CACHE_KEY, {});
+    const cached = cache[cacheKey];
+    if (cached && Date.now() - cached.fetchedAt < FIAT_PRICE_TTL_MS) {
+      return {
+        exchangerId,
+        exchangerName: details.name,
+        currencyId,
+        currencyName: cached.meta?.name ?? currencyId,
+        currencySign: cached.meta?.sign ?? '',
+        currencySymbol: cached.meta?.symbol ?? currencyId.toUpperCase(),
+        acuPriceFiat: cached.acuPriceFiat,
+        fetchedAt: cached.fetchedAt,
+      };
+    }
+
     this.applyCoinGeckoPlan(exchanger);
     const apiKey = await this.secrets.get(FIAT_API_KEY_SECRET(exchangerId));
     if (apiKey) exchanger.setApiKey(apiKey);
@@ -848,16 +877,10 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     }
     const fiatSymbolForPrice = meta?.symbol ?? currencyId;
 
-    const cacheKey = `${exchangerId}:${fiatSymbolForPrice}`;
     let acuPriceFiat: number;
+    const fetchedAt = Date.now();
     try {
-      if (this._fiatPriceCache && this._fiatPriceCache.key === cacheKey &&
-        Date.now() - this._fiatPriceCache.fetchedAt < FIAT_PRICE_TTL_MS) {
-        acuPriceFiat = this._fiatPriceCache.value;
-      } else {
-        acuPriceFiat = await exchanger.getACULatestPrice(fiatSymbolForPrice);
-        this._fiatPriceCache = { key: cacheKey, value: acuPriceFiat, fetchedAt: Date.now() };
-      }
+      acuPriceFiat = await exchanger.getACULatestPrice(fiatSymbolForPrice);
     } catch (err: unknown) {
       return {
         exchangerId,
@@ -867,10 +890,16 @@ export class StudioPanel implements vscode.WebviewViewProvider {
         currencySign: meta?.sign ?? '',
         currencySymbol: meta?.symbol ?? currencyId.toUpperCase(),
         acuPriceFiat: 0,
-        fetchedAt: Date.now(),
+        fetchedAt,
         error: (err as Error).message,
       };
     }
+
+    // Persist the fresh rate, dropping entries already past the TTL.
+    const pruned: FiatPriceCache = Object.fromEntries(
+      Object.entries(cache).filter(([, e]) => Date.now() - e.fetchedAt < FIAT_PRICE_TTL_MS));
+    pruned[cacheKey] = { acuPriceFiat, fetchedAt, meta };
+    await this.globalState.update(FIAT_PRICE_CACHE_KEY, pruned);
 
     return {
       exchangerId,
@@ -880,7 +909,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       currencySign: meta?.sign ?? '',
       currencySymbol: meta?.symbol ?? currencyId.toUpperCase(),
       acuPriceFiat,
-      fetchedAt: Date.now(),
+      fetchedAt,
     };
   }
 
@@ -915,7 +944,9 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       if (trimmed) await this.secrets.store(FIAT_API_KEY_SECRET(exchangerId), trimmed);
       else await this.secrets.delete(FIAT_API_KEY_SECRET(exchangerId));
     }
-    this._fiatPriceCache = undefined;
+    // Fiat settings changed (currency, exchanger, key, or plan) — drop cached
+    // rates so the next pricing push fetches fresh.
+    await this.globalState.update(FIAT_PRICE_CACHE_KEY, undefined);
     await this.pushFiatSelection();
     void this.pushPricing();
   }
