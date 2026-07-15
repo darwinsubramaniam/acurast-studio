@@ -10,6 +10,15 @@ export class DeploymentStore {
     return this.globalState.get<StoredDeployment[]>(KEY) ?? [];
   }
 
+  /**
+   * True when `path` is the recorded `projectPath` of some stored deployment.
+   * Guards `history.openFolder` so a webview message can only reveal a folder the
+   * extension itself tracked, not an arbitrary filesystem path.
+   */
+  hasProjectPath(path: string): boolean {
+    return this.getAll().some((r) => r.projectPath === path);
+  }
+
   async save(record: StoredDeployment): Promise<void> {
     await this.globalState.update(KEY, [...this.getAll(), record]);
   }
