@@ -195,7 +195,7 @@
 
   const routeIcons: Record<string, string> = {
     wallets: ICONS.wallet,
-    settings: ICONS.settings,
+    settings: ICONS.braces,
     deploy: ICONS.deployments,
     history: ICONS.history,
     processors: ICONS.processor,

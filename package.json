@@ -83,6 +83,12 @@
         "icon": "$(globe)"
       },
       {
+        "command": "acurast.studio.showSettings",
+        "title": "Project Settings",
+        "category": "Acurast",
+        "icon": "$(json)"
+      },
+      {
         "command": "acurast.setActiveConfig",
         "title": "Set as Active acurast.json",
         "category": "Acurast"
@@ -169,9 +175,14 @@
           "group": "navigation@2"
         },
         {
+          "command": "acurast.studio.showSettings",
+          "when": "view == acurastStudio && acurast.isAcurastProject && acurast.studio.route != 'settings'",
+          "group": "navigation@3"
+        },
+        {
           "command": "acurast.deploy",
           "when": "view == acurastStudio && acurast.isAcurastProject",
-          "group": "navigation@3"
+          "group": "navigation@4"
         }
       ],
       "editor/title": [

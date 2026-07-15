@@ -149,6 +149,23 @@ describe('navigation', () => {
 
 // ---------------------------------------------------------------------------
 
+describe('status bar (network target)', () => {
+  it('renders the network pill for the current Studio target', () => {
+    render(Home, { props: { ctx: BASE_CTX, wallets: BASE_WALLETS, deploy: null, navigate: vi.fn() } });
+    expect(screen.getByRole('button', { name: /mainnet/i })).toBeInTheDocument();
+  });
+
+  it('no longer renders the {} settings shortcut beside the network pill (moved to the view title bar)', () => {
+    render(Home, { props: { ctx: BASE_CTX, wallets: BASE_WALLETS, deploy: null, navigate: vi.fn() } });
+    // The removed gear/{} button had the exact accessible name "Settings".
+    // The "Project Settings" nav-card is a separate control and stays.
+    expect(screen.queryByRole('button', { name: 'Settings' })).toBeNull();
+    expect(screen.getByRole('button', { name: /Project Settings/i })).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+
 describe('donation footer', () => {
   it('renders the Support development footer', () => {
     render(Home, { props: { ctx: BASE_CTX, wallets: BASE_WALLETS, deploy: null, navigate: vi.fn() } });

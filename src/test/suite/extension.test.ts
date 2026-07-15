@@ -31,6 +31,7 @@ suite('Command registration', () => {
     'acurast.openDashboard',
     'acurast.studio.home',
     'acurast.studio.showTunnel',
+    'acurast.studio.showSettings',
     'acurast.setActiveConfig',
     'acurast.chooseConfig',
     'acurast.clearActiveConfig',

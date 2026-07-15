@@ -78,6 +78,7 @@ export async function activate(extensionContext: vscode.ExtensionContext) {
     vscode.commands.registerCommand(SHOW_WALLETS_COMMAND_ID, () => studioPanel.navigate('wallets')),
     vscode.commands.registerCommand('acurast.studio.home', () => studioPanel.navigate('home')),
     vscode.commands.registerCommand('acurast.studio.showTunnel', () => studioPanel.navigate('tunnel')),
+    vscode.commands.registerCommand('acurast.studio.showSettings', () => studioPanel.navigate('settings')),
     ...registerWalletCommands(wallet),
     ...registerCommands({ ctx, wallet, output, studioPanel }),
     ...registerAcurastLanguageService(extensionContext),

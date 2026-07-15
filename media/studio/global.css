@@ -101,13 +101,6 @@ body {
 .net-pill .label {
   font-size: 11px; font-weight: 500; text-transform: capitalize; color: var(--acu-accent-soft-fg);
 }
-.gear-btn {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 26px; height: 22px; padding: 0; border: none; border-radius: 4px;
-  background: transparent; color: var(--vscode-descriptionForeground); cursor: pointer;
-}
-.gear-btn:hover { background: var(--vscode-toolbar-hoverBackground); color: var(--vscode-foreground); }
-.gear-btn svg { width: 16px; height: 16px; }
 .home-divider { height: 1px; background: var(--vscode-panel-border, transparent); margin: 0 -8px 12px; }
 
 /* ── Home: Active wallet summary card ──────────────────────────────────────── */
@@ -1227,10 +1220,7 @@ select:focus, input:focus, textarea:focus { outline: 1px solid var(--vscode-focu
    block below). */
 .pst { display: flex; flex-direction: column; container-type: inline-size; }
 
-.pst-head { display: flex; align-items: center; justify-content: space-between; margin: 2px 0 12px; }
-.pst-head-left { display: flex; align-items: center; gap: 8px; }
-.pst-head-icon { display: inline-flex; color: var(--vscode-descriptionForeground); }
-.pst-head-icon svg { width: 16px; height: 16px; }
+.pst-head { display: flex; align-items: center; margin: 2px 0 12px; }
 
 /* Transient "saved" confirmation (local UI state only, no new host message). */
 .pst-toast {

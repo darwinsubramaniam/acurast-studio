@@ -113,7 +113,7 @@
 </script>
 
 <div class="home-view">
-  <!-- StatusBar: brand + network target + settings shortcut -->
+  <!-- StatusBar: brand + network target -->
   <div class="studio-statusbar">
     <div class="brand">
       <span class="logo">{@html ICONS.logo}</span>
@@ -135,14 +135,6 @@
       >
         <span class="dot"></span>
         <span class="label">{wallets.network}</span>
-      </button>
-      <button
-        class="gear-btn"
-        onclick={() => navigate("settings")}
-        title="Settings"
-        aria-label="Settings"
-      >
-        {@html ICONS.braces}
       </button>
     </div>
   </div>

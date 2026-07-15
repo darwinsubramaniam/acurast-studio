@@ -47,6 +47,17 @@ async function openAdvanced() {
   return (await screen.findByLabelText(/Include env vars/i)) as HTMLInputElement;
 }
 
+describe('Settings — header row', () => {
+  it('shows only the status pill, with no duplicate "PROJECT SETTINGS" heading', () => {
+    render(Settings, { props: propsFor(VALID) });
+    // The route header (App topbar) already titles the page; the in-body eyebrow
+    // + {} icon were removed, leaving just the valid/invalid pill on the row.
+    expect(screen.queryByText('PROJECT SETTINGS')).toBeNull();
+    // A clean, valid config shows the green "Valid" pill.
+    expect(screen.getByText('Valid')).toBeInTheDocument();
+  });
+});
+
 describe('Settings — includeEnvironmentVariables field', () => {
   it('renders the stored whitelist as a comma-joined string', async () => {
     render(Settings, { props: propsFor({ ...VALID, includeEnvironmentVariables: ['EXISTING', 'TWO'] }) });

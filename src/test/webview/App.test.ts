@@ -13,6 +13,7 @@ vi.mock('../../studio/webview/lib/vscode', () => ({
 }));
 
 import App from '../../studio/webview/App.svelte';
+import { ICONS } from '../../studio/webview/lib/icons';
 
 function dispatch(data: Record<string, unknown>) {
   window.dispatchEvent(new MessageEvent('message', { data }));
@@ -50,6 +51,19 @@ describe('message: route', () => {
     dispatch({ type: 'route', route: 'home' });
     await tick();
     expect(screen.getByText('Support development')).toBeInTheDocument();
+  });
+
+  it('titles the settings route "Project Settings" with the {} (braces) icon', async () => {
+    const { container } = render(App);
+    await tick();
+    dispatch({ type: 'route', route: 'settings' });
+    await tick();
+    expect(screen.getByRole('heading', { name: 'Project Settings' })).toBeInTheDocument();
+    // Positively assert the braces ({}) icon is the one rendered in the route header.
+    // Normalize both through the same parser so attribute order/whitespace match.
+    const expected = document.createElement('span');
+    expected.innerHTML = ICONS.braces;
+    expect(container.querySelector('.title-icon')?.innerHTML).toBe(expected.innerHTML);
   });
 });
 

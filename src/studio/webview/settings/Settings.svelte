@@ -361,10 +361,6 @@
       {/if}
 
       <div class="pst-head">
-        <div class="pst-head-left">
-          <span class="pst-head-icon">{@html ICONS.braces}</span>
-          <span class="dpl-eyebrow">PROJECT SETTINGS</span>
-        </div>
         <span class="dpl-pill {statusPill.tone}"><span class="dot"></span>{statusPill.label}</span>
       </div>
 
