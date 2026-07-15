@@ -13,6 +13,7 @@ import { loadPricing } from '../sdk/pricing';
 import { SYMBOL, MATCHER_ENDPOINTS, TUNNEL_PORT, type AcurastNetwork } from '../sdk/constants';
 import { networkLabel } from '../lib/network';
 import { stripAnsi } from '../lib/log';
+import { getNonce } from '../lib/nonce';
 import { setTargetNetwork, getProjectNetwork } from '../wallet/networkSetting';
 import { computeTxtValue, relaysFor, wildcardName, txtName, publicUrlExample, normalizeSuffix } from '../tunnel/tunnel';
 import { verifyTunnelDns } from '../tunnel/dnsVerify';
@@ -2099,9 +2100,3 @@ function mergeJobIds(existing: DeployJobId[], next: DeployJobId[]): DeployJobId[
   return [...existing, ...next.filter((j) => !seen.has(key(j)))];
 }
 
-function getNonce(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let nonce = '';
-  for (let i = 0; i < 32; i++) nonce += chars.charAt(Math.floor(Math.random() * chars.length));
-  return nonce;
-}
