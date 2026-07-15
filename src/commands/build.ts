@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
 import * as fs from 'fs';
 import { spawn } from 'child_process';
 import { AcurastContext } from '../context';
 import { stripAnsi } from '../lib/log';
+import { resolveWithinRoot } from '../lib/pathSafe';
 import type { LogLevel } from '../studio/types';
 
 /**
@@ -97,8 +97,17 @@ export interface RunBuildOptions {
  */
 export function runProjectBuild(opts: RunBuildOptions): Promise<void> {
   const { projectRoot, build, output, onStage, onLog } = opts;
-  const cwd = path.resolve(projectRoot, build.cwd ?? '.');
   return new Promise<void>((resolve, reject) => {
+    // Confine the working dir to the project — a config-controlled `build.cwd`
+    // must not run the command somewhere else on disk via `../` or an absolute path.
+    let cwd: string;
+    try {
+      cwd = resolveWithinRoot(projectRoot, build.cwd ?? '.', 'build.cwd');
+    } catch (err) {
+      onStage?.('error', (err as Error).message);
+      reject(err as Error);
+      return;
+    }
     // Write each line to both the output channel (ANSI-stripped — the channel
     // can't render colors anyway) and the per-stage log hook.
     const emit = (level: LogLevel, line: string) => {
@@ -145,7 +154,14 @@ export function runProjectBuild(opts: RunBuildOptions): Promise<void> {
         return;
       }
       if (isLocalPath(build.output)) {
-        const abs = path.resolve(projectRoot, build.output as string);
+        let abs: string;
+        try {
+          abs = resolveWithinRoot(projectRoot, build.output as string, 'build.output');
+        } catch (err) {
+          onStage?.('error', (err as Error).message);
+          reject(err as Error);
+          return;
+        }
         if (!fs.existsSync(abs)) {
           const msg = `Build finished but output not found: ${build.output}`;
           onStage?.('error', msg);
