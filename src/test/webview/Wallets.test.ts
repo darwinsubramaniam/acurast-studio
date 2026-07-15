@@ -127,6 +127,33 @@ describe('all-wallets list', () => {
 
 // ---------------------------------------------------------------------------
 
+// A non-active wallet with a zero balance shows a funding link in its row. The
+// label follows the target network — mainnet has no faucet, so it must read
+// "Learn how to get ACU" (docs) there, not "Faucet". Scope to `.wallet-row` so
+// the queries hit the non-active row, not the active card's own funding link.
+describe('no-funds nudge — non-active wallet rows', () => {
+  const balances = { w1: BAL_NONZERO, w2: { status: 'ok', value: 0, symbol: 'cACU' } as BalanceMsg };
+
+  it('labels the row link "Learn how to get ACU" (docs) on mainnet', () => {
+    const wallets = { list: [WALLET, WALLET2], activeId: 'w1', network: 'mainnet', symbol: 'ACU' };
+    const { container } = render(Wallets, { props: { wallets, walletBalances: balances, walletOp: null } });
+    const link = container.querySelector('.wallet-row .wr-link');
+    expect(link).toHaveTextContent('Learn how to get ACU');
+    expect(link).not.toHaveTextContent(/Faucet/i);
+    expect(link).toHaveAttribute('href', 'https://docs.acurast.com/token-holders/how-to-get-acu/');
+  });
+
+  it('labels the row link "Faucet" on canary', () => {
+    const wallets = { list: [WALLET, WALLET2], activeId: 'w1', network: 'canary', symbol: 'cACU' };
+    const { container } = render(Wallets, { props: { wallets, walletBalances: balances, walletOp: null } });
+    const link = container.querySelector('.wallet-row .wr-link');
+    expect(link).toHaveTextContent('Faucet');
+    expect(link).toHaveAttribute('href', 'https://faucet.acurast.com/');
+  });
+});
+
+// ---------------------------------------------------------------------------
+
 describe('wallet search', () => {
   const wallets = { list: [WALLET, WALLET2, WALLET3], activeId: 'w1', network: 'canary', symbol: 'cACU' };
   const balances = {

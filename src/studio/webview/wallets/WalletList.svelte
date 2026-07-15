@@ -169,7 +169,7 @@
             <span class="wr-bal err">Unavailable</span>
           {:else if kind === 'zero'}
             <span class="wr-bal muted">No funds yet</span>
-            <a class="wr-link" href={fundingUrl(wallets.network)} onclick={openFunding}>Faucet {@html ICONS.arrowUpRight}</a>
+            <a class="wr-link" href={fundingUrl(wallets.network)} onclick={openFunding}>{wallets.network === 'mainnet' ? 'Learn how to get ACU' : 'Faucet'} {@html ICONS.arrowUpRight}</a>
           {:else}
             <span class="wr-bal">{balText(w.id)} {wallets.symbol}</span>
             <button class="wr-link" onclick={() => onAction('setActive', w.id)}>Set active</button>
