@@ -12,6 +12,7 @@ import {
   type PricingResult,
 } from '../sdk/pricing';
 import type { AcurastProjectConfig } from '@acurast/sdk/types';
+import { validateDeployConfig, formatIssue } from '../sdk/validateDeployConfig';
 
 interface EstimateCostOptions {
   ctx: AcurastContext;
@@ -35,6 +36,24 @@ export async function estimateCost({ ctx, wallet, output }: EstimateCostOptions)
     config = loaded;
   } catch (err: unknown) {
     vscode.window.showErrorMessage(`Failed to load acurast.json: ${(err as Error).message}`);
+    return;
+  }
+
+  // Pre-flight config validation (same SDK zod schema as deploy). A structurally
+  // invalid config can't be meaningfully priced — and the pricing math reads
+  // fields that hard errors flag as missing/wrong — so block before any network
+  // call. Advisory notes are non-blocking and printed atop the estimate below.
+  const { errors: configErrors, notes: configNotes } = validateDeployConfig(config);
+  if (configErrors.length > 0) {
+    output.clear();
+    output.show(true);
+    output.appendLine(`[estimate-cost] project=${config.projectName}`);
+    output.appendLine('');
+    output.appendLine(`Cannot estimate — acurast.json has ${configErrors.length} validation error${configErrors.length === 1 ? '' : 's'}:`);
+    for (const e of configErrors) output.appendLine(`  ❌ ${formatIssue(e)}`);
+    vscode.window.showErrorMessage(
+      `Cannot estimate cost: acurast.json has ${configErrors.length} validation error${configErrors.length === 1 ? '' : 's'} — see the Output panel.`
+    );
     return;
   }
 
@@ -62,6 +81,12 @@ export async function estimateCost({ ctx, wallet, output }: EstimateCostOptions)
   output.clear();
   output.appendLine(`[estimate-cost] project=${config.projectName} network=${network}`);
   output.appendLine('');
+
+  if (configNotes.length > 0) {
+    output.appendLine(`Config notes (${configNotes.length}):`);
+    for (const n of configNotes) output.appendLine(`  ⚠️ ${formatIssue(n)}`);
+    output.appendLine('');
+  }
 
   renderToOutput(result, symbol, output);
 }

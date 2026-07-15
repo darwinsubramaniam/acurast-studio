@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { deployProject, loadAcurastConfig } from '@acurast/sdk/deploy';
 import { normalizeMinProcessorVersions } from '../sdk/configCompat';
+import { validateDeployConfig, formatIssue } from '../sdk/validateDeployConfig';
 import { walletFromMnemonic, convertConfigToJob } from '@acurast/sdk/chain';
 import { AcurastContext } from '../context';
 import { WalletService } from '../wallet/walletService';
@@ -52,6 +53,24 @@ export async function deploy({ ctx, wallet, output, studioPanel }: DeployOptions
 
   if (!effectiveFileUrl) {
     vscode.window.showErrorMessage('acurast.json has no "fileUrl" — set the path to your script (or an ipfs:// URL / CID), or a build.output, to deploy.');
+    return;
+  }
+
+  // Pre-deploy config validation against the SDK's zod schema. Hard errors block
+  // before we prompt for a password or sign anything; advisory notes (Shell needs
+  // an image, start time too soon, unattested devices, tight interval timing…)
+  // surface in the confirm dialog below. Validate with effectiveFileUrl so
+  // build.output projects (which may leave the raw fileUrl empty) aren't wrongly
+  // flagged for a missing fileUrl.
+  const { errors: configErrors, notes: configNotes } = validateDeployConfig({
+    ...config,
+    fileUrl: effectiveFileUrl,
+  });
+  if (configErrors.length > 0) {
+    await vscode.window.showErrorMessage(
+      `acurast.json has ${configErrors.length} validation error${configErrors.length === 1 ? '' : 's'} — fix ${configErrors.length === 1 ? 'it' : 'them'} before deploying.`,
+      { modal: true, detail: configErrors.map(formatIssue).join('\n') }
+    );
     return;
   }
 
@@ -107,11 +126,18 @@ export async function deploy({ ctx, wallet, output, studioPanel }: DeployOptions
   // consent to run it, since it's an arbitrary shell command from acurast.json.
   const buildNote = buildCfg?.command ? `\n\nBuild step: ${buildCfg.command}` : '';
 
+  // Advisory config notes (non-blocking) — shown so the user can back out and fix
+  // them, but they can still proceed.
+  const notesNote = configNotes.length
+    ? `\n\n⚠️ ${configNotes.length} note${configNotes.length === 1 ? '' : 's'}:\n` +
+      configNotes.map((n) => `• ${formatIssue(n)}`).join('\n')
+    : '';
+
   const confirm = await vscode.window.showWarningMessage(
     `Deploy "${config.projectName}" to ${network}?`,
     {
       modal: true,
-      detail: `Replicas: ${config.numberOfReplicas ?? 1}\nMax cost/exec: ${config.maxCostPerExecution ?? 'n/a'} (planck ${symbol})${buildNote}${mismatchNote}`,
+      detail: `Replicas: ${config.numberOfReplicas ?? 1}\nMax cost/exec: ${config.maxCostPerExecution ?? 'n/a'} (planck ${symbol})${buildNote}${notesNote}${mismatchNote}`,
     },
     'Deploy'
   );
