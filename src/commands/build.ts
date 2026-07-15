@@ -27,6 +27,27 @@ export interface ReadBuildResult {
   projectKey: string;
 }
 
+/** Thrown when a build is attempted in an untrusted workspace. */
+export class WorkspaceUntrustedError extends Error {
+  constructor() {
+    super(
+      'Refusing to run the project build command: acurast.json `build.command` runs an ' +
+        'arbitrary shell command and requires a trusted workspace.',
+    );
+    this.name = 'WorkspaceUntrustedError';
+  }
+}
+
+/**
+ * Defense-in-depth guard for the shell sink. The command entry points already
+ * check Workspace Trust before calling `runProjectBuild`, but the executor must
+ * not rely on every caller remembering — a repository-sourced `build.command`
+ * only ever runs after this returns true.
+ */
+export function ensureWorkspaceTrustedForBuild(isTrusted: boolean): void {
+  if (!isTrusted) throw new WorkspaceUntrustedError();
+}
+
 // IPFS CIDs / ipfs:// / https:// references are not local files — skip existence
 // checks for them. Mirrors deploy.ts:resolveAgainst so output behaves like fileUrl.
 const REMOTE_REF = /^(ipfs:\/\/|https?:\/\/|Qm[1-9A-HJ-NP-Za-km-z]{44}|b[A-Za-z2-7]{58})/;
@@ -99,6 +120,15 @@ export function runProjectBuild(opts: RunBuildOptions): Promise<void> {
   const { projectRoot, build, output, onStage, onLog } = opts;
   const cwd = path.resolve(projectRoot, build.cwd ?? '.');
   return new Promise<void>((resolve, reject) => {
+    // Never execute a workspace-sourced shell command in an untrusted workspace,
+    // regardless of whether the caller remembered to check.
+    try {
+      ensureWorkspaceTrustedForBuild(vscode.workspace.isTrusted);
+    } catch (err) {
+      onStage?.('error', (err as Error).message);
+      reject(err as Error);
+      return;
+    }
     // Write each line to both the output channel (ANSI-stripped — the channel
     // can't render colors anyway) and the per-stage log hook.
     const emit = (level: LogLevel, line: string) => {
