@@ -397,7 +397,11 @@ export class StudioPanel implements vscode.WebviewViewProvider {
         await this.pushHistory();
         break;
       case 'history.openFolder':
-        if (msg.path) await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(msg.path));
+        // Only reveal a folder the extension itself recorded — never an arbitrary
+        // path supplied over the webview channel.
+        if (msg.path && this.deploymentStore.hasProjectPath(msg.path)) {
+          await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(msg.path));
+        }
         break;
       case 'network.setTarget':
         await setTargetNetwork(msg.network);
