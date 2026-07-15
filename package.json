@@ -30,7 +30,13 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": "limited",
-      "description": "Wallets, balance, and history work in untrusted workspaces. The build step (acurast.json `build.command`) runs a shell command and only executes in a trusted workspace."
+      "description": "Wallets, balance, and history work in untrusted workspaces. The build step (acurast.json `build.command`) runs a shell command and only executes in a trusted workspace.",
+      "restrictedConfigurations": [
+        "acurast.cliPath",
+        "acurast.rpcOverrides",
+        "acurast.matcherUrls",
+        "acurast.tunnelRelays"
+      ]
     }
   },
   "contributes": {
@@ -235,7 +241,8 @@
         "acurast.cliPath": {
           "type": "string",
           "default": "acurast",
-          "description": "Path to the Acurast CLI binary."
+          "scope": "machine",
+          "description": "Path to the Acurast CLI binary. Machine-scoped so a workspace cannot override the executable that is run on the host."
         },
         "acurast.network": {
           "type": "string",
