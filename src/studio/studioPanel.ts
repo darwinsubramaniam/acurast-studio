@@ -97,7 +97,11 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     private readonly workspaceState: vscode.Memento,
     // The distro catalog is not workspace-scoped — a refresh in one project
     // should serve every other one — so its cache lives in globalState.
-    private readonly globalState: vscode.Memento
+    private readonly globalState: vscode.Memento,
+    // Drives the Home version badge: package.json version, whether we're under
+    // an Extension Development Host (F5), and the CI-stamped release channel/tag
+    // (null for local/dev builds — the numeric version can't reveal the channel).
+    private readonly versionInfo: { version: string; dev: boolean; channel: 'rc' | 'pre' | 'stable' | null; tag: string | null }
   ) {
     wallet.onDidChange(() => this.pushWallets());
     ctx.onDidChangeActiveConfig(() => {
@@ -147,6 +151,37 @@ export class StudioPanel implements vscode.WebviewViewProvider {
         : null,
       configExists,
       anyConfigExists,
+    });
+  }
+
+  /**
+   * Post the version badge shown on Home:
+   *   - F5 dev host        → `dev · <git short hash>`
+   *   - packaged build     → `v<package.json version>`
+   * plus the CI-stamped `channel`/`tag` so the webview can flag a pre-release /
+   * RC — the numeric version alone can't, since the Marketplace strips the
+   * tag suffix.
+   */
+  private async pushAppInfo() {
+    const { version, dev, channel, tag } = this.versionInfo;
+    let label = `v${version}`;
+    if (dev) {
+      const hash = await this.gitShortHash();
+      label = hash ? `dev · ${hash}` : 'dev';
+    }
+    this.post({ type: 'appInfo', label, version, tag, channel, dev });
+  }
+
+  /** `git rev-parse --short HEAD` in the extension dir, or null if unavailable
+   * (git missing / not a repo). Only used for the dev version badge. */
+  private gitShortHash(): Promise<string | null> {
+    return new Promise((resolve) => {
+      execFile(
+        'git',
+        ['rev-parse', '--short', 'HEAD'],
+        { cwd: this.extensionUri.fsPath },
+        (err, stdout) => resolve(err ? null : stdout.trim() || null),
+      );
     });
   }
 
@@ -494,6 +529,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
 
   private async pushAll() {
     this.post({ type: 'route', route: this._route });
+    void this.pushAppInfo();
     await this.pushContext();
     await this.pushWallets();
     if (this._route === 'wallets' || this._route === 'home') this.startBalancePoll();

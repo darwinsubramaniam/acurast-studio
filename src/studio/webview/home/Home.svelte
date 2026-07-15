@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Route, DeployState, WalletInfo, BalanceMsg } from "../../types";
+  import type { Route, DeployState, WalletInfo, BalanceMsg, AppInfoMsg } from "../../types";
   import { ICONS } from "../lib/icons";
   import { send } from "../lib/vscode";
   import { truncate } from "../lib/format";
@@ -22,6 +22,8 @@
     balance?: BalanceMsg;
     deploy: DeployState | null;
     navigate: (r: Route) => void;
+    /** Version/channel badge info; null until the host posts it. */
+    appInfo?: AppInfoMsg | null;
   }
   let {
     ctx,
@@ -29,7 +31,17 @@
     balance = { status: "idle" },
     deploy,
     navigate,
+    appInfo = null,
   }: Props = $props();
+
+  // Small pill flagging a non-stable build; stable and local/dev show none.
+  let channelPill = $derived(
+    appInfo?.channel === "pre"
+      ? "Pre-release"
+      : appInfo?.channel === "rc"
+        ? "RC"
+        : null,
+  );
 
   // Hosted wallet-connect donation page (GitHub Pages, separate repo).
   const DONATE_URL = "https://darwinsubramaniam.github.io/acurast-studio-donate/";
@@ -106,6 +118,14 @@
     <div class="brand">
       <span class="logo">{@html ICONS.logo}</span>
       <span class="name">Studio</span>
+      {#if appInfo}
+        <span class="version" title={appInfo.tag ?? "Extension version"}
+          >{appInfo.label}</span
+        >
+        {#if channelPill}
+          <span class="channel-pill channel-{appInfo.channel}">{channelPill}</span>
+        {/if}
+      {/if}
     </div>
     <div class="right">
       <button

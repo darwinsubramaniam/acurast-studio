@@ -28,6 +28,14 @@ version must be strictly `major.minor.patch`. So the `-rc.N` / `-pre` suffix
 lives only in the git tag; CI strips it to derive the numeric version that goes
 into the `.vsix`.
 
+Because that suffix is gone from the packaged version, the extension can't tell
+a pre-release from a stable build at runtime from the number alone (and VS Code
+exposes no pre-release flag to extensions). So the same "Parse Tag" step also
+stamps the channel + full tag into the manifest — `npm pkg set
+acurastRelease.channel=… acurastRelease.tag=…` — which `extension.ts` reads back
+to drive the version badge on the Studio Home view (a "Pre-release" / "RC" pill
+for non-stable builds). It's written in CI only, never committed.
+
 ---
 
 ## Versioning convention (odd-minor)

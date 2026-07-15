@@ -93,6 +93,16 @@ jobs:
       - name: Set package.json version
         run: npm pkg set version="${{ steps.tag.outputs.VERSION }}"
 
+      # Stamp the channel + full tag into the manifest so the extension's Home
+      # version badge can tell a pre-release/RC from a stable build at runtime.
+      # The numeric version can't reveal it — the Marketplace strips the suffix —
+      # and VS Code exposes no runtime pre-release flag. Read back in extension.ts
+      # via extension.packageJSON.acurastRelease. Ephemeral (CI only).
+      - name: Stamp release channel
+        run: |
+          npm pkg set acurastRelease.channel="${{ steps.tag.outputs.CHANNEL }}"
+          npm pkg set acurastRelease.tag="${{ github.ref_name }}"
+
       # Build & package the .vsix. `vsce package` triggers "vscode:prepublish"
       # (npm run build, which sets esbuild's __ACURAST_DEV_SEED__=false so the
       # demo-seed code is stripped). Pre-release builds get the --pre-release flag.

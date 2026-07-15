@@ -234,6 +234,25 @@ export type InMsg =
 // interfaces below already carry their own `type` and are folded into the union;
 // these are the previously-inline shapes that lacked a named interface.
 export interface RouteMsg { type: 'route'; route: Route; }
+/**
+ * App-level version indicator for the Home view, resolved by StudioPanel on
+ * `ready`. `label` is display-ready:
+ *   - `dev · <git short hash>` for a local Extension Development Host run (F5),
+ *   - `v0.5.1` for any packaged build (the numeric package.json version).
+ * `channel` tells stable from pre-release/RC — the numeric version can't, since
+ * the Marketplace strips the tag suffix. CI stamps it into the manifest
+ * (`acurastRelease.channel`); it is null for local / dev builds. `tag` is the
+ * full git tag when CI injected it (e.g. `v0.5.0-pre`), for the hover tooltip.
+ */
+export type ReleaseChannel = 'rc' | 'pre' | 'stable';
+export interface AppInfoMsg {
+  type: 'appInfo';
+  label: string;
+  version: string;
+  tag: string | null;
+  channel: ReleaseChannel | null;
+  dev: boolean;
+}
 export interface ContextMsg {
   type: 'context';
   isAcurastProject: boolean;
@@ -312,7 +331,7 @@ export interface DurationConvertedMsg {
 }
 
 export type OutMsg =
-  | RouteMsg | ContextMsg | WalletsStateMsg | BalanceStateMsg
+  | RouteMsg | AppInfoMsg | ContextMsg | WalletsStateMsg | BalanceStateMsg
   | WalletsBalancesMsg | WalletOpResultMsg
   | ConfigStateMsg | DeployStateMsg | NetworkMismatchMsg
   | PricingStateMsg | FiatListStateMsg | FiatSelectionStateMsg

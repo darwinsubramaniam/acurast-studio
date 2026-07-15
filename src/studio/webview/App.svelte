@@ -16,6 +16,7 @@
     WalletOpResultMsg,
     DistroCatalogStateMsg,
     DurationConvertedMsg,
+    AppInfoMsg,
     OutMsg,
   } from "../types";
   import { send } from "./lib/vscode";
@@ -48,6 +49,8 @@
   }
 
   let route = $state<Route>("home");
+  // Extension version badge for Home; null until the host posts it on `ready`.
+  let appInfo = $state<AppInfoMsg | null>(null);
   let ctx = $state<CtxState>({
     isAcurastProject: false,
     configPath: null,
@@ -107,6 +110,9 @@
       switch (msg.type) {
         case "route":
           route = msg.route;
+          break;
+        case "appInfo":
+          appInfo = msg;
           break;
         case "context":
           ctx = {
@@ -213,7 +219,7 @@
 {/if}
 
 {#if route === "home"}
-  <Home {ctx} {wallets} {balance} {deploy} {navigate} />
+  <Home {ctx} {wallets} {balance} {deploy} {navigate} {appInfo} />
 {:else if route === "wallets"}
   <Wallets {wallets} {walletBalances} {walletOp} />
 {:else if route === "settings"}

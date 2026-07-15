@@ -53,7 +53,19 @@ export async function activate(extensionContext: vscode.ExtensionContext) {
     await seedDemoData(wallet, deploymentStore);
   }
 
-  const studioPanel = new StudioPanel(extensionContext.extensionUri, ctx, wallet, extensionContext.secrets, deploymentStore, extensionContext.workspaceState, extensionContext.globalState);
+  // `acurastRelease` is stamped into the manifest by CI at package time (see
+  // .github/workflows/publish.yml) — the numeric version alone can't tell a
+  // pre-release from a stable one because the Marketplace strips the tag suffix.
+  const pkg = extensionContext.extension.packageJSON as {
+    version: string;
+    acurastRelease?: { channel?: 'rc' | 'pre' | 'stable'; tag?: string };
+  };
+  const studioPanel = new StudioPanel(extensionContext.extensionUri, ctx, wallet, extensionContext.secrets, deploymentStore, extensionContext.workspaceState, extensionContext.globalState, {
+    version: pkg.version,
+    dev: extensionContext.extensionMode === vscode.ExtensionMode.Development,
+    channel: pkg.acurastRelease?.channel ?? null,
+    tag: pkg.acurastRelease?.tag ?? null,
+  });
   const statusBar = new AcurastStatusBar(wallet, ctx);
   const output = vscode.window.createOutputChannel('Acurast');
 

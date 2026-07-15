@@ -74,6 +74,21 @@ body {
   font-size: 14px; font-weight: 600; letter-spacing: -0.01em;
   color: var(--vscode-foreground);
 }
+.studio-statusbar .brand .version {
+  font-size: 10px; font-weight: 500; letter-spacing: 0.01em;
+  color: var(--vscode-descriptionForeground);
+  padding: 1px 6px; border-radius: 999px;
+  background: var(--vscode-badge-background, rgba(128, 128, 128, 0.16));
+  white-space: nowrap;
+}
+/* Non-stable channel flag (pre-release / RC) — amber, distinct from the green brand. */
+.studio-statusbar .brand .channel-pill {
+  font-size: 9px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
+  color: var(--vscode-editorWarning-foreground, #d9822b);
+  padding: 1px 6px; border-radius: 999px;
+  border: 1px solid var(--vscode-editorWarning-foreground, #d9822b);
+  white-space: nowrap;
+}
 .studio-statusbar .right { display: flex; align-items: center; gap: 10px; }
 .net-pill {
   display: inline-flex; align-items: center; gap: 6px;
