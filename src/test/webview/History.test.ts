@@ -81,6 +81,24 @@ function localState(status: LocalJobStatus | undefined): HistoryStateMsg {
   };
 }
 
+/** A `history.state` for one local record with a resolved status AND its
+ * on-chain schedule (so a RUNNING card can show its expiry countdown). */
+function localStateWithSchedule(
+  status: LocalJobStatus,
+  schedule: { startTime: number; endTime: number },
+): HistoryStateMsg {
+  return {
+    type: 'history.state',
+    status: 'ok',
+    records: [localRecord()],
+    offset: 0,
+    hasMore: false,
+    total: 1,
+    statuses: { rec1: status },
+    schedules: { rec1: schedule },
+  };
+}
+
 function dereg(status: DeregisterStateMsg['status'], extra: Partial<DeregisterStateMsg> = {}, key = `${ORIGIN}:42`): Record<string, DeregisterStateMsg> {
   return { [key]: { type: 'deregister.state', key, status, ...extra } };
 }
@@ -217,7 +235,7 @@ describe('History — on-chain delete', () => {
     });
     await fireEvent.click(screen.getByRole('button', { name: /On-chain/ }));
     expect(screen.queryByText('Job #7')).not.toBeInTheDocument();
-    expect(screen.getByText(/No additional on-chain deployments found/i)).toBeInTheDocument();
+    expect(screen.getByText(/No on-chain deployments found/i)).toBeInTheDocument();
   });
 });
 
@@ -365,5 +383,129 @@ describe('History — multi-select bulk delete', () => {
     // rec1 (origin:42) is loading; select it via select-all.
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Select all local deployments' }));
     expect(screen.getByRole('button', { name: 'Delete 2' })).toBeDisabled();
+  });
+});
+
+// ── RUNNING label + expiry countdown ─────────────────────────────────────────
+describe('History — RUNNING status & expiry', () => {
+  it('labels an active local job RUNNING (never "active")', () => {
+    render(History, { props: baseProps({ historyState: localState('active') }) });
+    expect(screen.getByText('RUNNING')).toBeInTheDocument();
+    expect(screen.queryByText('active')).not.toBeInTheDocument();
+  });
+
+  it('leaves non-active local statuses unchanged', () => {
+    render(History, { props: baseProps({ historyState: localState('scheduled') }) });
+    expect(screen.getByText('scheduled')).toBeInTheDocument();
+    expect(screen.queryByText('RUNNING')).not.toBeInTheDocument();
+  });
+
+  it('shows an expiry countdown on a RUNNING local card when a schedule is known', () => {
+    const now = Date.now();
+    render(History, {
+      props: baseProps({
+        historyState: localStateWithSchedule('active', {
+          startTime: now - 60_000,
+          endTime: now + 3_600_000,
+        }),
+      }),
+    });
+    expect(screen.getByText('Expires')).toBeInTheDocument();
+    expect(screen.getByText(/^in \d/)).toBeInTheDocument();
+  });
+
+  it('omits the expiry row when the RUNNING card has no schedule yet', () => {
+    render(History, { props: baseProps({ historyState: localState('active') }) });
+    expect(screen.queryByText('Expires')).not.toBeInTheDocument();
+  });
+
+  it('labels an active on-chain job RUNNING and shows its expiry', async () => {
+    render(History, {
+      props: baseProps({
+        historyState: {
+          type: 'history.state',
+          status: 'ok',
+          records: [],
+          offset: 0,
+          hasMore: false,
+          total: 0,
+          onlineRecords: [onlineRecord()], // registration is active by default
+        },
+      }),
+    });
+    await fireEvent.click(screen.getByRole('button', { name: /On-chain/ }));
+    expect(screen.getByText('RUNNING')).toBeInTheDocument();
+    expect(screen.getByText('Expires')).toBeInTheDocument();
+    expect(screen.getByText(/^in \d/)).toBeInTheDocument();
+  });
+});
+
+// ── Read-only locally-tracked on-chain cards ─────────────────────────────────
+describe('History — read-only (also-local) on-chain cards', () => {
+  function readonlyOnlineState(records: StoredDeploymentWithMeta[]): HistoryStateMsg {
+    return {
+      type: 'history.state',
+      status: 'ok',
+      records: [],
+      offset: 0,
+      hasMore: false,
+      total: 0,
+      onlineRecords: records,
+    };
+  }
+
+  it('renders a locally-tracked job visible but non-interactive', async () => {
+    render(History, {
+      props: baseProps({
+        historyState: readonlyOnlineState([onlineRecord({ alsoLocal: true })]),
+      }),
+    });
+    await fireEvent.click(screen.getByRole('button', { name: /On-chain/ }));
+
+    // Visible…
+    expect(screen.getByText('Job #7')).toBeInTheDocument();
+    // The "Local" chip (by its tooltip — the section header also reads "Local").
+    expect(screen.getByTitle(/Tracked in the Local section/)).toHaveTextContent('Local');
+    expect(screen.getByText(/Tracked in the Local section/)).toBeInTheDocument();
+    // …but inert: checkbox and delete disabled, and no read-only-breaking actions.
+    expect(screen.getByRole('checkbox', { name: 'Select deployment' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /Start times/ })).not.toBeInTheDocument();
+  });
+
+  it('excludes read-only cards from select-all (no bulk button appears)', async () => {
+    render(History, {
+      props: baseProps({
+        historyState: readonlyOnlineState([onlineRecord({ alsoLocal: true })]),
+      }),
+    });
+    await fireEvent.click(screen.getByRole('button', { name: /On-chain/ }));
+    await fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Select all visible on-chain deployments' }),
+    );
+    expect(screen.queryByRole('button', { name: /Delete \d/ })).not.toBeInTheDocument();
+  });
+
+  it('select-all skips read-only cards and bulk deletes only the interactive one', async () => {
+    render(History, {
+      props: baseProps({
+        historyState: readonlyOnlineState([
+          onlineRecord(), // localId 7, interactive
+          onlineRecord({
+            id: `online:${ORIGIN}:9`,
+            jobIds: [{ origin: ORIGIN, localId: 9 }],
+            alsoLocal: true,
+          }),
+        ]),
+      }),
+    });
+    await fireEvent.click(screen.getByRole('button', { name: /On-chain/ }));
+    await fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Select all visible on-chain deployments' }),
+    );
+    await fireEvent.click(screen.getByRole('button', { name: 'Delete 1' }));
+    expect(send).toHaveBeenCalledWith('history.bulkDelete', {
+      items: [{ origin: ORIGIN, localId: 7, network: 'mainnet' }],
+    });
   });
 });

@@ -70,11 +70,23 @@
     });
   }
 
-  // Live clock for the per-processor start countdowns. Ticks once a second only
-  // while at least one job's assignments have been fetched.
+  // Live clock for the per-processor start countdowns and RUNNING-card expiry
+  // countdowns. Ticks once a second only while something on screen needs it:
+  // a fetched assignment, or a RUNNING job (local or on-chain) whose expiry we
+  // can count down. (Declared before the lists it reads — the callback runs
+  // after component init, so those are initialized by the time it fires.)
   let now = $state(Date.now());
   $effect(() => {
-    const live = Object.values(assignments).some((a) => a?.status === "ok");
+    const runningLocal = accumulated.some(
+      (r) => localStatus[r.id] === "active" && localSchedules[r.id],
+    );
+    const runningOnline = onlinePageRecords.some(
+      (r) => jobStatus(r.registration) === "active",
+    );
+    const live =
+      runningLocal ||
+      runningOnline ||
+      Object.values(assignments).some((a) => a?.status === "ok");
     if (!live) return;
     const id = setInterval(() => (now = Date.now()), 1000);
     return () => clearInterval(id);
@@ -90,6 +102,9 @@
   // Per-record on-chain status: 'loading' until the host's background chain
   // query resolves it. 'none' = no on-chain registration → no badge shown.
   let localStatus = $state<Record<string, LocalJobStatus | "loading">>({});
+  // Per-record on-chain schedule (start/end epoch ms), so a RUNNING local card
+  // can show when its job expires. Lands with the same message as `localStatus`.
+  let localSchedules = $state<Record<string, { startTime: number; endTime: number }>>({});
 
   // ── Online section ───────────────────────────────────────────────────────────
   const ONLINE_PAGE = 15;
@@ -110,6 +125,11 @@
       onlinePage * ONLINE_PAGE,
       (onlinePage + 1) * ONLINE_PAGE,
     ),
+  );
+  // Read-only (also-local) records can't be selected or bulk-deleted — they're
+  // managed from the Local section. Only these count toward select-all / bulk.
+  let selectableOnlinePage = $derived(
+    onlinePageRecords.filter((r) => !r.alsoLocal),
   );
 
   // React only to a new historyState message; all accumulator reads/writes are
@@ -138,10 +158,17 @@
         if (r.jobIds.length) pending[r.id] = "loading";
       }
       localStatus = pending;
+      // A full reload (offset 0) replaces the list, so drop stale schedules;
+      // load-more keeps the ones already resolved for earlier pages.
+      if (offset === 0) localSchedules = {};
     }
 
     if (state.statuses !== undefined) {
       localStatus = { ...localStatus, ...state.statuses };
+    }
+
+    if (state.schedules !== undefined) {
+      localSchedules = { ...localSchedules, ...state.schedules };
     }
 
     if (state.onlineRecords !== undefined) {
@@ -232,7 +259,8 @@
     accumulated.length > 0 && accumulated.every((r) => selectedLocal.has(r.id)),
   );
   let allOnlineSelected = $derived(
-    onlinePageRecords.length > 0 && onlinePageRecords.every((r) => selectedOnline.has(r.id)),
+    selectableOnlinePage.length > 0 &&
+      selectableOnlinePage.every((r) => selectedOnline.has(r.id)),
   );
 
   function toggleSelected(section: "local" | "online", id: string) {
@@ -247,7 +275,7 @@
   }
   function toggleAllOnline() {
     const next = new Set(selectedOnline);
-    for (const r of onlinePageRecords) {
+    for (const r of selectableOnlinePage) {
       if (allOnlineSelected) next.delete(r.id);
       else next.add(r.id);
     }
@@ -288,6 +316,19 @@
     if (reg.startTime > now) return "scheduled";
     if (reg.endTime < now) return "expired";
     return "active";
+  }
+
+  // Badge label for a lifecycle status. "active" reads as RUNNING so an
+  // in-progress job is unambiguous; the CSS class stays `status-active`.
+  function statusLabel(s: string): string {
+    return s === "active" ? "RUNNING" : s;
+  }
+
+  // Expiry countdown for a RUNNING job — "in 2d 3h" until its schedule ends.
+  // Reads the reactive `now` so it ticks down each second.
+  function expiryLabel(endTime: number): string {
+    const remaining = endTime - now;
+    return remaining > 0 ? `in ${fmtDuration(remaining)}` : "expiring…";
   }
 </script>
 
@@ -353,7 +394,7 @@
                     <Spinner size={9} />
                   </span>
                 {:else if st && st !== "none"}
-                  <span class="badge status-{st}">{st}</span>
+                  <span class="badge status-{st}">{statusLabel(st)}</span>
                 {/if}
               {/if}
               <button
@@ -376,6 +417,15 @@
                 ? ""
                 : "s"}
             </div>
+            {#if localStatus[rec.id] === "active" && localSchedules[rec.id]}
+              {@const sched = localSchedules[rec.id]}
+              <div class="h-card-row expiry">
+                <span class="h-label">Expires</span>
+                <span class="expiry-val" title={fmt(sched.endTime)}
+                  >{expiryLabel(sched.endTime)}</span
+                >
+              </div>
+            {/if}
             {#if rec.jobIds.length}
               <div class="h-card-row">
                 <span class="h-label">Job{rec.jobIds.length === 1 ? "" : "s"}</span>
@@ -550,19 +600,21 @@
           </div>
         {:else if onlineRecords.length === 0}
           <div class="section-empty">
-            <p class="muted">No additional on-chain deployments found.</p>
+            <p class="muted">No on-chain deployments found for this wallet.</p>
           </div>
         {:else}
           <div class="cards">
             {#each onlinePageRecords as rec (rec.id)}
               {@const status = jobStatus(rec.registration)}
               {@const dreg = deregisters[diagKey(rec)]}
-              <div class="h-card online">
+              {@const readonly = rec.alsoLocal === true}
+              <div class="h-card online" class:readonly>
                 <div class="h-card-header">
                   <input
                     type="checkbox"
                     class="sel-box"
-                    checked={selectedOnline.has(rec.id)}
+                    checked={!readonly && selectedOnline.has(rec.id)}
+                    disabled={readonly}
                     onchange={() => toggleSelected("online", rec.id)}
                     aria-label="Select deployment"
                   />
@@ -575,13 +627,20 @@
                       >{rec.registration.strategy}</span
                     >
                   {/if}
-                  <span class="badge status-{status}">{status}</span>
+                  <span class="badge status-{status}">{statusLabel(status)}</span>
+                  {#if readonly}
+                    <span
+                      class="badge tracked"
+                      title="Tracked in the Local section — manage it there"
+                      >Local</span
+                    >
+                  {/if}
                   <button
                     class="icon-btn danger"
-                    title="Delete"
+                    title={readonly ? "Managed in the Local section" : "Delete"}
                     aria-label="Delete"
                     onclick={() => deleteRecord(rec, false)}
-                    disabled={dreg?.status === "loading"}
+                    disabled={readonly || dreg?.status === "loading"}
                   >
                     {#if dreg?.status === "loading"}
                       <Spinner size={12} />
@@ -595,6 +654,14 @@
                   <div class="h-card-meta">
                     {fmt(r.startTime)} → {fmt(r.endTime)}
                   </div>
+                  {#if status === "active"}
+                    <div class="h-card-row expiry">
+                      <span class="h-label">Expires</span>
+                      <span class="expiry-val" title={fmt(r.endTime)}
+                        >{expiryLabel(r.endTime)}</span
+                      >
+                    </div>
+                  {/if}
                   <div class="h-card-row">
                     <span class="h-label">Slots</span><span>{r.slots}</span>
                     <span class="h-label" style="margin-left:8px">Every</span
@@ -624,7 +691,11 @@
                     On-chain only &middot; not in local history
                   </div>
                 {/if}
-                {#if rec.jobIds[0]}
+                {#if readonly}
+                  <div class="readonly-hint">
+                    Tracked in the Local section — manage it there.
+                  </div>
+                {:else if rec.jobIds[0]}
                   {@const dstate = diagnoses[diagKey(rec)]}
                   {@const astate = assignments[diagKey(rec)]}
                   <div class="h-card-actions">
@@ -878,6 +949,20 @@
   .h-card.online {
     opacity: 0.85;
   }
+  /* Locally-tracked jobs surfaced read-only in the On-chain list: dimmer, and
+     their disabled controls read as non-interactive. */
+  .h-card.online.readonly {
+    opacity: 0.55;
+  }
+  .h-card.online.readonly .sel-box {
+    cursor: default;
+  }
+  .readonly-hint {
+    margin-top: 6px;
+    font-size: 10.5px;
+    font-style: italic;
+    color: var(--vscode-descriptionForeground);
+  }
 
   .h-card-header {
     display: flex;
@@ -896,6 +981,14 @@
   .h-card-meta {
     font-size: 11px;
     color: var(--vscode-descriptionForeground);
+  }
+  .expiry .h-label {
+    min-width: 44px;
+  }
+  .expiry-val {
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    color: var(--vscode-foreground);
   }
 
   .h-card-actions {
@@ -1059,6 +1152,12 @@
   .badge.strategy {
     background: var(--vscode-charts-blue, #0078d4);
     color: #fff;
+  }
+  /* "Local" chip on a read-only On-chain card — quiet, informational, not a state. */
+  .badge.tracked {
+    background: transparent;
+    color: var(--vscode-descriptionForeground);
+    border: 1px solid var(--vscode-panel-border, var(--vscode-descriptionForeground));
   }
   /* Network identity: Acurast green for mainnet, yellow for canary */
   .badge.net-mainnet {

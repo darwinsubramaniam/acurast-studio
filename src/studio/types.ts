@@ -592,6 +592,13 @@ export interface OnlineJobRegistration {
 export interface StoredDeploymentWithMeta extends StoredDeployment {
   pathExists: boolean;
   registration?: OnlineJobRegistration;
+  /**
+   * True when this On-chain record's job is also tracked in Local history. The
+   * On-chain view renders these visible-but-read-only (no checkbox, delete, or
+   * actions) — they're already managed from the Local section, and are surfaced
+   * here only so a running job is also seen where its on-chain state lives.
+   */
+  alsoLocal?: boolean;
 }
 
 /** Lifecycle status of a local record's job, resolved from the chain.
@@ -609,6 +616,10 @@ export interface HistoryStateMsg {
   /** Per-record on-chain status, keyed by record id. Posted asynchronously
    * after the local list, once the chain query for that page resolves. */
   statuses?: Record<string, LocalJobStatus>;
+  /** Per-record on-chain schedule (start/end epoch ms), keyed by record id.
+   * Posted alongside `statuses` so a RUNNING local card can show when its job
+   * expires (`endTime`). Only present for records with an on-chain registration. */
+  schedules?: Record<string, { startTime: number; endTime: number }>;
   error?: string;
 }
 

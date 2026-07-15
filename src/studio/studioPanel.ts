@@ -1221,6 +1221,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     }
 
     const statuses: Record<string, LocalJobStatus> = {};
+    const schedules: Record<string, { startTime: number; endTime: number }> = {};
     for (const [network, recs] of byNetwork) {
       const regByKey = new Map<string, OnlineJobRegistration>();
       const origins = [...new Set(recs.flatMap((r) => r.jobIds.map((j) => j.origin)))];
@@ -1236,11 +1237,13 @@ export class StudioPanel implements vscode.WebviewViewProvider {
         const j = r.jobIds[0];
         const reg = regByKey.get(`${j.origin}:${j.localId}`);
         statuses[r.id] = reg ? this.jobLifecycle(reg) : 'none';
+        // Carry the schedule so a RUNNING card can show when its job expires.
+        if (reg) schedules[r.id] = { startTime: reg.startTime, endTime: reg.endTime };
       }
     }
     // Don't post a stale result onto a list the user already navigated away from.
     if (!this.historyEnrichmentCurrent(gen)) return;
-    this.post({ type: 'history.state', status: 'ok', statuses } satisfies HistoryStateMsg);
+    this.post({ type: 'history.state', status: 'ok', statuses, schedules } satisfies HistoryStateMsg);
   }
 
   private jobLifecycle(reg: OnlineJobRegistration): LocalJobStatus {
@@ -1323,29 +1326,35 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       const multiOrigin = (api as any).createType('AcurastCommonMultiOrigin', { acurast: address });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const jobEntries: [any, any][] = await (api.query['acurast']['storedJobRegistration'] as any).entries(multiOrigin);
-      // Build a set of job keys already saved locally so we skip duplicates
-      const savedKeys = new Set(
-        this.deploymentStore.getAll()
-          .flatMap(r => r.jobIds.map(j => `${j.origin}:${j.localId}`))
-      );
+      // Map each locally-tracked job key → its project name. Jobs already saved
+      // locally are no longer filtered out: they still exist on-chain (a running
+      // job especially), so we surface them here too — but flagged `alsoLocal`
+      // so the view renders them read-only (managed from the Local section).
+      const localProjectByKey = new Map<string, string>();
+      for (const rec of this.deploymentStore.getAll()) {
+        for (const j of rec.jobIds) localProjectByKey.set(`${j.origin}:${j.localId}`, rec.project);
+      }
       const onlineRecords: StoredDeploymentWithMeta[] = jobEntries
-        .map(([key, value]) => {
+        .map(([key, value]): StoredDeploymentWithMeta => {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const localId: number = (api as any).createType('u128', key.args.at(1)).toNumber();
           const registration = this.decodeRegistration(api, value);
+          const localProject = localProjectByKey.get(`${address}:${localId}`);
 
           return {
             id: `online:${address}:${localId}`,
-            project: 'on-chain',
+            project: localProject ?? 'on-chain',
             network,
             startedAt: registration?.startTime ?? 0,
             finishedAt: registration?.endTime ?? 0,
             jobIds: [{ origin: address, localId }],
             pathExists: false,
             registration,
+            alsoLocal: localProject !== undefined,
           };
         })
-        .filter(r => !savedKeys.has(`${r.jobIds[0].origin}:${r.jobIds[0].localId}`));
+        // Interactive (purely on-chain) records first, read-only (also-local) after.
+        .sort((a, b) => Number(a.alsoLocal) - Number(b.alsoLocal));
       this.post({ type: 'history.state', status: 'ok', onlineRecords } satisfies HistoryStateMsg);
     } catch (err) {
       this.post({ type: 'history.state', status: 'error', error: (err as Error).message } satisfies HistoryStateMsg);
