@@ -72,10 +72,16 @@ function hostOf(url: string): string {
  * plugin has no usable one — `distro.sh.sample` (a template with no tarball) and
  * `termux.sh` (a `.zip` bootstrap, not a `.tar.xz` rootfs) both drop out here.
  */
+/** A SHA256 digest is exactly 64 hex characters. */
+const SHA256_RE = /^[a-f0-9]{64}$/i;
+
 export function parseDistroPlugin(id: string, source: string): DistroImage | null {
   const url = quoted(source, new RegExp(`TARBALL_URL\\['${ARCH}'\\]="([^"]+)"`));
   const sha256 = quoted(source, new RegExp(`TARBALL_SHA256\\['${ARCH}'\\]="([^"]+)"`));
-  if (!url || !sha256 || !url.endsWith('.tar.xz')) return null;
+  // Reject a missing/malformed integrity hash rather than letting a truncated or
+  // tampered value flow into acurast.json — the processor verifies this SHA256 on
+  // download, so it is the one integrity control in the image pipeline.
+  if (!url || !sha256 || !url.endsWith('.tar.xz') || !SHA256_RE.test(sha256)) return null;
 
   const name = quoted(source, /^DISTRO_NAME="([^"]*)"/m) || id;
   const comment = quoted(source, /^DISTRO_COMMENT="([^"]*)"/m);

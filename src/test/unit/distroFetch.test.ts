@@ -31,19 +31,31 @@ describe('parseDistroPlugin', () => {
   it('omits comment when the plugin declares none', () => {
     const src = `DISTRO_NAME="Void Linux"
 TARBALL_URL['aarch64']="https://x.test/void.tar.xz"
-TARBALL_SHA256['aarch64']="abc"`;
+TARBALL_SHA256['aarch64']="37e61ce5fd8593a7d10c4e72ebe611adb7e795f7492e4c0bf3a950441c984161"`;
     expect(parseDistroPlugin('void', src)).toEqual({
       id: 'void',
       name: 'Void Linux',
       url: 'https://x.test/void.tar.xz',
-      sha256: 'abc',
+      sha256: '37e61ce5fd8593a7d10c4e72ebe611adb7e795f7492e4c0bf3a950441c984161',
     });
   });
 
   it('falls back to the plugin id when DISTRO_NAME is missing', () => {
     const src = `TARBALL_URL['aarch64']="https://x.test/a.tar.xz"
-TARBALL_SHA256['aarch64']="abc"`;
+TARBALL_SHA256['aarch64']="37e61ce5fd8593a7d10c4e72ebe611adb7e795f7492e4c0bf3a950441c984161"`;
     expect(parseDistroPlugin('mystery', src)?.name).toBe('mystery');
+  });
+
+  it('rejects a malformed SHA256 (not 64 hex chars) rather than trusting it', () => {
+    const short = `DISTRO_NAME="Bad"
+TARBALL_URL['aarch64']="https://x.test/bad.tar.xz"
+TARBALL_SHA256['aarch64']="abc"`;
+    expect(parseDistroPlugin('bad', short)).toBeNull();
+
+    const nonHex = `DISTRO_NAME="Bad"
+TARBALL_URL['aarch64']="https://x.test/bad.tar.xz"
+TARBALL_SHA256['aarch64']="zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"`;
+    expect(parseDistroPlugin('bad', nonHex)).toBeNull();
   });
 
   it('rejects a plugin with no aarch64 entry (arm-only)', () => {
