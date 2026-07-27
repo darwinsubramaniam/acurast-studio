@@ -215,4 +215,18 @@ describe('ensureWorkspaceTrustedForBuild', () => {
   it('throws WorkspaceUntrustedError when the workspace is untrusted', () => {
     expect(() => ensureWorkspaceTrustedForBuild(false)).toThrow(WorkspaceUntrustedError);
   });
+
+  it('rejects a build.cwd that escapes the project root (and never spawns)', async () => {
+    const p = runProjectBuild({ projectRoot: root, build: { command: 'make', cwd: '../../..' }, output: fakeOut() });
+    await expect(p).rejects.toThrow(/build\.cwd.*outside the project/s);
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a build.output that escapes the project root', async () => {
+    const child = fakeChild();
+    spawnMock.mockReturnValue(child);
+    const p = runProjectBuild({ projectRoot: root, build: { command: 'noop', output: '../../secret.js' }, output: fakeOut() });
+    child.emit('close', 0);
+    await expect(p).rejects.toThrow(/build\.output.*outside the project/s);
+  });
 });

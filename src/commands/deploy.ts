@@ -12,6 +12,7 @@ import { StudioPanel } from '../studio/studioPanel';
 import { IPFS_DEFAULTS, RPC_ENDPOINTS, SYMBOL, type AcurastNetwork } from '../sdk/constants';
 import { getTargetNetwork } from '../wallet/networkSetting';
 import { resolveDeployEnvVars } from '../lib/env';
+import { resolveWithinRoot } from '../lib/pathSafe';
 import { readBuildConfig, runProjectBuild } from './build';
 
 interface DeployOptions {
@@ -81,10 +82,18 @@ export async function deploy({ ctx, wallet, output, studioPanel }: DeployOptions
   }
 
   // Resolve relative paths against the project root (the directory holding acurast.json),
-  // because the SDK reads fileUrl via fs.statSync against process.cwd().
+  // because the SDK reads fileUrl via fs.statSync against process.cwd(). A local
+  // fileUrl that escapes the project root is rejected before anything is read/uploaded.
+  let resolvedFileUrl: string | undefined;
+  try {
+    resolvedFileUrl = resolveAgainst(projectRoot, effectiveFileUrl);
+  } catch (err: unknown) {
+    vscode.window.showErrorMessage((err as Error).message);
+    return;
+  }
   const resolvedConfig = normalizeMinProcessorVersions({
     ...config,
-    fileUrl: resolveAgainst(projectRoot, effectiveFileUrl),
+    fileUrl: resolvedFileUrl,
   } as NonNullable<typeof config>);
 
   const bundleFolder = path.join(projectRoot, '.acurast', 'bundles');
@@ -256,12 +265,18 @@ export async function deploy({ ctx, wallet, output, studioPanel }: DeployOptions
   );
 }
 
-/** Resolve a relative fileUrl against the project root. Leaves IPFS hashes and absolute paths alone. */
-function resolveAgainst(root: string, fileUrl: string | undefined): string | undefined {
+/**
+ * Resolve a local fileUrl against the project root, rejecting anything that
+ * escapes it. IPFS hashes / ipfs:// / https:// references are left as-is (the SDK
+ * resolves those over the network). A local path — relative OR absolute — is
+ * resolved and confined to the project directory so a malicious acurast.json
+ * can't point `fileUrl` at `/home/user/.ssh/id_rsa` (or `../../…`) and have the
+ * SDK read it and upload it to IPFS. Throws on a containment violation.
+ */
+export function resolveAgainst(root: string, fileUrl: string | undefined): string | undefined {
   if (!fileUrl) return fileUrl;
-  if (path.isAbsolute(fileUrl)) return fileUrl;
   if (/^(ipfs:\/\/|https?:\/\/|Qm[1-9A-HJ-NP-Za-km-z]{44}|b[A-Za-z2-7]{58})/.test(fileUrl)) {
     return fileUrl; // IPFS CID / URL — let SDK handle as-is
   }
-  return path.resolve(root, fileUrl);
+  return resolveWithinRoot(root, fileUrl, 'fileUrl');
 }
