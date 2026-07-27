@@ -67,14 +67,15 @@ function hostOf(url: string): string {
   }
 }
 
+/** A SHA256 digest is exactly 64 hex characters. Upstream writes them lowercase;
+ * accept either case rather than reject a valid digest on presentation alone. */
+const SHA256_RE = /^[a-f0-9]{64}$/i;
+
 /**
  * Parse one `distro-plugins/<id>.sh` into its aarch64 image, or null when the
  * plugin has no usable one — `distro.sh.sample` (a template with no tarball) and
  * `termux.sh` (a `.zip` bootstrap, not a `.tar.xz` rootfs) both drop out here.
  */
-/** A SHA256 digest is exactly 64 hex characters. */
-const SHA256_RE = /^[a-f0-9]{64}$/i;
-
 export function parseDistroPlugin(id: string, source: string): DistroImage | null {
   const url = quoted(source, new RegExp(`TARBALL_URL\\['${ARCH}'\\]="([^"]+)"`));
   const sha256 = quoted(source, new RegExp(`TARBALL_SHA256\\['${ARCH}'\\]="([^"]+)"`));
