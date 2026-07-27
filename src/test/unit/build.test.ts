@@ -22,7 +22,8 @@ vi.mock('vscode', () => ({
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
 vi.mock('child_process', () => ({ spawn: spawnMock }));
 
-import { readBuildConfig, runProjectBuild, isLocalPath } from '../../commands/build';
+import * as vscode from 'vscode';
+import { readBuildConfig, runProjectBuild, isLocalPath, ensureWorkspaceTrustedForBuild, WorkspaceUntrustedError } from '../../commands/build';
 
 let root: string;
 
@@ -192,5 +193,26 @@ describe('runProjectBuild', () => {
     const p = runProjectBuild({ projectRoot: root, build: { command: 'nope' }, output: fakeOut() });
     child.emit('error', new Error('spawn ENOENT'));
     await expect(p).rejects.toThrow('Failed to start build command');
+  });
+
+  it('refuses to spawn in an untrusted workspace, regardless of the caller', async () => {
+    const original = vscode.workspace.isTrusted;
+    (vscode.workspace as { isTrusted: boolean }).isTrusted = false;
+    try {
+      const p = runProjectBuild({ projectRoot: root, build: { command: 'rm -rf ~' }, output: fakeOut() });
+      await expect(p).rejects.toBeInstanceOf(WorkspaceUntrustedError);
+      expect(spawnMock).not.toHaveBeenCalled();
+    } finally {
+      (vscode.workspace as { isTrusted: boolean }).isTrusted = original;
+    }
+  });
+});
+
+describe('ensureWorkspaceTrustedForBuild', () => {
+  it('is a no-op when the workspace is trusted', () => {
+    expect(() => ensureWorkspaceTrustedForBuild(true)).not.toThrow();
+  });
+  it('throws WorkspaceUntrustedError when the workspace is untrusted', () => {
+    expect(() => ensureWorkspaceTrustedForBuild(false)).toThrow(WorkspaceUntrustedError);
   });
 });
