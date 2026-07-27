@@ -13,6 +13,7 @@ import { loadPricing } from '../sdk/pricing';
 import { SYMBOL, MATCHER_ENDPOINTS, TUNNEL_PORT, type AcurastNetwork } from '../sdk/constants';
 import { networkLabel } from '../lib/network';
 import { stripAnsi } from '../lib/log';
+import { httpsExternalUrl } from '../lib/url';
 import { setTargetNetwork, getProjectNetwork } from '../wallet/networkSetting';
 import { computeTxtValue, relaysFor, wildcardName, txtName, publicUrlExample, normalizeSuffix } from '../tunnel/tunnel';
 import { verifyTunnelDns } from '../tunnel/dnsVerify';
@@ -344,24 +345,21 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       case 'devtools.refreshKey':
         await this.fetchDevtoolsUrl();
         break;
-      case 'devtools.openUrl':
-        if (msg.url) await vscode.env.openExternal(vscode.Uri.parse(msg.url));
+      case 'devtools.openUrl': {
+        // Only ever hand https URLs to the OS — same guard as `openExternal`.
+        const safe = httpsExternalUrl(msg.url);
+        if (safe) await vscode.env.openExternal(vscode.Uri.parse(safe, true));
         break;
-      case 'openExternal':
+      }
+      case 'openExternal': {
         // Defense-in-depth: only ever hand https URLs to the OS. The webview is
         // trusted (bundled, CSP-locked) and today sends only the donation page,
         // but validating the scheme stops any future message from opening
         // file:/command:/vscode: URIs via this channel.
-        if (msg.url) {
-          let target: vscode.Uri | undefined;
-          try {
-            target = vscode.Uri.parse(msg.url, true);
-          } catch {
-            target = undefined;
-          }
-          if (target?.scheme === 'https') await vscode.env.openExternal(target);
-        }
+        const safe = httpsExternalUrl(msg.url);
+        if (safe) await vscode.env.openExternal(vscode.Uri.parse(safe, true));
         break;
+      }
       case 'processors.query':
         await this.fetchProcessors(msg.address, msg.network);
         break;
