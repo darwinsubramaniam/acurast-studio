@@ -67,6 +67,10 @@ function hostOf(url: string): string {
   }
 }
 
+/** A SHA256 digest is exactly 64 hex characters. Upstream writes them lowercase;
+ * accept either case rather than reject a valid digest on presentation alone. */
+const SHA256_RE = /^[a-f0-9]{64}$/i;
+
 /**
  * Parse one `distro-plugins/<id>.sh` into its aarch64 image, or null when the
  * plugin has no usable one — `distro.sh.sample` (a template with no tarball) and
@@ -75,7 +79,10 @@ function hostOf(url: string): string {
 export function parseDistroPlugin(id: string, source: string): DistroImage | null {
   const url = quoted(source, new RegExp(`TARBALL_URL\\['${ARCH}'\\]="([^"]+)"`));
   const sha256 = quoted(source, new RegExp(`TARBALL_SHA256\\['${ARCH}'\\]="([^"]+)"`));
-  if (!url || !sha256 || !url.endsWith('.tar.xz')) return null;
+  // Reject a missing/malformed integrity hash rather than letting a truncated or
+  // tampered value flow into acurast.json — the processor verifies this SHA256 on
+  // download, so it is the one integrity control in the image pipeline.
+  if (!url || !sha256 || !url.endsWith('.tar.xz') || !SHA256_RE.test(sha256)) return null;
 
   const name = quoted(source, /^DISTRO_NAME="([^"]*)"/m) || id;
   const comment = quoted(source, /^DISTRO_COMMENT="([^"]*)"/m);

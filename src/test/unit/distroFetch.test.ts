@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { parseDistroPlugin, v4TagsNewestFirst, fetchDistroCatalog } from '../../sdk/distroFetch';
 
+/** Ubuntu 25.10's real aarch64 digest — a well-formed hash for fixtures that
+ *  aren't exercising hash validation. */
+const VALID_SHA = '37e61ce5fd8593a7d10c4e72ebe611adb7e795f7492e4c0bf3a950441c984161';
+
 const UBUNTU = `# This is a default distribution plug-in.
 DISTRO_NAME="Ubuntu (25.10)"
 DISTRO_COMMENT="Regular release (questing)."
@@ -31,19 +35,40 @@ describe('parseDistroPlugin', () => {
   it('omits comment when the plugin declares none', () => {
     const src = `DISTRO_NAME="Void Linux"
 TARBALL_URL['aarch64']="https://x.test/void.tar.xz"
-TARBALL_SHA256['aarch64']="abc"`;
+TARBALL_SHA256['aarch64']="${VALID_SHA}"`;
     expect(parseDistroPlugin('void', src)).toEqual({
       id: 'void',
       name: 'Void Linux',
       url: 'https://x.test/void.tar.xz',
-      sha256: 'abc',
+      sha256: VALID_SHA,
     });
   });
 
   it('falls back to the plugin id when DISTRO_NAME is missing', () => {
     const src = `TARBALL_URL['aarch64']="https://x.test/a.tar.xz"
-TARBALL_SHA256['aarch64']="abc"`;
+TARBALL_SHA256['aarch64']="${VALID_SHA}"`;
     expect(parseDistroPlugin('mystery', src)?.name).toBe('mystery');
+  });
+
+  // Each case isolates ONE way the digest can be wrong, so a regression in the
+  // length check can't be masked by the charset check (or vice versa).
+  it.each([
+    ['truncated', 'abc'],
+    ['64 chars but not hex', 'z'.repeat(64)],
+    ['65 hex chars — one too many', 'a'.repeat(65)],
+    ['63 hex chars — one too few', 'a'.repeat(63)],
+  ])('rejects a malformed SHA256 (%s) rather than trusting it', (_case, sha256) => {
+    const src = `DISTRO_NAME="Bad"
+TARBALL_URL['aarch64']="https://x.test/bad.tar.xz"
+TARBALL_SHA256['aarch64']="${sha256}"`;
+    expect(parseDistroPlugin('bad', src)).toBeNull();
+  });
+
+  it('accepts an uppercase digest — case is presentation, not validity', () => {
+    const src = `DISTRO_NAME="Shouty"
+TARBALL_URL['aarch64']="https://x.test/s.tar.xz"
+TARBALL_SHA256['aarch64']="${VALID_SHA.toUpperCase()}"`;
+    expect(parseDistroPlugin('shouty', src)?.sha256).toBe(VALID_SHA.toUpperCase());
   });
 
   it('rejects a plugin with no aarch64 entry (arm-only)', () => {
@@ -157,7 +182,9 @@ describe('fetchDistroCatalog', () => {
 
   it('throws when a v4 tag yields no aarch64 images', async () => {
     const catalog = fetchDistroCatalog(
-      fakeGitHub({ 'v4.38.0': { 'termux.sh': `DISTRO_NAME="Termux"\nTARBALL_URL['aarch64']="https://x/b.zip"\nTARBALL_SHA256['aarch64']="a"` } }),
+      // Valid digest, wrong archive type — so this asserts the .tar.xz check
+      // specifically, not the hash check that would also reject it.
+      fakeGitHub({ 'v4.38.0': { 'termux.sh': `DISTRO_NAME="Termux"\nTARBALL_URL['aarch64']="https://x/b.zip"\nTARBALL_SHA256['aarch64']="${VALID_SHA}"` } }),
     );
     await expect(catalog).rejects.toThrow(/No aarch64 images/);
   });
