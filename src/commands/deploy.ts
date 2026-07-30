@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { deployProject, loadAcurastConfig } from '@acurast/sdk/deploy';
-import { normalizeMinProcessorVersions } from '../sdk/configCompat';
+import { resolveMinProcessorVersions } from '../sdk/configCompat';
 import { validateDeployConfig, formatIssue } from '../sdk/validateDeployConfig';
 import { walletFromMnemonic, convertConfigToJob } from '@acurast/sdk/chain';
 import { AcurastContext } from '../context';
@@ -91,10 +91,19 @@ export async function deploy({ ctx, wallet, output, studioPanel }: DeployOptions
     vscode.window.showErrorMessage((err as Error).message);
     return;
   }
-  const resolvedConfig = normalizeMinProcessorVersions({
-    ...config,
-    fileUrl: resolvedFileUrl,
-  } as NonNullable<typeof config>);
+  // Resolve `minProcessorVersions` names ("1.26.0") to the build numbers the
+  // chain stores, against the live processor-version table. An unknown name is
+  // a config error, so report it instead of letting the SDK throw mid-deploy.
+  let resolvedConfig: NonNullable<typeof config>;
+  try {
+    resolvedConfig = await resolveMinProcessorVersions({
+      ...config,
+      fileUrl: resolvedFileUrl,
+    } as NonNullable<typeof config>);
+  } catch (err: unknown) {
+    vscode.window.showErrorMessage((err as Error).message, { modal: true });
+    return;
+  }
 
   const bundleFolder = path.join(projectRoot, '.acurast', 'bundles');
 

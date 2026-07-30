@@ -841,6 +841,9 @@ export class StudioPanel implements vscode.WebviewViewProvider {
       return;
     }
     const { fees, advice, fallbackReason, error } = result;
+    // `result.config` has been through resolveMinProcessorVersions, so this is a
+    // build number even when acurast.json spells the version out as "1.26.0".
+    const minAndroidBuild = result.config.minProcessorVersions?.android;
 
     const fiat = await this.loadFiatConversion();
 
@@ -871,6 +874,7 @@ export class StudioPanel implements vscode.WebviewViewProvider {
         distribution: advice.distribution,
       } : undefined,
       fiat,
+      minAndroidBuild: typeof minAndroidBuild === 'number' ? minAndroidBuild : undefined,
       fallbackReason,
       error,
     });

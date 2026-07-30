@@ -689,7 +689,9 @@
 
             {#if advice}
               {@const nonPriceBlocker = isNonPriceBlocker(advice)}
-              {@const tunnelGate = advice.status === 'insufficient' && Number(getNested(p, 'minProcessorVersions', 'android') ?? 0) >= 122}
+              <!-- Build number resolved by the host: acurast.json may spell the
+                   min version out as "1.26.0", which is not comparable here. -->
+              {@const tunnelGate = advice.status === 'insufficient' && (pricing.minAndroidBuild ?? 0) >= 122}
               {@const verdict = adviceVerdict(advice.status)}
               <div class="pricing-status-row pricing-{advice.status}">
                 <span>{verdict.icon} {verdict.label}</span>

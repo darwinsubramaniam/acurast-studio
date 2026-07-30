@@ -388,6 +388,10 @@ export interface PricingStateMsg {
   fees?: SerializedFees;
   advice?: SerializedAdvice;
   fiat?: PricingFiatInfo;
+  /** `minProcessorVersions.android` resolved to a build number — the config may
+   * carry a readable version name ("1.26.0"), which the webview cannot resolve
+   * on its own. Set on `status: 'ok'` when the project declares one. */
+  minAndroidBuild?: number;
   fallbackReason?: string;
   error?: string;
 }

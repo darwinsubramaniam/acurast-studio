@@ -33,6 +33,9 @@ vi.mock('@acurast/sdk/deploy', () => ({
 vi.mock('@acurast/sdk/chain', () => ({
   walletFromMnemonic: walletFromMnemonicMock,
   convertConfigToJob: convertConfigToJobMock,
+  // Reached via deploy's `resolveMinProcessorVersions`; no network in unit tests.
+  fetchDeviceVersions: vi.fn(async () => new Map()),
+  deviceVersions: new Map<number, Map<number, string>>([[0, new Map()], [1, new Map()]]),
 }));
 
 import * as vscode from 'vscode';

@@ -1,4 +1,5 @@
-import { AcurastService, getBalance, getHumanReadableVersion, fetchDeviceVersions } from '@acurast/sdk/chain';
+import { AcurastService, getBalance, getHumanReadableVersion } from '@acurast/sdk/chain';
+import { ensureDeviceVersions } from './deviceVersions';
 import type { KeyringPair } from '@polkadot/keyring/types';
 import { RPC_ENDPOINTS, type AcurastNetwork } from './constants';
 import type { ManagedProcessor, ManagedProcessorsResult, JobDiagnosis, NewAdvertisementParams } from '../studio/types';
@@ -16,16 +17,6 @@ function toNum(v: any): number | undefined {
 export class AcurastClient {
   private getOverrides: () => RpcOverrides = () => ({});
   private services = new Map<AcurastNetwork, AcurastService>();
-  private deviceVersionsPromise: Promise<void> | undefined;
-
-  /**
-   * Populate the SDK's module-level device-version table exactly once.
-   * Concurrent callers share a single in-flight fetch; best-effort, so a failed
-   * fetch resolves quietly and falls back to the bundled version table.
-   */
-  private ensureDeviceVersions(): Promise<void> {
-    return (this.deviceVersionsPromise ??= fetchDeviceVersions().then(() => {}).catch(() => {}));
-  }
 
   configure(getOverrides: () => RpcOverrides): void {
     this.getOverrides = getOverrides;
@@ -63,7 +54,7 @@ export class AcurastClient {
     const api = svc.api;
     if (!api) throw new Error('SDK service has no api after connect');
 
-    await this.ensureDeviceVersions();
+    await ensureDeviceVersions();
 
     /* eslint-disable @typescript-eslint/no-explicit-any */
     const pm = (api.query as any).acurastProcessorManager;
@@ -306,7 +297,7 @@ export class AcurastClient {
     const svc = await this.service(network);
     const api = svc.api;
     if (!api) throw new Error('SDK service has no api after connect');
-    await this.ensureDeviceVersions();
+    await ensureDeviceVersions();
 
     /* eslint-disable @typescript-eslint/no-explicit-any */
     const q = api.query as any;

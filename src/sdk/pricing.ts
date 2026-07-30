@@ -3,7 +3,7 @@ import { AssignmentStrategyVariant } from '@acurast/sdk/types';
 import type { AcurastProjectConfig } from '@acurast/sdk/types';
 import type { PricingAdvice } from '@acurast/sdk/matcher';
 import { BigNumber } from 'bignumber.js';
-import { normalizeMinProcessorVersions } from './configCompat';
+import { resolveMinProcessorVersions } from './configCompat';
 
 export type { PricingAdvice };
 export type FeeAnalysis = ReturnType<typeof getFeeAnalysis>;
@@ -35,9 +35,10 @@ export async function loadPricing({
   walletAddress,
   matcherUrl,
 }: LoadPricingOptions): Promise<PricingResult> {
-  // Coerce quoted numeric min-versions (e.g. "122") to numbers so the SDK's
-  // job conversion doesn't throw — see normalizeMinProcessorVersions.
-  const config = normalizeMinProcessorVersions(rawConfig);
+  // Resolve readable min-versions (e.g. "1.26.0") to build numbers before any
+  // SDK job conversion — see resolveMinProcessorVersions. Throws on an unknown
+  // version name; loadPricing's callers surface that as the pricing error.
+  const config = await resolveMinProcessorVersions(rawConfig);
   const fees = getFeeAnalysis(config);
 
   // Narrow the assignmentStrategy union on `type` so `instantMatch` is typed

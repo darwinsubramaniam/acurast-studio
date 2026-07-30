@@ -36,6 +36,8 @@ const DEFAULT_REWARD = 100_000_000_000;
 const DEFAULT_START_DELAY_MS = 10_000;
 // Shell runtime + image support need a recent processor build (see the
 // deployment-config docs); applied to both runtimes for consistency.
+// Written as the app version a developer actually sees on their processor —
+// `resolveMinProcessorVersions` turns it into the build number the chain stores.
 const MIN_ANDROID_PROCESSOR_VERSION = '1.26.0';
 
 // ── Duration input ────────────────────────────────────────────────────────────
