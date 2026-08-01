@@ -7,6 +7,18 @@ import type { EncryptedBlob } from './crypto';
 const SECRETS_KEY = 'acurast.wallets.v2';
 export const ACURAST_SS58_PREFIX = 42;
 
+interface AttemptState {
+  count: number;
+  lastAttempt: number;
+  blockedUntil: number;
+}
+
+const MAX_ATTEMPTS = 5;
+const BLOCK_AFTER = MAX_ATTEMPTS - 1;
+const BASE_DELAY_MS = 500;
+const COOLDOWN_MS = 60_000;
+const ATTEMPT_DECAY_MS = 10 * 60_000;
+
 export interface WalletInfo {
   id: string;
   address: string;
@@ -41,6 +53,7 @@ export class WalletService {
   private _onDidChange = new vscode.EventEmitter<WalletChange>();
   readonly onDidChange = this._onDidChange.event;
   private _ready: Promise<void>;
+  private _attempts = new Map<string, AttemptState>();
 
   constructor(private readonly secrets: vscode.SecretStorage) {
     this._ready = cryptoWaitReady().then(() => undefined);
@@ -128,10 +141,39 @@ export class WalletService {
   }
 
   async reveal(id: string, password: string): Promise<string> {
+    const now = Date.now();
+    let state = this._attempts.get(id);
+    // Failures older than the decay window no longer indicate active guessing.
+    if (state && now - state.lastAttempt > ATTEMPT_DECAY_MS) {
+      this._attempts.delete(id);
+      state = undefined;
+    }
+    if (state && now < state.blockedUntil) {
+      const remaining = Math.ceil((state.blockedUntil - now) / 1000);
+      throw new Error(`Too many attempts. Please wait ${remaining}s before trying again.`);
+    }
+
     const vault = await this.loadVault();
     const stored = vault.wallets.find((w) => w.info.id === id);
     if (!stored) throw new Error('Wallet not found');
-    return decrypt(stored.encrypted, password);
+
+    try {
+      const result = decrypt(stored.encrypted, password);
+      this._attempts.delete(id);
+      return result;
+    } catch (err) {
+      const prev = this._attempts.get(id);
+      const count = (prev?.count ?? 0) + 1;
+      const delay = Math.min(BASE_DELAY_MS * 2 ** (count - 1), COOLDOWN_MS);
+      const blockedUntil = count > BLOCK_AFTER ? now + delay : 0;
+      this._attempts.set(id, { count, lastAttempt: now, blockedUntil });
+
+      if (blockedUntil > 0) {
+        const remaining = Math.ceil(delay / 1000);
+        throw new Error(`Incorrect password. Too many attempts — please wait ${remaining}s before trying again.`);
+      }
+      throw err;
+    }
   }
 
   async delete(id: string): Promise<void> {

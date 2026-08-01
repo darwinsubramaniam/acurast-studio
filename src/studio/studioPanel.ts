@@ -487,10 +487,8 @@ export class StudioPanel implements vscode.WebviewViewProvider {
     try {
       const mnemonic = await this.wallet.reveal(id, password);
       this.postWalletOp({ op: 'reveal', ok: true, id, mnemonic });
-    } catch {
-      // decrypt throws on a wrong password (and a missing wallet); surface the
-      // friendly message the mock shows rather than the raw crypto error.
-      this.postWalletOp({ op: 'reveal', ok: false, id, message: 'Incorrect password — try again' });
+    } catch (err: unknown) {
+      this.postWalletOp({ op: 'reveal', ok: false, id, message: (err as Error).message });
     }
   }
 

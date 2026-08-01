@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 vi.mock('vscode', () => {
   class EventEmitter<T> {
@@ -142,6 +142,88 @@ describe('WalletService', () => {
 
     it('throws when wallet id is not found', async () => {
       await expect(wallet.reveal('nonexistent', PASSWORD)).rejects.toThrow('Wallet not found');
+    });
+  });
+
+  describe('reveal() rate limiting', () => {
+    const WRONG = 'wrong-password';
+    let nowOffset: number;
+
+    beforeEach(() => {
+      nowOffset = 0;
+      const realNow = Date.now.bind(Date);
+      vi.spyOn(Date, 'now').mockImplementation(() => realNow() + nowOffset);
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    const advance = (ms: number) => { nowOffset += ms; };
+
+    async function failOnce(id: string): Promise<Error> {
+      return wallet.reveal(id, WRONG).then(
+        () => { throw new Error('expected reveal to fail'); },
+        (err: Error) => err
+      );
+    }
+
+    it('surfaces a plain error for the first four failures', async () => {
+      const { info } = await wallet.create({ name: 'W', description: '' }, PASSWORD);
+      for (let i = 0; i < 4; i++) {
+        const err = await failOnce(info.id);
+        expect(err.message).toBe('Incorrect password.');
+      }
+    });
+
+    it('blocks for 8s on the fifth consecutive failure', async () => {
+      const { info } = await wallet.create({ name: 'W', description: '' }, PASSWORD);
+      for (let i = 0; i < 4; i++) await failOnce(info.id);
+      const err = await failOnce(info.id);
+      expect(err.message).toContain('Too many attempts');
+      expect(err.message).toContain('wait 8s');
+    });
+
+    it('rejects even the correct password while blocked, without extending the block', async () => {
+      const { info } = await wallet.create({ name: 'W', description: '' }, PASSWORD);
+      for (let i = 0; i < 5; i++) await failOnce(info.id);
+      await expect(wallet.reveal(info.id, PASSWORD)).rejects.toThrow(/Too many attempts/);
+      advance(8_000);
+      await expect(wallet.reveal(info.id, PASSWORD)).resolves.toBeTruthy();
+    });
+
+    it('doubles the block on each further failure and caps at 60s', async () => {
+      const { info } = await wallet.create({ name: 'W', description: '' }, PASSWORD);
+      for (let i = 0; i < 4; i++) await failOnce(info.id);
+      for (const secs of [8, 16, 32, 60, 60]) {
+        const err = await failOnce(info.id);
+        expect(err.message).toContain(`wait ${secs}s`);
+        advance(secs * 1000);
+      }
+    });
+
+    it('resets the counter after a successful reveal', async () => {
+      const { info } = await wallet.create({ name: 'W', description: '' }, PASSWORD);
+      for (let i = 0; i < 4; i++) await failOnce(info.id);
+      await wallet.reveal(info.id, PASSWORD);
+      const err = await failOnce(info.id);
+      expect(err.message).toBe('Incorrect password.');
+    });
+
+    it('forgets stale failures after the 10-minute decay window', async () => {
+      const { info } = await wallet.create({ name: 'W', description: '' }, PASSWORD);
+      for (let i = 0; i < 4; i++) await failOnce(info.id);
+      advance(10 * 60_000 + 1);
+      const err = await failOnce(info.id);
+      expect(err.message).toBe('Incorrect password.');
+    });
+
+    it('tracks attempts per wallet id', async () => {
+      const { info: a } = await wallet.create({ name: 'A', description: '' }, PASSWORD);
+      const { info: b } = await wallet.create({ name: 'B', description: '' }, ALT_PASSWORD);
+      for (let i = 0; i < 5; i++) await failOnce(a.id);
+      const err = await failOnce(b.id);
+      expect(err.message).toBe('Incorrect password.');
     });
   });
 
