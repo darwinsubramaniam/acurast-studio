@@ -8,9 +8,8 @@
 
 Manage encrypted wallets, edit `acurast.json`, estimate cost, and deploy to Mainnet or Canary from a single panel. The bundled `@acurast/sdk` handles signing, IPFS upload, and submission — no hand-editing `.env`.
 
-[![Version](https://img.shields.io/visual-studio-marketplace/v/dw3labs.acurast-studio?label=Marketplace&color=blue)](https://marketplace.visualstudio.com/items?itemName=dw3labs.acurast-studio)
-[![Installs](https://img.shields.io/visual-studio-marketplace/i/dw3labs.acurast-studio?color=blue)](https://marketplace.visualstudio.com/items?itemName=dw3labs.acurast-studio)
-[![Rating](https://img.shields.io/visual-studio-marketplace/r/dw3labs.acurast-studio)](https://marketplace.visualstudio.com/items?itemName=dw3labs.acurast-studio)
+[![Version](https://vsmarketplacebadges.dev/version-short/dw3labs.acurast-studio.svg?label=Marketplace&color=blue)](https://marketplace.visualstudio.com/items?itemName=dw3labs.acurast-studio)
+[![Installs](https://vsmarketplacebadges.dev/installs-short/dw3labs.acurast-studio.svg?label=Installs&color=blue)](https://marketplace.visualstudio.com/items?itemName=dw3labs.acurast-studio)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
 
 </div>
