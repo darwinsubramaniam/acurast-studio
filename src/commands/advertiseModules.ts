@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { WalletService, ACURAST_SS58_PREFIX } from '../wallet/walletService';
+import { validateAdvertiseArgs } from './advertiseValidation';
 import { StudioPanel } from '../studio/studioPanel';
 import { acurastClient } from '../sdk/acurastClient';
 import { type AcurastNetwork } from '../sdk/constants';
@@ -38,7 +39,11 @@ export async function advertiseModules(
   { wallet, output, studioPanel }: Deps,
   args?: AdvertiseModulesArgs,
 ) {
-  if (!args) return;
+  const validationError = validateAdvertiseArgs(args);
+  if (validationError || !args) {
+    if (validationError) vscode.window.showErrorMessage(`Cannot advertise: ${validationError}`);
+    return;
+  }
   const { walletId, processor, modules, network, newAd } = args;
 
   const info = (await wallet.list()).find((w) => w.id === walletId);
